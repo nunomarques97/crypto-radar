@@ -58,5 +58,14 @@ class TestRepoRoot(unittest.TestCase):
         self.assertNotIn("radar_state.sqlite", state_dir)
 
 
+class TestProcessIdentity(unittest.TestCase):
+    def test_executable_identity_is_path_normalized_and_start_token_is_distinct(self):
+        executable = paths.normalized_executable_identity(sys.executable)
+        first = paths.ProcessIdentity(42, executable, 100)
+        reused_pid = paths.ProcessIdentity(42, executable, 101)
+        self.assertEqual(executable, paths.normalized_executable_identity(os.path.abspath(sys.executable)))
+        self.assertNotEqual(first, reused_pid)
+
+
 if __name__ == "__main__":
     unittest.main()

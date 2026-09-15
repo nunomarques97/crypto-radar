@@ -47,6 +47,8 @@ with tempfile.TemporaryDirectory(prefix="crypto-radar-ui-test-") as state_dir:
             os.environ.pop(name)
     os.environ.pop("CRYPTO_RADAR_NTFY_TOPIC", None)
     os.environ["RADAR_STATE_DIR"] = state_dir
+    if {inherited_popup_enabled!r}:
+        os.environ["RADAR_COPY_PROMPT_POPUP_ENABLED"] = "1"
 
     import ui  # noqa: F401 - must run its module-init (RADAR_* env overrides) first, like python -m ui does
 
@@ -86,20 +88,25 @@ with tempfile.TemporaryDirectory(prefix="crypto-radar-ui-test-") as state_dir:
 
 class NoDuplicateWindowTestCase(unittest.TestCase):
     def test_mock_alert_never_spawns_popup_subprocess_when_run_under_ui(self):
-        script = _SCRIPT.format(repo_root=REPO_ROOT)
-        with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as fh:
-            fh.write(script)
-            script_path = fh.name
-        try:
-            result = subprocess.run(
-                [sys.executable, script_path],
-                cwd=REPO_ROOT, capture_output=True, text=True, timeout=30,
-            )
-        finally:
-            os.remove(script_path)
+        for inherited_popup_enabled in (False, True):
+            with self.subTest(inherited_popup_enabled=inherited_popup_enabled):
+                script = _SCRIPT.format(
+                    repo_root=REPO_ROOT,
+                    inherited_popup_enabled=inherited_popup_enabled,
+                )
+                with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as fh:
+                    fh.write(script)
+                    script_path = fh.name
+                try:
+                    result = subprocess.run(
+                        [sys.executable, script_path],
+                        cwd=REPO_ROOT, capture_output=True, text=True, timeout=30,
+                    )
+                finally:
+                    os.remove(script_path)
 
-        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
-        self.assertIn("SPAWNED_COUNT=0", result.stdout)
+                self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+                self.assertIn("SPAWNED_COUNT=0", result.stdout)
 
 
 if __name__ == "__main__":

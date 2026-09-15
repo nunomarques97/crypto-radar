@@ -38,4 +38,6 @@ if not os.environ.get("RADAR_STATE_DIR"):
     from ui import paths as _paths
     os.environ["RADAR_STATE_DIR"] = _paths.repo_root()
 
-os.environ.setdefault("RADAR_COPY_PROMPT_POPUP_ENABLED", "0")
+# The Control Room must never inherit an enabled popup path: in a frozen
+# process it can recursively launch another full Control Room window.
+os.environ["RADAR_COPY_PROMPT_POPUP_ENABLED"] = "0"
