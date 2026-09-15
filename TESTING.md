@@ -1,0 +1,56 @@
+# Testing
+
+## Takeover baseline — before changes
+
+2026-09-14, Windows, Python 3.12.10, Node 24.14.0. Command: `python -m unittest discover -s tests -v`. This is unittest, not pytest; pytest was not installed in the primary Python environment.
+
+**411 tests run in 33.428 seconds: 410 passed, 1 failed, no skips reported.** Two unittest cases wrap Node suites; 411 is the unittest count, not the sum of every individual JavaScript case. The frozen-launch regression passed in a fresh Python subprocess, not an actual rebuilt executable.
+
+Failure: `test_claude_bridge.TestBridgeHealthDetection.test_no_sdk_and_no_events_reports_offline_without_crashing` expects `OFFLINE`, received `AUTH_ERROR`. Classification: **PRE-EXISTING / ENVIRONMENTAL**. It calls `run_bridge_cycle(env={})` without controlling `_anthropic_available()`. Anthropic 1.5.0 is installed; the implementation therefore reports missing credentials. This is not evidence that a credential should be configured or that production behavior should be changed to match the faulty test.
+
+For the baseline, state/events/SQLite paths were redirected to a new temporary directory, ntfy topic and the API-key variable were cleared in the child process, and bytecode writes were disabled. Test fixtures use temporary databases. Existing desktop-effect test isolation is incomplete: the fresh-process mock regression stubs the popup but not every notification/clipboard effect. T001 addresses that gap. Do not describe the historical baseline as a fully hermetic suite.
+
+Evidence: `docs/audit/2026-09-14/baseline.log`, `source-inventory.json`, `current-schema.json`. The schema was inspected through a SQLite read-only connection; no production data migration or test run against the production DB was performed.
+
+## Standard verification
+
+T001 is PO-accepted. `python scripts/run_tests.py` is the standard isolated runner for the inspected suite; it is not an OS network sandbox. The runner must construct child-only configuration before imports, place every configured runtime artifact under a disposable state directory, clear inherited provider credentials and ntfy destinations, preserve existing user environment, and return the actual unittest exit code.
+
+After T001 acceptance:
+
+```powershell
+Set-Location <repo>
+python scripts/run_tests.py
+```
+
+Direct Node checks when changing room/toggle logic:
+
+```powershell
+node --test tests/ui_tests/js/test_agent_room.mjs
+node --test tests/ui_tests/js/test_test_mode.mjs
+```
+
+Do not hide missing Node behind a Python green result. The current wrappers skip when Node is absent; UI acceptance requires Node execution. Do not globally disable popup behavior just to make tests pass: the regression must still verify that importing `ui` establishes the existing override before config loads.
+
+## Strategy
+
+- Pure deterministic features: known analytical examples, malformed data, boundary conditions, invariance under unrelated symbols/quotes, and parameter perturbation when a parameter changes policy or accounting.
+- Store/controller: temporary databases, two connections for concurrency, atomic claims/budgets, idempotency, crash/recovery, fenced late results, migration tests on disposable copies.
+- External adapters: recorded/synthetic public-response fixtures and injected clients. No production Kraken, Ollama, Claude, ntfy, clipboard or desktop interaction in ordinary automated tests.
+- Models: schema, evidence scope, risk-authority rejection, deadline and retry tests use fake adapters. Real model evaluation is a separately registered experiment, not a unit-test side effect.
+- UI: Node contract/state tests plus Python API isolation. A JS visibility toggle test alone does not prove backend isolation. Source/frozen visual and lifecycle smoke tests require a separately controlled environment.
+- Outcomes: chronological and instrument alignment, both-leg cost identity, missing-label behavior, delayed publication, repeatable cohort assignment and full denominator accounting.
+
+Use only appropriate checks; do not mass-add tests that mirror trivial implementation. Keep the full regression suite because this package has substantial cross-module import-time configuration.
+
+## Reporting
+
+Every task records command, environment, counts, exit code, skips, and unexpected effects. Categories: NEW REGRESSION (introduced), PRE-EXISTING (observed before), ENVIRONMENTAL (depends on host/setup), EXPECTED (explicitly specified outcome, not a blanket waiver). Multiple labels can apply, as in the baseline health test. Preserve failures and explain each.
+
+## Post-task results
+
+T001 accepted 2026-09-15: **415 tests passed in 31.994s, exit 0, no skips**. Both Node wrappers ran. PO inspected the four-file diff and ran the runner from <home>, proving repository discovery outside its CWD. The original SDK-dependent failure and desktop-effect fixture gap are fixed without runtime edits. See `docs/tasks/results/T001.md` and `docs/audit/2026-09-14/t001-po-review.log`. A separate log-display wrapper hit a cp1252 Unicode error after the successful test child; this was an environmental display failure, not a failing suite. The historical failure remains recorded above.
+
+## Sextant verification scope
+
+247 selected tests passed in 19.34s using `.venv/Scripts/python.exe -m pytest -p no:cacheprovider` against money/time, capabilities, LLM risk boundary, costs, backtest correctness, market data, HTTP transport, registry, preflight, carry accounting and registered-value perturbation modules. Full suite/coverage/type/lint checks were not run. See `docs/audit/2026-09-14/sextant-selected.log` and `docs/SEXTANT_REUSE.md`.

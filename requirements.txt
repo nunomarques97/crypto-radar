@@ -1,0 +1,2 @@
+# Observed working direct dependency at the 2026-09-14 audit; not a transitive lock.
+requests==2.34.2

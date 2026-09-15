@@ -1,0 +1,363 @@
+"""Claude Bridge (Phase 4): turns PENDING events into Sonnet/Fable analysis.
+
+RADAR LOCAL -> EVENT -> CLAUDE BRIDGE -> MODEL (SONNET | FABLE) -> ANALYSIS
+-> RESULT -> PERSISTENCE -> WINDOWS NOTIFICATION.
+
+This module never knows Kraken trading rules and never executes anything on
+a market - it only reads events the radar already created, calls a model,
+and writes the result back. It respects the Demand Router's decision as the
+sole authority for model choice: only SONNET and FABLE are ever dispatched,
+never OPUS, and never a model choice made by the LLM itself.
+
+SQLite (the `events` table) is the source of state; `events.jsonl` stays the
+append-only audit log (events.py already writes both). This module only ever
+transitions events through their SQLite row - never edits the jsonl log.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+import time
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
+from typing import Any, Callable
+
+from . import budgets, config, events
+from .analysis_schema import ANALYSIS_RESPONSE_SCHEMA, validate_analysis
+from .context_builder import build_model_context
+from .prompts import BRIDGE_SYSTEM_PROMPT_V1, MODEL_TASK_INSTRUCTIONS, build_user_message
+from .store import SnapshotStore
+
+logger = logging.getLogger("radar_v08.claude_bridge")
+
+CALL_STATUSES = (
+    "SUCCESS", "TIMEOUT", "RATE_LIMITED", "QUOTA_EXHAUSTED", "AUTH_ERROR",
+    "PROVIDER_UNAVAILABLE", "INVALID_RESPONSE",
+)
+HEALTH_STATES = ("ONLINE", "OFFLINE", "RATE_LIMITED", "QUOTA_EXHAUSTED", "AUTH_ERROR", "DEGRADED")
+
+# Higher = worse. Used to pick the single health state a cycle reports when
+# several events land on different outcomes (task section 15).
+_HEALTH_SEVERITY = {
+    "ONLINE": 0,
+    "DEGRADED": 1,
+    "RATE_LIMITED": 2,
+    "QUOTA_EXHAUSTED": 3,
+    "OFFLINE": 4,
+    "AUTH_ERROR": 5,
+}
+
+_STATUS_TO_HEALTH = {
+    "SUCCESS": "ONLINE",
+    "TIMEOUT": "DEGRADED",
+    "RATE_LIMITED": "RATE_LIMITED",
+    "QUOTA_EXHAUSTED": "QUOTA_EXHAUSTED",
+    "AUTH_ERROR": "AUTH_ERROR",
+    "PROVIDER_UNAVAILABLE": "OFFLINE",
+    "INVALID_RESPONSE": "DEGRADED",
+}
+
+
+@dataclass
+class CallResult:
+    status: str
+    parsed: dict[str, Any] | None = None
+    raw_text: str | None = None
+    error: str | None = None
+    latency_ms: float = 0.0
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+
+
+@dataclass
+class BridgeCycleResult:
+    health: str
+    processed: list[dict[str, Any]] = field(default_factory=list)
+    recovered_stale: int = 0
+    skipped_reason: str | None = None
+
+
+def _anthropic_available() -> bool:
+    try:
+        import anthropic  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+def _api_key_present(env: dict | None = None) -> bool:
+    source = env if env is not None else os.environ
+    return bool(source.get("ANTHROPIC_API_KEY") or source.get("ANTHROPIC_AUTH_TOKEN"))
+
+
+def _default_create(model: str, max_tokens: int, system: str, user_content: str, schema: dict[str, Any]) -> Any:
+    import anthropic  # lazy: Kraken/Qwen/router phases must work with no anthropic package installed
+
+    client = anthropic.Anthropic(timeout=config.CLAUDE_BRIDGE_TIMEOUT_SECONDS)
+    return client.messages.create(
+        model=model,
+        max_tokens=max_tokens,
+        system=system,
+        messages=[{"role": "user", "content": user_content}],
+        output_config={"format": {"type": "json_schema", "schema": schema}},
+    )
+
+
+def classify_exception(exc: Exception) -> str:
+    """Maps an SDK exception to one of CALL_STATUSES. Falls back to
+    PROVIDER_UNAVAILABLE for anything unrecognized (including the anthropic
+    package not being installed) rather than crashing the bridge cycle.
+    """
+    try:
+        import anthropic
+    except ImportError:
+        return "PROVIDER_UNAVAILABLE"
+
+    if isinstance(exc, (anthropic.AuthenticationError, anthropic.PermissionDeniedError)):
+        return "AUTH_ERROR"
+    if isinstance(exc, anthropic.RateLimitError):
+        return "RATE_LIMITED"
+    if isinstance(exc, getattr(anthropic, "APITimeoutError", ())):
+        return "TIMEOUT"
+    if isinstance(exc, anthropic.APIStatusError):
+        etype = getattr(exc, "type", None)
+        status_code = getattr(exc, "status_code", None)
+        if etype == "billing_error" or status_code == 402:
+            return "QUOTA_EXHAUSTED"
+        if etype == "overloaded_error" or (status_code is not None and status_code >= 500):
+            return "PROVIDER_UNAVAILABLE"
+        return "INVALID_RESPONSE"
+    if isinstance(exc, anthropic.APIConnectionError):
+        return "PROVIDER_UNAVAILABLE"
+    return "PROVIDER_UNAVAILABLE"
+
+
+def _extract_text(response: Any) -> str | None:
+    for block in getattr(response, "content", []) or []:
+        if isinstance(block, dict):
+            if block.get("type") == "text":
+                return block.get("text")
+            continue
+        if getattr(block, "type", None) == "text":
+            return getattr(block, "text", None)
+    return None
+
+
+def call_model(
+    model_demand: str,
+    context: dict[str, Any],
+    create_fn: Callable[..., Any] | None = None,
+) -> CallResult:
+    """Dispatches ONE event's context to the model the Demand Router already
+    chose. `model_demand` must be SONNET or FABLE - the router's output is the
+    sole authority for model selection (task section 5); this function never
+    picks a model itself and never accepts OPUS.
+    """
+    if model_demand not in ("SONNET", "FABLE"):
+        raise ValueError(f"Claude Bridge only dispatches SONNET or FABLE, never {model_demand!r}")
+
+    model = config.CLAUDE_BRIDGE_MODEL_IDS[model_demand]
+    max_tokens = (
+        config.CLAUDE_BRIDGE_SONNET_MAX_TOKENS if model_demand == "SONNET" else config.CLAUDE_BRIDGE_FABLE_MAX_TOKENS
+    )
+    task_instructions = MODEL_TASK_INSTRUCTIONS[model_demand]
+    user_content = build_user_message(task_instructions, context)
+
+    def _call() -> Any:
+        if create_fn is not None:
+            return create_fn(model, max_tokens, BRIDGE_SYSTEM_PROMPT_V1, user_content, ANALYSIS_RESPONSE_SCHEMA)
+        return _default_create(model, max_tokens, BRIDGE_SYSTEM_PROMPT_V1, user_content, ANALYSIS_RESPONSE_SCHEMA)
+
+    started = time.perf_counter()
+    try:
+        response = _call()
+    except ImportError:
+        return CallResult(
+            status="PROVIDER_UNAVAILABLE",
+            error="anthropic SDK not installed (pip install anthropic)",
+            latency_ms=(time.perf_counter() - started) * 1000,
+        )
+    except Exception as exc:  # noqa: BLE001 - classified below into a typed status, never swallowed silently
+        status = classify_exception(exc)
+        logger.warning("Claude Bridge call failed (%s): %s", status, exc)
+        return CallResult(status=status, error=str(exc), latency_ms=(time.perf_counter() - started) * 1000)
+
+    latency_ms = (time.perf_counter() - started) * 1000
+    text = _extract_text(response)
+    if text is None:
+        return CallResult(status="INVALID_RESPONSE", error="no text block in response", latency_ms=latency_ms)
+
+    try:
+        parsed = json.loads(text)
+    except (json.JSONDecodeError, TypeError) as exc:
+        return CallResult(status="INVALID_RESPONSE", error=f"invalid JSON: {exc}", raw_text=text, latency_ms=latency_ms)
+
+    validated, validation_error = validate_analysis(parsed, expected_asset=context.get("asset"))
+    if validated is None:
+        return CallResult(status="INVALID_RESPONSE", error=validation_error, raw_text=text, latency_ms=latency_ms)
+
+    usage = getattr(response, "usage", None)
+    input_tokens = getattr(usage, "input_tokens", None) if usage is not None else None
+    output_tokens = getattr(usage, "output_tokens", None) if usage is not None else None
+
+    return CallResult(
+        status="SUCCESS", parsed=validated, raw_text=text, latency_ms=latency_ms,
+        input_tokens=input_tokens, output_tokens=output_tokens,
+    )
+
+
+def _backoff_seconds(attempts: int) -> float:
+    schedule = config.CLAUDE_BRIDGE_RETRY_BACKOFF_SECONDS
+    index = min(max(attempts - 1, 0), len(schedule) - 1)
+    return float(schedule[index])
+
+
+def _worse_health(a: str, b: str) -> str:
+    return a if _HEALTH_SEVERITY.get(a, 0) >= _HEALTH_SEVERITY.get(b, 0) else b
+
+
+def _apply_outcome(store: SnapshotStore, event_row: Any, result: CallResult, now: datetime, now_iso: str) -> str:
+    event_id = event_row["event_id"]
+    attempts = (event_row["attempts"] or 0) + 1
+
+    if result.status == "SUCCESS":
+        store.mark_event_processed(event_id, now_iso)
+        events.snapshot_to_jsonl(store, event_id)
+        return "PROCESSED"
+
+    # Auth problems are a configuration issue, not a transient outage -
+    # retrying without fixing the credential just wastes attempts, so this
+    # is the one status that goes straight to FAILED (task section 11).
+    if result.status == "AUTH_ERROR":
+        store.mark_event_failed(event_id, now_iso, f"auth_error: {result.error}")
+        events.snapshot_to_jsonl(store, event_id)
+        return "FAILED"
+
+    if attempts >= config.CLAUDE_BRIDGE_MAX_ATTEMPTS_BEFORE_FAILED:
+        store.mark_event_failed(event_id, now_iso, f"max_attempts_exceeded ({result.status}): {result.error}")
+        events.snapshot_to_jsonl(store, event_id)
+        return "FAILED"
+
+    next_attempt_at = (now + timedelta(seconds=_backoff_seconds(attempts))).isoformat()
+    store.mark_event_deferred(event_id, now_iso, f"{result.status.lower()}: {result.error}", next_attempt_at)
+    events.snapshot_to_jsonl(store, event_id)
+    return "DEFERRED"
+
+
+def run_bridge_cycle(
+    store: SnapshotStore,
+    now: datetime | None = None,
+    max_events: int | None = None,
+    create_fn: Callable[..., Any] | None = None,
+    notify_fn: Callable[[dict[str, Any]], None] | None = None,
+    env: dict | None = None,
+) -> BridgeCycleResult:
+    """One pass over the actionable event queue. Safe to call repeatedly
+    (loop mode) or once (single `--mode full`/`--mode bridge` run). Never
+    raises on provider trouble - every failure mode ends in a typed event
+    status and a bridge health state, never an uncaught exception.
+    """
+    now = now or datetime.now(timezone.utc)
+    now_iso = now.isoformat()
+    max_events = max_events if max_events is not None else config.CLAUDE_BRIDGE_MAX_EVENTS_PER_CYCLE
+
+    cutoff_iso = (now - timedelta(seconds=config.CLAUDE_BRIDGE_PROCESSING_STALE_SECONDS)).isoformat()
+    recovered_ids = store.recover_stale_processing(cutoff_iso, now_iso)
+    recovered = len(recovered_ids)
+    if recovered:
+        logger.warning("Recovered %d stale PROCESSING event(s) back to PENDING", recovered)
+        for recovered_id in recovered_ids:
+            events.snapshot_to_jsonl(store, recovered_id)
+
+    if create_fn is None and not _anthropic_available():
+        store.set_bridge_health("OFFLINE", "anthropic SDK not installed", now_iso)
+        return BridgeCycleResult(health="OFFLINE", recovered_stale=recovered, skipped_reason="NO_SDK")
+
+    if create_fn is None and not _api_key_present(env):
+        store.set_bridge_health("AUTH_ERROR", "no ANTHROPIC_API_KEY/ANTHROPIC_AUTH_TOKEN in environment", now_iso)
+        return BridgeCycleResult(health="AUTH_ERROR", recovered_stale=recovered, skipped_reason="NO_CREDENTIALS")
+
+    candidates = store.find_actionable_events(now_iso, max_events)
+    processed: list[dict[str, Any]] = []
+    cycle_health = "ONLINE"
+
+    for row in candidates:
+        event_id = row["event_id"]
+        model_demand = row["model_demand"]
+
+        if model_demand not in ("SONNET", "FABLE"):
+            # IGNORE-demand events are never queued for the Bridge in the
+            # first place, but guard anyway - never call a model for one.
+            continue
+
+        if store.has_successful_analysis(event_id):
+            # Idempotency backstop: a PROCESSED-looking candidate that
+            # somehow re-entered the actionable set is never re-billed.
+            store.mark_event_processed(event_id, now_iso)
+            events.snapshot_to_jsonl(store, event_id)
+            continue
+
+        budget_ok, _budget_status = budgets.try_consume_budget(store, model_demand, now)
+        if not budget_ok:
+            next_attempt_at = (now + timedelta(seconds=_backoff_seconds((row["attempts"] or 0) + 1))).isoformat()
+            store.mark_event_deferred(event_id, now_iso, "budget_exhausted", next_attempt_at)
+            events.snapshot_to_jsonl(store, event_id)
+            processed.append({"event_id": event_id, "asset": row["asset"], "outcome": "DEFERRED", "reason": "budget_exhausted"})
+            continue
+
+        if not store.claim_event_for_processing(event_id, now_iso):
+            continue  # claimed/settled by someone else since find_actionable_events ran
+        events.snapshot_to_jsonl(store, event_id)
+
+        context = build_model_context(row)
+        requested_at = datetime.now(timezone.utc).isoformat()
+        result = call_model(model_demand, context, create_fn=create_fn)
+        completed_at = datetime.now(timezone.utc).isoformat()
+
+        store.insert_model_analysis(
+            event_id=event_id,
+            model=config.CLAUDE_BRIDGE_MODEL_IDS[model_demand],
+            model_version=config.MODEL_VERSION_TAG[model_demand],
+            requested_at=requested_at,
+            completed_at=completed_at,
+            status=result.status,
+            response=result.raw_text,
+            parsed_output_json=json.dumps(result.parsed, ensure_ascii=False) if result.parsed is not None else None,
+            latency_ms=result.latency_ms,
+            input_tokens=result.input_tokens,
+            output_tokens=result.output_tokens,
+            error=result.error,
+        )
+
+        outcome = _apply_outcome(store, row, result, now, now_iso)
+        cycle_health = _worse_health(cycle_health, _STATUS_TO_HEALTH.get(result.status, "DEGRADED"))
+
+        entry = {
+            "event_id": event_id, "asset": row["asset"], "model": model_demand,
+            "outcome": outcome, "status": result.status, "parsed": result.parsed,
+            "error": result.error, "latency_ms": result.latency_ms,
+        }
+        processed.append(entry)
+
+        if outcome == "PROCESSED" and notify_fn is not None and not row["notified"]:
+            notify_fn(
+                {
+                    "event_id": event_id, "asset": row["asset"], "model": model_demand,
+                    "setup_type": row["setup_type"], "direction": row["direction"],
+                    "opportunity_score": row["opportunity_score"], "tradeability_score": row["tradeability_score"],
+                    "recommendation": (result.parsed or {}).get("recommendation"),
+                }
+            )
+            store.mark_event_notified(event_id, now_iso)
+            events.snapshot_to_jsonl(store, event_id)
+
+    store.set_bridge_health(cycle_health, None, now_iso)
+    return BridgeCycleResult(health=cycle_health, processed=processed, recovered_stale=recovered)
+
+
+def bridge_health_label(store: SnapshotStore) -> str:
+    """Last-known health, surviving process restarts (task section 15)."""
+    row = store.get_bridge_health()
+    return row["state"] if row is not None else "UNKNOWN"

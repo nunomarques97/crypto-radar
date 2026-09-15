@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<title>Crypto Radar — Control Room</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+
+  <div class="topbar">
+    <div class="brand"><span class="dot" id="brand-dot"></span> CRYPTO RADAR <span style="color:var(--muted-dim); font-weight:400;">— Control Room</span></div>
+    <div class="topbar-status">
+      <span>Estado <b class="mono" id="proc-state">STOPPED</b></span>
+      <span>Uptime <b class="mono" id="proc-uptime">—</b></span>
+      <span>Último heartbeat <b class="mono" id="last-heartbeat">—</b></span>
+      <span>Próximo ciclo FULL <b class="mono" id="next-cycle">—</b></span>
+      <span id="test-mode-banner" class="test-mode-banner" hidden>🧪 TEST MODE ACTIVE</span>
+    </div>
+    <div class="btns">
+      <button class="btn ghost test-toggle" id="btn-test-mode" aria-pressed="false">🧪 TEST MODE: OFF</button>
+      <button class="btn start" id="btn-start">START RADAR</button>
+      <button class="btn ghost" id="btn-restart">RESTART</button>
+      <button class="btn stop" id="btn-stop">STOP RADAR</button>
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="nav-item active" data-tab="dashboard">Dashboard</div>
+    <div class="nav-item" data-tab="agentes">Agentes</div>
+    <div class="nav-item" data-tab="alertas">Alertas <span class="badge" id="alerts-badge">0</span></div>
+    <div class="nav-item" data-tab="historico">Histórico</div>
+    <div class="sep"></div>
+    <div class="nav-item" data-tab="mocks" data-test-only="1" hidden>Mocks / Testes</div>
+    <div class="nav-item" data-tab="sistema">Sistema / Logs</div>
+  </div>
+
+  <div class="content">
+
+    <!-- DASHBOARD -->
+    <section class="tab-panel" id="tab-dashboard">
+      <div class="main-grid">
+        <div class="panel">
+          <h3>System Status</h3>
+          <div id="system-status-rows"></div>
+        </div>
+
+        <div class="panel span2">
+          <h3>Agentes</h3>
+          <div class="rail" id="agents-rail-mini"></div>
+        </div>
+
+        <div class="panel">
+          <h3>Funnel</h3>
+          <div id="funnel-rows"></div>
+          <div class="funnel-note">Demand = decisão do router neste ciclo. Calls = chamadas reais à API (model_analyses).</div>
+        </div>
+
+        <div class="panel span3">
+          <h3>Alertas reais — mais recentes</h3>
+          <table>
+            <thead><tr>
+              <th>Hora</th><th>Asset</th><th>Setup</th><th>Dir</th><th>Opp.</th><th>Tradeability</th><th>Demand</th><th>Lifecycle</th><th>NTFY</th><th></th>
+            </tr></thead>
+            <tbody id="alerts-preview-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- AGENTES -->
+    <section class="tab-panel" id="tab-agentes" hidden>
+      <div class="room-panel">
+        <h3>Agent Control Room</h3>
+        <div id="agent-room"></div>
+      </div>
+    </section>
+
+    <!-- ALERTAS -->
+    <section class="tab-panel" id="tab-alertas" hidden>
+      <div class="panel">
+        <h3>Alertas reais</h3>
+        <table>
+          <thead><tr>
+            <th>Hora</th><th>Asset</th><th>Setup</th><th>Dir</th><th>Opp.</th><th>Tradeability</th><th>Demand</th><th>Lifecycle</th><th>NTFY</th><th></th>
+          </tr></thead>
+          <tbody id="alerts-body"></tbody>
+        </table>
+        <div id="alerts-empty" class="empty" hidden>Sem alertas reais até ao momento.</div>
+      </div>
+    </section>
+
+    <!-- HISTORICO -->
+    <section class="tab-panel" id="tab-historico" hidden>
+      <div class="panel">
+        <h3>Histórico</h3>
+        <table>
+          <thead><tr>
+            <th>Hora</th><th>Asset</th><th>Setup</th><th>Dir</th><th>Opp.</th><th>Tradeability</th><th>Demand</th><th>NTFY</th><th></th>
+          </tr></thead>
+          <tbody id="history-body"></tbody>
+        </table>
+        <div id="history-empty" class="empty" hidden>Sem histórico registado ainda.</div>
+      </div>
+    </section>
+
+    <!-- MOCKS -->
+    <section class="tab-panel" id="tab-mocks" data-test-only="1" hidden>
+      <div class="panel">
+        <h3>Mocks / Testes <span class="test-marker">[TESTE] — nunca toca Kraken/Qwen/Claude</span></h3>
+        <div class="toolbar">
+          <button class="btn" id="btn-notify-test">TESTAR NTFY</button>
+          <button class="btn" id="btn-mock-alert">EXECUTAR MOCK ALERT</button>
+          <button class="btn" id="btn-clipboard-test">TESTAR CLIPBOARD</button>
+          <button class="btn" id="btn-comm-test">TESTAR COMUNICAÇÃO (visual)</button>
+        </div>
+        <div id="mock-result" class="result-box" hidden></div>
+      </div>
+      <div class="panel" style="margin-top:16px;">
+        <h3>Eventos mock recentes</h3>
+        <table>
+          <thead><tr><th>Hora</th><th>Asset</th><th>Setup</th><th>Demand</th><th></th></tr></thead>
+          <tbody id="mocks-body"></tbody>
+        </table>
+        <div id="mocks-empty" class="empty" hidden>Sem eventos mock ainda — usa EXECUTAR MOCK ALERT acima.</div>
+      </div>
+    </section>
+
+    <!-- SISTEMA -->
+    <section class="tab-panel" id="tab-sistema" hidden>
+      <div class="panel" style="max-width:640px;">
+        <h3>Sistema</h3>
+        <div class="field-row"><span class="k">SQLite</span><span class="mono" id="sys-sqlite-path">—</span></div>
+        <div class="field-row"><span class="k">Log</span><span class="mono" id="sys-log-path">—</span></div>
+        <div class="field-row"><span class="k">PID</span><span class="mono" id="sys-pid">—</span></div>
+        <div class="field-row"><span class="k">Exit code (última paragem)</span><span class="mono" id="sys-exit-code">—</span></div>
+        <div class="toolbar" style="margin-top:14px;">
+          <button class="btn ghost" id="btn-open-log">ABRIR LOG</button>
+          <button class="btn ghost" id="btn-open-folder">ABRIR PASTA DO RADAR</button>
+        </div>
+      </div>
+      <div class="panel" style="margin-top:16px; max-width:640px;">
+        <h3>Últimas linhas de log</h3>
+        <div class="log-box mono" id="log-lines">—</div>
+      </div>
+    </section>
+
+  </div>
+</div>
+<script src="test_mode.js"></script>
+<script src="agent_room.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

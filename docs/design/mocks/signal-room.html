@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<title>Crypto Radar — Signal Room mock</title>
+<style>
+  :root{
+    --bg:#0B0E13; --panel:#12161D; --panel-hi:#161B23; --border:#1E242D;
+    --text:#E6E9EE; --muted:#8B95A5; --muted-dim:#5A6577;
+    --ok:#34D399; --warn:#F5B94D; --err:#F0616B; --info:#5B9DF6; --idle:#4B5563;
+    --r-sm:6px; --r-md:10px; --r-pill:999px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:Inter,-apple-system,Segoe UI,system-ui,sans-serif;
+    font-size:13px; line-height:1.4;
+  }
+  .mono{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;}
+  .app{display:grid; grid-template-columns:220px 1fr; grid-template-rows:56px 1fr; height:100vh; min-height:900px;}
+  .topbar{grid-column:1/3; display:flex; align-items:center; justify-content:space-between; padding:0 20px; border-bottom:1px solid var(--border); background:var(--panel);}
+  .brand{display:flex; align-items:center; gap:10px; font-weight:600; letter-spacing:.2px;}
+  .brand .dot{width:9px; height:9px; border-radius:50%; background:var(--ok); box-shadow:0 0 0 4px rgba(52,211,153,.15);}
+  .topbar-status{display:flex; align-items:center; gap:18px; color:var(--muted); font-size:12px;}
+  .topbar-status b{color:var(--text); font-weight:500;}
+  .btns{display:flex; gap:8px;}
+  .btn{border:1px solid var(--border); background:var(--panel-hi); color:var(--text); padding:7px 14px; border-radius:var(--r-sm); font-size:12px; cursor:pointer; font-weight:500;}
+  .btn.start{border-color:rgba(52,211,153,.4); color:var(--ok);}
+  .btn.stop{border-color:rgba(240,97,107,.35); color:var(--err);}
+  .btn.ghost{color:var(--muted);}
+  .sidebar{border-right:1px solid var(--border); background:var(--panel); padding:16px 10px; display:flex; flex-direction:column; gap:2px;}
+  .nav-item{padding:9px 12px; border-radius:var(--r-sm); color:var(--muted); font-size:13px; cursor:pointer; display:flex; align-items:center; justify-content:space-between;}
+  .nav-item.active{background:var(--panel-hi); color:var(--text); font-weight:600;}
+  .nav-item .badge{font-size:11px; color:var(--muted-dim); background:var(--bg); border:1px solid var(--border); padding:1px 6px; border-radius:var(--r-pill);}
+  .nav-item.active .badge{color:var(--info); border-color:rgba(91,157,246,.3);}
+  .sidebar .sep{height:1px; background:var(--border); margin:10px 4px;}
+  .main{padding:20px; overflow:auto; display:grid; grid-template-columns:1.15fr 1fr 1fr; gap:16px; align-content:start;}
+  .panel{background:var(--panel); border:1px solid var(--border); border-radius:var(--r-md); padding:16px;}
+  .panel h3{margin:0 0 12px; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); font-weight:600;}
+  .panel.span2{grid-column:span 2;}
+  .panel.span3{grid-column:span 3;}
+
+  .status-row{display:flex; justify-content:space-between; align-items:center; padding:7px 0; border-bottom:1px solid var(--border); font-size:12.5px;}
+  .status-row:last-child{border-bottom:none;}
+  .status-row .name{color:var(--muted);}
+  .pill{display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:600; padding:2px 8px; border-radius:var(--r-pill);}
+  .pill .dot{width:6px; height:6px; border-radius:50%;}
+  .pill.ok{color:var(--ok); background:rgba(52,211,153,.10);} .pill.ok .dot{background:var(--ok);}
+  .pill.warn{color:var(--warn); background:rgba(245,185,77,.10);} .pill.warn .dot{background:var(--warn);}
+  .pill.err{color:var(--err); background:rgba(240,97,107,.10);} .pill.err .dot{background:var(--err);}
+  .pill.info{color:var(--info); background:rgba(91,157,246,.10);} .pill.info .dot{background:var(--info);}
+  .pill.idle{color:var(--muted); background:rgba(75,85,99,.15);} .pill.idle .dot{background:var(--idle);}
+
+  /* agent pipeline rail — signature element */
+  .rail{display:flex; flex-direction:column; gap:0;}
+  .agent-node{display:flex; gap:12px; position:relative; padding-bottom:18px;}
+  .agent-node:last-child{padding-bottom:0;}
+  .agent-node .line{position:absolute; left:9px; top:22px; bottom:-2px; width:1px; background:var(--border);}
+  .agent-node:last-child .line{display:none;}
+  .node-dot{width:20px; height:20px; border-radius:50%; border:1px solid var(--border); background:var(--panel-hi); display:flex; align-items:center; justify-content:center; flex-shrink:0; z-index:1;}
+  .node-dot .core{width:7px; height:7px; border-radius:50%; background:var(--idle);}
+  .agent-node.active .node-dot{border-color:rgba(91,157,246,.5);}
+  .agent-node.active .node-dot .core{background:var(--info); animation:pulse 1.8s ease-in-out infinite;}
+  .agent-node.ok .node-dot .core{background:var(--ok);}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(91,157,246,.35);} 50%{box-shadow:0 0 0 5px rgba(91,157,246,0);}}
+  .node-body{flex:1; padding-top:1px;}
+  .node-top{display:flex; justify-content:space-between; align-items:baseline;}
+  .node-name{font-weight:600; font-size:12.5px;}
+  .node-role{color:var(--muted-dim); font-size:11px; margin-top:1px;}
+  .node-meta{color:var(--muted); font-size:11px; margin-top:4px;}
+
+  .funnel-row{display:flex; justify-content:space-between; align-items:center; padding:6px 0; font-size:12.5px; border-bottom:1px dashed var(--border);}
+  .funnel-row:last-child{border-bottom:none;}
+  .funnel-row .n{font-weight:600;}
+  .funnel-row.split{background:rgba(245,185,77,.05); margin:0 -8px; padding:6px 8px; border-radius:6px; border-bottom:none;}
+  .funnel-row.split .n{color:var(--warn);}
+  .funnel-note{font-size:10.5px; color:var(--muted-dim); margin-top:8px; line-height:1.5;}
+
+  table{width:100%; border-collapse:collapse; font-size:12px;}
+  th{text-align:left; color:var(--muted-dim); font-weight:500; font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; padding:0 10px 8px; border-bottom:1px solid var(--border);}
+  td{padding:9px 10px; border-bottom:1px solid var(--border); vertical-align:middle;}
+  tr:last-child td{border-bottom:none;}
+  .asset{font-weight:600;}
+  .dir-long{color:var(--ok);} .dir-short{color:var(--err);}
+  .copy-btn{border:1px solid var(--border); background:transparent; color:var(--muted); padding:4px 9px; border-radius:var(--r-sm); font-size:11px; cursor:pointer;}
+  .copy-btn:hover{color:var(--text); border-color:var(--muted-dim);}
+  .lifecycle{display:flex; gap:4px; align-items:center;}
+  .step{width:7px; height:7px; border-radius:50%; background:var(--idle);}
+  .step.done{background:var(--ok);}
+  .step.cur{background:var(--info); animation:pulse 1.8s ease-in-out infinite;}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="topbar">
+    <div class="brand"><span class="dot"></span> CRYPTO RADAR <span style="color:var(--muted-dim); font-weight:400;">— Control Room</span></div>
+    <div class="topbar-status">
+      <span>Uptime <b class="mono">02:14:07</b></span>
+      <span>Último heartbeat <b class="mono">há 4s</b></span>
+      <span>Próximo ciclo FULL <b class="mono">~1m 12s</b></span>
+      <span class="pill ok"><span class="dot"></span>RUNNING</span>
+    </div>
+    <div class="btns">
+      <button class="btn ghost">RESTART</button>
+      <button class="btn stop">STOP RADAR</button>
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="nav-item active">Dashboard</div>
+    <div class="nav-item">Agentes</div>
+    <div class="nav-item">Alertas <span class="badge">3</span></div>
+    <div class="nav-item">Histórico</div>
+    <div class="sep"></div>
+    <div class="nav-item">Mocks / Testes</div>
+    <div class="nav-item">Sistema / Logs</div>
+  </div>
+
+  <div class="main">
+
+    <div class="panel">
+      <h3>System Status</h3>
+      <div class="status-row"><span class="name">Kraken</span><span class="pill ok"><span class="dot"></span>OK</span></div>
+      <div class="status-row"><span class="name">Kraken Futures</span><span class="pill ok"><span class="dot"></span>OK</span></div>
+      <div class="status-row"><span class="name">SQLite</span><span class="pill ok"><span class="dot"></span>OK</span></div>
+      <div class="status-row"><span class="name">Qwen</span><span class="pill ok"><span class="dot"></span>OK</span></div>
+      <div class="status-row"><span class="name">NTFY</span><span class="pill info"><span class="dot"></span>ENABLED</span></div>
+      <div class="status-row"><span class="name">Claude Bridge</span><span class="pill warn"><span class="dot"></span>AUTH ERROR</span></div>
+    </div>
+
+    <div class="panel span2">
+      <h3>Agentes</h3>
+      <div class="rail">
+        <div class="agent-node active">
+          <div class="node-dot"><span class="core"></span></div><div class="line"></div>
+          <div class="node-body">
+            <div class="node-top"><span class="node-name">Qwen 14B</span><span class="pill info"><span class="dot"></span>PROCESSING</span></div>
+            <div class="node-role">Screener · qwen3:14b</div>
+            <div class="node-meta">evento atual <span class="mono">LSK</span> · última atividade <span class="mono">09:21:03</span> · processados <span class="mono">142</span></div>
+          </div>
+        </div>
+        <div class="agent-node">
+          <div class="node-dot"><span class="core"></span></div><div class="line"></div>
+          <div class="node-body">
+            <div class="node-top"><span class="node-name">Qwen Red Team</span><span class="pill idle"><span class="dot"></span>NOT CONFIGURED</span></div>
+            <div class="node-role">Adversarial review</div>
+            <div class="node-meta">não implementado nesta fase</div>
+          </div>
+        </div>
+        <div class="agent-node">
+          <div class="node-dot"><span class="core"></span></div><div class="line"></div>
+          <div class="node-body">
+            <div class="node-top"><span class="node-name">Sonnet</span><span class="pill idle"><span class="dot"></span>IDLE</span></div>
+            <div class="node-role">Orchestrator · claude-sonnet-5</div>
+            <div class="node-meta">demand (ciclo) <span class="mono">4</span> · calls reais <span class="mono">0</span> · última atividade —</div>
+          </div>
+        </div>
+        <div class="agent-node">
+          <div class="node-dot"><span class="core"></span></div>
+          <div class="node-body">
+            <div class="node-top"><span class="node-name">Fable 5.1</span><span class="pill idle"><span class="dot"></span>WAITING</span></div>
+            <div class="node-role">Trading analyst · claude-fable-5-1</div>
+            <div class="node-meta">demand (ciclo) <span class="mono">1</span> · calls reais <span class="mono">0</span> · bridge bloqueada (AUTH ERROR)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>Funnel</h3>
+      <div class="funnel-row"><span>Assets scanned</span><span class="n mono">312</span></div>
+      <div class="funnel-row"><span>L1 anomalies</span><span class="n mono">40</span></div>
+      <div class="funnel-row"><span>L2 opportunities</span><span class="n mono">9</span></div>
+      <div class="funnel-row"><span>L3 finalists</span><span class="n mono">5</span></div>
+      <div class="funnel-row"><span>Qwen reviews</span><span class="n mono">5</span></div>
+      <div class="funnel-row split"><span>Sonnet demand</span><span class="n mono">4</span></div>
+      <div class="funnel-row split"><span>Sonnet calls</span><span class="n mono">0</span></div>
+      <div class="funnel-row split"><span>Fable demand</span><span class="n mono">1</span></div>
+      <div class="funnel-row split"><span>Fable calls</span><span class="n mono">0</span></div>
+      <div class="funnel-row"><span>Deferred</span><span class="n mono">1</span></div>
+      <div class="funnel-row"><span>Failed</span><span class="n mono">0</span></div>
+      <div class="funnel-note">Demand = decisão do router neste ciclo. Calls = chamadas reais à API (model_analyses). Bridge em AUTH ERROR → calls ficam a 0 mesmo com demand &gt; 0.</div>
+    </div>
+
+    <div class="panel span3">
+      <h3>Alertas reais — mais recentes</h3>
+      <table>
+        <thead><tr>
+          <th>Hora</th><th>Asset</th><th>Setup</th><th>Dir</th><th>Opp.</th><th>Tradeability</th><th>Demand</th><th>Lifecycle</th><th>NTFY</th><th></th>
+        </tr></thead>
+        <tbody>
+          <tr>
+            <td class="mono">09:21:03</td><td class="asset">LSK</td><td>CONTINUATION</td><td class="dir-long">LONG</td>
+            <td class="mono">71</td><td class="mono">58</td><td><span class="pill info"><span class="dot"></span>FABLE</span></td>
+            <td><div class="lifecycle" title="Detected → Qwen → Router → NTFY → Prompt → Claude">
+              <span class="step done"></span><span class="step done"></span><span class="step done"></span><span class="step done"></span><span class="step done"></span><span class="step cur"></span>
+            </div></td>
+            <td><span class="pill ok"><span class="dot"></span>SENT</span></td>
+            <td><button class="copy-btn">COPIAR PROMPT</button></td>
+          </tr>
+          <tr>
+            <td class="mono">09:14:41</td><td class="asset">ARB</td><td>BREAKOUT</td><td class="dir-long">LONG</td>
+            <td class="mono">64</td><td class="mono">72</td><td><span class="pill warn"><span class="dot"></span>SONNET</span></td>
+            <td><div class="lifecycle">
+              <span class="step done"></span><span class="step done"></span><span class="step done"></span><span class="step done"></span><span class="step cur"></span><span class="step"></span>
+            </div></td>
+            <td><span class="pill warn"><span class="dot"></span>PENDING</span></td>
+            <td><button class="copy-btn">COPIAR PROMPT</button></td>
+          </tr>
+          <tr>
+            <td class="mono">08:58:12</td><td class="asset">PUMP</td><td>REVERSAL</td><td class="dir-short">SHORT</td>
+            <td class="mono">60</td><td class="mono">41</td><td><span class="pill warn"><span class="dot"></span>SONNET</span></td>
+            <td><div class="lifecycle">
+              <span class="step done"></span><span class="step done"></span><span class="step done"></span><span class="step done"></span><span class="step done"></span><span class="step"></span>
+            </div></td>
+            <td><span class="pill err"><span class="dot"></span>FAILED</span></td>
+            <td><button class="copy-btn">COPIAR PROMPT</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

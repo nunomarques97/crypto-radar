@@ -1,0 +1,30 @@
+# Resolved on Windows with CPython 3.12.10 on 2026-09-15.
+# This is a constraints file for requirements.txt, requirements-ui.txt,
+# requirements-build.txt, and requirements-dev.txt; it does not install groups.
+altgraph==0.17.5
+ast_serialize==0.11.2
+bottle==0.13.4
+certifi==2026.7.22
+cffi==2.1.1
+charset-normalizer==3.5.1
+clr_loader==0.3.1
+idna==3.19
+librt==0.15.0
+mypy==2.3.1
+mypy_extensions==1.1.0
+packaging==26.3
+pathspec==1.1.1
+pefile==2024.8.26
+pip==25.0.1
+proxy_tools==0.1.0
+pycparser==3.0
+pyinstaller==6.22.3
+pyinstaller-hooks-contrib==2026.7
+pythonnet==3.1.0
+pywebview==6.2.1
+pywin32-ctypes==0.2.3
+requests==2.34.2
+ruff==0.16.7
+setuptools==84.0.0
+typing_extensions==4.16.0
+urllib3==2.7.0

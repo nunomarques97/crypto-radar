@@ -1,0 +1,58 @@
+# Crypto Radar
+
+A Windows desktop and Python market-analysis system using public Kraken spot/perpetual data, deterministic L0–L3 analysis, SQLite, and local Qwen through Ollama. It does not place orders. The Agent Control Room visualizes the pipeline and controls its process.
+
+**Current implementation is not yet the local-only target.** The `full`, `bridge`, and `loop` modes still invoke the optional Claude Bridge. The default command without a mode runs the older v0.7 implementation. The Test Mode panel currently exposes real mock-alert persistence and notification actions; see the audit before using them.
+
+## Documentation and status
+
+The September 14, 2026 takeover audit established 411 tests: 410 passing and one pre-existing environmental failure. T001 was PO-accepted on September 15: 415 tests pass, including both Node wrappers, with no skips. See `TESTING.md` for evidence, exact commands and limitations.
+
+| Document | Responsibility |
+|---|---|
+| [Architecture](ARCHITECTURE.md) | Verified current system and accepted target boundaries |
+| [Roadmap](ROADMAP.md) | Delivery gates, scope, acceptance, rollback |
+| [Risk](RISK.md) | Deterministic authority and prohibited capabilities |
+| [Control Room design](DESIGN.md) | Visual contract, real activity, Test Mode |
+| [Testing](TESTING.md) | Baseline, isolation, verification |
+| [Development and Codex](DEVELOPMENT.md) | Environment, setup, handoffs, review, recovery |
+| [Takeover audit](docs/TAKEOVER_AUDIT.md) | Evidence, discrepancies, risks and scope of inspection |
+| [Sextant reuse matrix](docs/SEXTANT_REUSE.md) | Component-by-component reuse decisions |
+
+The older `docs/RADAR_v0.8_ARCHITECTURE.md` remains historical design context. Its phase numbers and cloud direction do not override these documents.
+
+## Design status and continuation
+
+Read PO handover first when taking ownership. Status vocabulary: **IMPLEMENTED** means source plus recorded acceptance evidence; **ACCEPTED DESIGN** is specified but not implemented; **EXPERIMENTAL** has a fixed benchmark/decision rule and stays disabled until it passes; **DEFERRED / AUTHORIZATION-GATED** is designed but unavailable.
+
+The analysis program remains R0–R7. [Operating contracts](docs/OPERATING_CONTRACTS.md) close queue/context/model/evaluation procedures. [Future execution architecture](docs/EXECUTION_ARCHITECTURE.md) and [future trading roadmap](docs/FUTURE_TRADING_ROADMAP.md) define a separate permission-gated end state. Documenting private/live execution does not enable it. Task catalog is the small-task sequence.
+
+## Run from source
+
+Use Python 3.12 and the dependencies in `DEVELOPMENT.md`. From PowerShell:
+
+```powershell
+Set-Location <repo>
+python -m ui
+```
+
+Opening the UI opens its configured SQLite store and may initialize its schema; it is not a read-only database viewer. Its Start button runs `python radar.py --mode loop`. Until cloud containment is implemented, clear both `ANTHROPIC_API_KEY` and `ANTHROPIC_AUTH_TOKEN` in the launching process if using the application. This is an operational workaround, not the final architectural gate. No credentials are needed for market data.
+
+Explicit CLI modes:
+
+| Command | Actual behavior |
+|---|---|
+| `python radar.py --mode heartbeat` | Public data, snapshots, L1/L2, persistence; no full L3/Qwen/bridge dispatch |
+| `python radar.py --mode full` | L0–L3, Qwen, router/events, legacy bridge and notification path |
+| `python radar.py --mode loop` | Repeated heartbeat/full cycles and legacy bridge draining |
+| `python radar.py --mode alerts` | Event history; interactive prompt-copy option |
+| `python radar.py --mode prompt --event ID` | Reconstruct and copy a saved prompt |
+| `python radar.py --mode shadow` | Comparison with legacy v0.7; not an isolated test mode |
+
+`bridge`, `mock-alert`, and `notify-test` are legacy operational tools with effects; they are not the automated test command. `python radar.py` and even an unrecognized flag such as `--help` can fall back to v0.7 because argument parsing is handwritten. Always give an explicit supported mode.
+
+Configuration is currently environment-based and evaluated at import time in `radar_v08/config.py`. `RADAR_STATE_DIR` sets the state root; individual SQLite/output/log path overrides take precedence. Do not change a live database during development. Ollama defaults to `http://localhost:11434` and `qwen3:14b`. ntfy is optional and involves external network delivery; local inference does not mean the whole application is offline.
+
+## Windows package
+
+The existing `CryptoRadarControlRoom.spec` builds an onedir PyInstaller application with local web assets. It expects the source project and a real Python interpreter nearby; it is not a standalone packaged backend. `RADAR_PYTHON_EXE` can point to the intended interpreter. See `DEVELOPMENT.md` before rebuilding. Preserve the duplicate-window regression safeguard.

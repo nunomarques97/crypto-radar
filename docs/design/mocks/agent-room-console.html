@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<title>Crypto Radar — Agent Room (Console variant)</title>
+<style>
+  :root{
+    --bg:#0B0E13; --panel:#12161D; --panel-hi:#161B23; --border:#1E242D;
+    --text:#E6E9EE; --muted:#8B95A5; --muted-dim:#5A6577;
+    --ok:#34D399; --warn:#F5B94D; --err:#F0616B; --info:#5B9DF6; --idle:#4B5563;
+    --r-sm:6px; --r-md:10px; --r-pill:999px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:Inter,-apple-system,Segoe UI,system-ui,sans-serif;
+    font-size:13px; line-height:1.4;
+  }
+  .mono{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;}
+  .app{display:grid; grid-template-columns:220px 1fr; grid-template-rows:56px 1fr; height:100vh; min-height:700px;}
+  .topbar{grid-column:1/3; display:flex; align-items:center; justify-content:space-between; padding:0 20px; border-bottom:1px solid var(--border); background:var(--panel);}
+  .brand{display:flex; align-items:center; gap:10px; font-weight:600; letter-spacing:.2px;}
+  .brand .dot{width:9px; height:9px; border-radius:50%; background:var(--ok); box-shadow:0 0 0 4px rgba(52,211,153,.15);}
+  .topbar-status{display:flex; align-items:center; gap:18px; color:var(--muted); font-size:12px;}
+  .topbar-status b{color:var(--text); font-weight:500;}
+  .btns{display:flex; gap:8px;}
+  .btn{border:1px solid var(--border); background:var(--panel-hi); color:var(--text); padding:7px 14px; border-radius:var(--r-sm); font-size:12px; cursor:pointer; font-weight:500;}
+  .btn.stop{border-color:rgba(240,97,107,.35); color:var(--err);}
+  .btn.ghost{color:var(--muted);}
+  .sidebar{border-right:1px solid var(--border); background:var(--panel); padding:16px 10px; display:flex; flex-direction:column; gap:2px;}
+  .nav-item{padding:9px 12px; border-radius:var(--r-sm); color:var(--muted); font-size:13px; cursor:pointer; display:flex; align-items:center; justify-content:space-between;}
+  .nav-item.active{background:var(--panel-hi); color:var(--text); font-weight:600;}
+  .nav-item .badge{font-size:11px; color:var(--muted-dim); background:var(--bg); border:1px solid var(--border); padding:1px 6px; border-radius:var(--r-pill);}
+  .sidebar .sep{height:1px; background:var(--border); margin:10px 4px;}
+  .main{padding:24px; overflow:auto;}
+  .room-header{font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); font-weight:600; margin:0 0 16px;}
+
+  .pill{display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:600; padding:2px 8px; border-radius:var(--r-pill);}
+  .pill .dot{width:6px; height:6px; border-radius:50%;}
+  .pill.ok{color:var(--ok); background:rgba(52,211,153,.10);} .pill.ok .dot{background:var(--ok);}
+  .pill.err{color:var(--err); background:rgba(240,97,107,.10);} .pill.err .dot{background:var(--err);}
+  .pill.info{color:var(--info); background:rgba(91,157,246,.10);} .pill.info .dot{background:var(--info);}
+  .pill.idle{color:var(--muted); background:rgba(75,85,99,.15);} .pill.idle .dot{background:var(--idle);}
+
+  .room{display:flex; flex-wrap:wrap; gap:16px; max-width:960px;}
+  .console{background:var(--panel); border:1px solid var(--border); border-radius:var(--r-md); width:200px; padding:18px 16px 16px; position:relative; overflow:hidden;}
+  .console::before{content:""; position:absolute; top:0; left:0; right:0; height:2px; background:var(--accent, var(--idle));}
+  .console.not-configured{opacity:.6;}
+  .console.not-configured::before{background:repeating-linear-gradient(90deg, var(--muted-dim) 0 6px, transparent 6px 10px);}
+
+  .ring-wrap{width:76px; height:76px; margin:4px auto 12px; border-radius:50%; border:1.5px solid var(--accent, var(--border)); display:flex; align-items:center; justify-content:center; position:relative;}
+  @keyframes ringPulse{0%,100%{box-shadow:0 0 0 0 rgba(91,157,246,.35);} 50%{box-shadow:0 0 0 6px rgba(91,157,246,0);}}
+  .ring-wrap.working{animation:ringPulse 1.8s ease-in-out infinite;}
+  .ring-wrap svg{overflow:visible;}
+
+  .agent-name{font-weight:600; font-size:13px; text-align:center;}
+  .agent-role{color:var(--muted-dim); font-size:10.5px; text-align:center; margin-top:1px; margin-bottom:10px;}
+  .state-line{display:flex; justify-content:center; margin-bottom:12px;}
+
+  .console-meta{display:flex; flex-direction:column; gap:5px; border-top:1px solid var(--border); padding-top:10px;}
+  .meta-row{display:flex; justify-content:space-between; font-size:11px;}
+  .meta-row .k{color:var(--muted-dim);}
+  .meta-row .v{color:var(--muted);}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="topbar">
+    <div class="brand"><span class="dot"></span> CRYPTO RADAR <span style="color:var(--muted-dim); font-weight:400;">— Control Room</span></div>
+    <div class="topbar-status">
+      <span>Uptime <b class="mono">02:14:07</b></span>
+      <span>Último heartbeat <b class="mono">há 4s</b></span>
+      <span class="pill ok"><span class="dot"></span>RUNNING</span>
+    </div>
+    <div class="btns">
+      <button class="btn ghost">RESTART</button>
+      <button class="btn stop">STOP RADAR</button>
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="nav-item">Dashboard</div>
+    <div class="nav-item active">Agentes</div>
+    <div class="nav-item">Alertas <span class="badge">3</span></div>
+    <div class="nav-item">Histórico</div>
+    <div class="sep"></div>
+    <div class="nav-item">Sistema / Logs</div>
+  </div>
+
+  <div class="main">
+    <h3 class="room-header">Agent Control Room</h3>
+
+    <div class="room">
+
+      <!-- QWEN 14B — WORKING -->
+      <div class="console" style="--accent:var(--info);">
+        <div class="ring-wrap working">
+          <svg width="46" height="46" viewBox="0 0 46 46">
+            <circle cx="16" cy="19" r="2.2" fill="var(--text)"/>
+            <circle cx="30" cy="19" r="2.2" fill="var(--text)"/>
+            <rect x="15" y="27" width="16" height="6" rx="3" fill="none" stroke="var(--border)"/>
+          </svg>
+        </div>
+        <div class="agent-name">QWEN 14B</div>
+        <div class="agent-role">Screener</div>
+        <div class="state-line"><span class="pill info"><span class="dot"></span>WORKING</span></div>
+        <div class="console-meta">
+          <div class="meta-row"><span class="k">Model</span><span class="v mono">qwen3:14b</span></div>
+          <div class="meta-row"><span class="k">Activity</span><span class="v mono">09:21:03</span></div>
+          <div class="meta-row"><span class="k">Event</span><span class="v mono">LSK</span></div>
+        </div>
+      </div>
+
+      <!-- RED TEAM — NOT CONFIGURED -->
+      <div class="console not-configured">
+        <div class="ring-wrap">
+          <svg width="46" height="46" viewBox="0 0 46 46">
+            <line x1="13" y1="16" x2="19" y2="22" stroke="var(--muted-dim)" stroke-width="1.6"/>
+            <line x1="19" y1="16" x2="13" y2="22" stroke="var(--muted-dim)" stroke-width="1.6"/>
+            <line x1="27" y1="16" x2="33" y2="22" stroke="var(--muted-dim)" stroke-width="1.6"/>
+            <line x1="33" y1="16" x2="27" y2="22" stroke="var(--muted-dim)" stroke-width="1.6"/>
+            <rect x="15" y="27" width="16" height="6" rx="3" fill="none" stroke="var(--border)"/>
+          </svg>
+        </div>
+        <div class="agent-name">RED TEAM</div>
+        <div class="agent-role">Adversarial review</div>
+        <div class="state-line"><span class="pill idle"><span class="dot"></span>NOT CONFIGURED</span></div>
+        <div class="console-meta">
+          <div class="meta-row"><span class="k">Model</span><span class="v mono">—</span></div>
+          <div class="meta-row"><span class="k">Activity</span><span class="v mono">—</span></div>
+          <div class="meta-row"><span class="k">Event</span><span class="v mono">—</span></div>
+        </div>
+      </div>
+
+      <!-- SONNET — SLEEPING -->
+      <div class="console">
+        <div class="ring-wrap" style="opacity:.7;">
+          <svg width="46" height="46" viewBox="0 0 46 46" style="transform:rotate(-8deg);">
+            <line x1="14" y1="19" x2="19" y2="19" stroke="var(--muted-dim)" stroke-width="1.6" stroke-linecap="round"/>
+            <line x1="27" y1="19" x2="32" y2="19" stroke="var(--muted-dim)" stroke-width="1.6" stroke-linecap="round"/>
+            <rect x="15" y="27" width="16" height="6" rx="3" fill="none" stroke="var(--border)"/>
+          </svg>
+          <span class="mono" style="position:absolute; top:-10px; right:-6px; font-size:9px; color:var(--muted-dim); font-weight:600;">z Z z</span>
+        </div>
+        <div class="agent-name">SONNET</div>
+        <div class="agent-role">Orchestrator</div>
+        <div class="state-line"><span class="pill idle"><span class="dot"></span>SLEEPING</span></div>
+        <div class="console-meta">
+          <div class="meta-row"><span class="k">Model</span><span class="v mono">claude-sonnet-5</span></div>
+          <div class="meta-row"><span class="k">Activity</span><span class="v mono">08:02:11</span></div>
+          <div class="meta-row"><span class="k">Event</span><span class="v mono">None</span></div>
+        </div>
+      </div>
+
+      <!-- FABLE — ERROR -->
+      <div class="console" style="--accent:var(--err);">
+        <div class="ring-wrap">
+          <svg width="46" height="46" viewBox="0 0 46 46">
+            <line x1="13" y1="16" x2="19" y2="22" stroke="var(--err)" stroke-width="1.6"/>
+            <line x1="19" y1="16" x2="13" y2="22" stroke="var(--err)" stroke-width="1.6"/>
+            <line x1="27" y1="16" x2="33" y2="22" stroke="var(--err)" stroke-width="1.6"/>
+            <line x1="33" y1="16" x2="27" y2="22" stroke="var(--err)" stroke-width="1.6"/>
+            <rect x="15" y="27" width="16" height="6" rx="3" fill="none" stroke="var(--border)"/>
+          </svg>
+        </div>
+        <div class="agent-name">FABLE 5.1</div>
+        <div class="agent-role">Trading analyst</div>
+        <div class="state-line"><span class="pill err"><span class="dot"></span>ERROR</span></div>
+        <div class="console-meta">
+          <div class="meta-row"><span class="k">Model</span><span class="v mono">claude-fable-5-1</span></div>
+          <div class="meta-row"><span class="k">Activity</span><span class="v mono">09:18:44</span></div>
+          <div class="meta-row"><span class="k">Error</span><span class="v mono" style="color:var(--err);">AUTH_ERROR</span></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+</body>
+</html>
