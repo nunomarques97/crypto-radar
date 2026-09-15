@@ -1,8 +1,4 @@
-"""Entry point for `python radar.py --mode heartbeat|full|shadow|bridge|loop`.
-
-v0.7's own `main()` in the top-level radar.py is untouched and still runs
-when no --mode flag (or --mode v07) is given - see the bottom of radar.py.
-"""
+"""Runtime dispatch for a validated `python radar.py --mode MODE` invocation."""
 
 from __future__ import annotations
 
@@ -21,6 +17,18 @@ from .terminal import render_terminal, safe_print
 logger = logging.getLogger("radar_v08.cli")
 
 _STARTED_AT = time.time()
+
+V08_SUPPORTED_MODES = (
+    "heartbeat",
+    "full",
+    "bridge",
+    "shadow",
+    "loop",
+    "notify-test",
+    "mock-alert",
+    "alerts",
+    "prompt",
+)
 
 
 def _run_bridge_and_render(output: dict, store: SnapshotStore) -> None:
@@ -56,15 +64,14 @@ def _run_bridge_and_render(output: dict, store: SnapshotStore) -> None:
 
 
 def run_mode(mode: str, argv: list[str] | None = None) -> int:
-    mode_norm = mode.strip().lower()
     argv = argv if argv is not None else sys.argv[1:]
 
-    if mode_norm == "heartbeat":
+    if mode == "heartbeat":
         output = run_and_write(mode="HEARTBEAT")
         print(json.dumps(output, indent=2, ensure_ascii=False))
         return 0
 
-    if mode_norm == "full":
+    if mode == "full":
         output = run_and_write(mode="FULL", full=True)
         print(json.dumps(output, indent=2, ensure_ascii=False))
         print()
@@ -75,7 +82,7 @@ def run_mode(mode: str, argv: list[str] | None = None) -> int:
             store.close()
         return 0
 
-    if mode_norm == "bridge":
+    if mode == "bridge":
         # Drains the existing event queue without running a radar cycle -
         # useful for recovery/testing, and for a tight bridge-only poll
         # interleaved between full cycles in `--mode loop`.
@@ -91,29 +98,28 @@ def run_mode(mode: str, argv: list[str] | None = None) -> int:
             store.close()
         return 0
 
-    if mode_norm == "shadow":
+    if mode == "shadow":
         result = run_shadow()
         print(json.dumps(result["comparison"], indent=2, ensure_ascii=False))
         return 0
 
-    if mode_norm == "loop":
+    if mode == "loop":
         return _run_loop()
 
-    if mode_norm == "notify-test":
+    if mode == "notify-test":
         return _run_notify_test()
 
-    if mode_norm == "mock-alert":
+    if mode == "mock-alert":
         return _run_mock_alert()
 
-    if mode_norm == "alerts":
+    if mode == "alerts":
         return _run_alerts()
 
-    if mode_norm == "prompt":
+    if mode == "prompt":
         return _run_prompt_recovery(argv)
 
     print(
-        f"Unknown --mode '{mode}'. Expected 'heartbeat', 'full', 'bridge', 'shadow', 'loop', "
-        "'notify-test', 'mock-alert', 'alerts', or 'prompt'.",
+        f"Unknown --mode '{mode}'. Expected one of: {', '.join(V08_SUPPORTED_MODES)}.",
         file=sys.stderr,
     )
     return 2

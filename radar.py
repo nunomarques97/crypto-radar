@@ -22,6 +22,7 @@ v0.7 goals:
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import sys
@@ -700,22 +701,84 @@ def main() -> int:
         return 1
 
 
-def _parse_mode(argv: list[str]) -> str:
-    """v0.8 adds `--mode heartbeat|shadow` on top of the plain v0.7 CLI.
-    No flag (or `--mode v07`) runs v0.7's own main() below, unchanged.
+ENTRY_MODES = (
+    "heartbeat",
+    "full",
+    "bridge",
+    "shadow",
+    "loop",
+    "notify-test",
+    "mock-alert",
+    "alerts",
+    "prompt",
+    "v07",
+)
+
+
+def _parse_entry_args(argv: list[str]) -> argparse.Namespace:
+    """Parse the public entry boundary before importing the v0.8 runtime.
+
+    The default is the documented v0.8 heartbeat path.  v0.7 remains an
+    explicit compatibility route only; parser errors must never fall through
+    to its legacy runtime.
     """
-    if "--mode" in argv:
-        idx = argv.index("--mode")
-        if idx + 1 < len(argv):
-            return argv[idx + 1]
-    return "v07"
+    parser = argparse.ArgumentParser(
+        prog="radar.py",
+        description="Run the Crypto Radar in an explicit supported mode.",
+        allow_abbrev=False,
+        add_help=False,
+    )
+    parser.add_argument("--help", action="help", help="show this help message and exit")
+    parser.add_argument(
+        "--mode",
+        choices=ENTRY_MODES,
+        action="append",
+        metavar="MODE",
+        help="mode to run (default: heartbeat)",
+    )
+    parser.add_argument(
+        "--event",
+        action="append",
+        metavar="EVENT_ID",
+        help="event ID, required only with --mode prompt",
+    )
+    parsed = parser.parse_args(argv)
+
+    if parsed.mode is None:
+        mode = "heartbeat"
+    elif len(parsed.mode) == 1:
+        mode = parsed.mode[0]
+    else:
+        parser.error("--mode may be specified only once")
+
+    if parsed.event is None:
+        event_id = None
+    elif len(parsed.event) == 1:
+        event_id = parsed.event[0]
+    else:
+        parser.error("--event may be specified only once")
+
+    if mode == "prompt" and not event_id:
+        parser.error("--mode prompt requires --event EVENT_ID")
+    if mode != "prompt" and event_id:
+        parser.error("--event is valid only with --mode prompt")
+
+    return argparse.Namespace(mode=mode, event_id=event_id)
+
+
+def entry_main(argv: list[str] | None = None) -> int:
+    """Route a fully validated invocation without an implicit legacy fallback."""
+    parsed = _parse_entry_args(sys.argv[1:] if argv is None else argv)
+    if parsed.mode == "v07":
+        return main()
+
+    # Keep v0.8 runtime imports after parsing so --help and malformed input
+    # cannot initialize its config, store, transport, model, or UI paths.
+    from radar_v08.cli import run_mode
+
+    mode_argv = ["--event", parsed.event_id] if parsed.event_id else []
+    return run_mode(parsed.mode, argv=mode_argv)
 
 
 if __name__ == "__main__":
-    _mode = _parse_mode(sys.argv[1:])
-    if _mode == "v07":
-        raise SystemExit(main())
-    else:
-        from radar_v08.cli import run_mode
-
-        raise SystemExit(run_mode(_mode))
+    raise SystemExit(entry_main())
