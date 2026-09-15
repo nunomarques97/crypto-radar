@@ -51,6 +51,8 @@ Every task records command, environment, counts, exit code, skips, and unexpecte
 
 T001 accepted 2026-09-15: **415 tests passed in 31.994s, exit 0, no skips**. Both Node wrappers ran. PO inspected the four-file diff and ran the runner from <home>, proving repository discovery outside its CWD. The original SDK-dependent failure and desktop-effect fixture gap are fixed without runtime edits. See `docs/tasks/results/T001.md` and `docs/audit/2026-09-14/t001-po-review.log`. A separate log-display wrapper hit a cp1252 Unicode error after the successful test child; this was an environmental display failure, not a failing suite. The historical failure remains recorded above.
 
+T002–T013 accepted 2026-09-15: environment reproducibility/quality gates and containment hardening increased the accepted full-suite count successively to **420, 427, 431, 434, 441, and 443 tests**, each exit 0 with no skips and both embedded Node wrappers passing. See the individual notes in docs/tasks/results/ for commands, scope, limitations, and commit references. T020 accepted 2026-09-15: **449 tests passed in 31.553s, exit 0, no skips**; both embedded Node wrappers passed. The PO independently re-ran the 18 focused tests and the isolated full runner. See `docs/tasks/results/T020.md`. T021 is the next eligible task.
+
 ## Sextant verification scope
 
 247 selected tests passed in 19.34s using `.venv/Scripts/python.exe -m pytest -p no:cacheprovider` against money/time, capabilities, LLM risk boundary, costs, backtest correctness, market data, HTTP transport, registry, preflight, carry accounting and registered-value perturbation modules. Full suite/coverage/type/lint checks were not run. See `docs/audit/2026-09-14/sextant-selected.log` and `docs/SEXTANT_REUSE.md`.

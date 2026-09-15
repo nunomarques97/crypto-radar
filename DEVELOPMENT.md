@@ -66,7 +66,7 @@ Starter prompt: “Read AGENTS.md and its required documentation, then implement
 
 ## 6. Verify and review
 
-T001 is accepted; use `.\.venv\Scripts\python.exe scripts/run_tests.py` (or the verified Python interpreter if the venv is not installed yet). Review exact output, not only the final sentence. See `TESTING.md` for the historical failure and Node requirements.
+T001–T013 are accepted; the latest accepted full-suite result is 443 passing tests with no skips. Use a verified disposable Python 3.12 development environment for task validation, review exact output rather than only the final sentence, and see `TESTING.md` plus `docs/tasks/results/` for task-level evidence.
 
 Inspect desktop's changed-files/review panel. In a terminal use `git status --short`, `git diff --stat`, `git diff`, and, after staging, `git diff --cached`. Match every changed file and behavior to the brief. PO review checks contracts, evidence, negative paths, data freshness, side effects and rollback; tests alone do not prove sound architecture. A fresh reviewer should read the diff and tests without trusting the developer's explanation. Commit only the accepted, inspected files. No automatic push/merge.
 

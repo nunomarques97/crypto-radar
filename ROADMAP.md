@@ -2,11 +2,11 @@
 
 Owner: PO/architect. Baseline: 2026-09-14. This replaces inherited phase numbering; previous phase labels describe history only. No calendar estimates are credible before the foundation tasks are reviewed. The target is autonomous **analysis**, not execution.
 
-Every phase is delivered through small briefs, not one prompt. A phase completes only when its acceptance criteria and tests are evidenced. T001 was implemented and PO-accepted; `docs/tasks/T002-environment.md` is the next implementation brief. Accepted design remains distinct from implemented status.
+Every phase is delivered through small briefs, not one prompt. A phase completes only when its acceptance criteria and tests are evidenced. T001–T013 and T020 are PO-accepted and locally committed; T021 is the next eligible task. Accepted design remains distinct from implemented status.
 
 ## R0 — Ownership and reproducible development
 
-- **Status:** audits complete; documentation established; T001 PO-accepted (415 tests pass); T002 ready; observed direct dependency manifests created; clean environment/Git setup still to complete as described in `DEVELOPMENT.md`.
+- **Status:** complete for the accepted foundation scope: reproducible Windows/Python 3.12 dependency verification and the critical quality gate were accepted in T002/T003. The audited Git baseline and subsequent accepted task commits exist locally. The original historical baseline remains preserved in `TESTING.md`.
 - **Goal / why now:** establish trustworthy inputs to development and recoverable changes before modifying product behavior.
 - **Dependencies:** inspected source and baseline; no runtime dependency.
 - **Scope:** source recovery archive/inventory, authoritative documents, Codex instructions, isolated test command, deterministic optional-SDK tests; observed direct dependency manifests, then a verified lock/clean environment and user-controlled local Git baseline.
@@ -18,7 +18,7 @@ Every phase is delivered through small briefs, not one prompt. A phase completes
 
 ## R1 — Contain current boundary violations
 
-- **Status:** specified at phase level; small-task specifications finalized in docs/tasks/TASK_CATALOG.md; implementation pending dependency acceptance.
+- **Status:** accepted containment for legacy cloud dispatch (T010), Test Mode isolation (T011), explicit CLI selection (T012), and Control Room process ownership (T013). Follow-on product work remains separately gated.
 - **Goal / why now:** remove accidental cloud execution and test-state contamination before calling the product local or isolated.
 - **Dependencies:** R0 safe test command. Independent narrow tasks may be reviewed separately.
 - **Scope:** (a) hard local-only runtime gate at the bridge dispatch boundary, including direct bridge mode and inherited credentials; preserve readable legacy history; (b) Test Mode visual controls separated from operational diagnostics, with backend protection so a hidden button is not the only boundary; (c) make supported entry-mode selection explicit and eliminate accidental v0.7 fallback for invalid flags.
@@ -30,6 +30,7 @@ Every phase is delivered through small briefs, not one prompt. A phase completes
 
 ## R2 — Correct facts and qualify data
 
+- **Status:** T020 pair-pure L1 history is PO-accepted; T021 is the next eligible feature-semantics task.
 - **Goal / why now:** prevent every analyst from agreeing on incorrect market inputs. Cross-quote L1 history is a concrete first correctness task, not speculative infrastructure.
 - **Dependencies:** R0; R1 before any user-run autonomous trial.
 - **Scope:** separate brief for pair-specific L1 history and BTC-relative distributions; separate brief for history coverage/ATR horizon semantics; per-instrument source/receive timestamps, clock injection, closed/gap-consistent candles, finite values, book/trade/status/mapping checks; reject stale futures independently. Wire real taker-buy evidence into routing only through a reviewed change.
