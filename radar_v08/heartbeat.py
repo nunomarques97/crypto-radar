@@ -191,8 +191,9 @@ def run_heartbeat(
         btc_return_1h = None
         if btc_entry is not None and btc_entry.primary_market is not None:
             btc_last = btc_entry.primary_market.last
-            btc_return_15m = compute_return(btc_last, lookup_past_spot(store, config.BTC_ASSET, now, 15))
-            btc_return_1h = compute_return(btc_last, lookup_past_spot(store, config.BTC_ASSET, now, 60))
+            btc_pair = btc_entry.primary_market.pair_key
+            btc_return_15m = compute_return(btc_last, lookup_past_spot(store, btc_pair, now, 15))
+            btc_return_1h = compute_return(btc_last, lookup_past_spot(store, btc_pair, now, 60))
 
         l1_by_asset: dict[str, tuple] = {}
         any_non_warmup = False
@@ -202,6 +203,7 @@ def run_heartbeat(
             features = compute_features(
                 store=store,
                 asset=entry.asset,
+                pair=m.pair_key,
                 now_dt=now,
                 current_last=m.last,
                 current_volume_today=m.volume_today,
@@ -217,7 +219,7 @@ def run_heartbeat(
                 current_mark=fut.mark_price if fut else None,
                 current_index=fut.index_price if fut else None,
             )
-            result = compute_anomaly(store, entry.asset, now, features)
+            result = compute_anomaly(store, entry.asset, m.pair_key, now, features)
             any_non_warmup = any_non_warmup or not result.warmup
             l1_by_asset[entry.asset] = (entry, features, result)
 

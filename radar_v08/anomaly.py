@@ -80,10 +80,10 @@ def _row_dt(row: sqlite3.Row) -> datetime:
     return datetime.fromisoformat(row["ts"])
 
 
-def lookup_past_spot(store: SnapshotStore, asset: str, now_dt: datetime, minutes_ago: int) -> sqlite3.Row | None:
+def lookup_past_spot(store: SnapshotStore, pair: str, now_dt: datetime, minutes_ago: int) -> sqlite3.Row | None:
     target = now_dt - timedelta(minutes=minutes_ago)
     tolerance = max(minutes_ago * 60 * config.LOOKUP_TOLERANCE_FRACTION, 30)
-    return store.nearest_spot_snapshot(asset, target.isoformat(), tolerance)
+    return store.nearest_spot_snapshot_by_pair(pair, target.isoformat(), tolerance)
 
 
 def lookup_past_futures(store: SnapshotStore, asset: str, now_dt: datetime, minutes_ago: int) -> sqlite3.Row | None:
@@ -124,6 +124,7 @@ def compute_oi_delta(current_oi: float | None, past_row: sqlite3.Row | None) -> 
 def compute_features(
     store: SnapshotStore,
     asset: str,
+    pair: str,
     now_dt: datetime,
     current_last: float,
     current_volume_today: float,
@@ -141,11 +142,11 @@ def compute_features(
 ) -> Features:
     f = Features()
 
-    past_1m = lookup_past_spot(store, asset, now_dt, 1)
-    past_5m = lookup_past_spot(store, asset, now_dt, 5)
-    past_15m = lookup_past_spot(store, asset, now_dt, 15)
-    past_1h = lookup_past_spot(store, asset, now_dt, 60)
-    past_4h = lookup_past_spot(store, asset, now_dt, 240)
+    past_1m = lookup_past_spot(store, pair, now_dt, 1)
+    past_5m = lookup_past_spot(store, pair, now_dt, 5)
+    past_15m = lookup_past_spot(store, pair, now_dt, 15)
+    past_1h = lookup_past_spot(store, pair, now_dt, 60)
+    past_4h = lookup_past_spot(store, pair, now_dt, 240)
 
     f.return_1m = compute_return(current_last, past_1m)
     f.return_5m = compute_return(current_last, past_5m)
@@ -255,11 +256,12 @@ def historical_delta_series(rows: list[sqlite3.Row], field_name: str, horizon_mi
 def compute_anomaly(
     store: SnapshotStore,
     asset: str,
+    pair: str,
     now_dt: datetime,
     features: Features,
 ) -> AnomalyResult:
     lookback_start = (now_dt - timedelta(hours=config.ANOMALY_HISTORY_LOOKBACK_HOURS)).isoformat()
-    history = store.asset_history(asset, lookback_start)
+    history = store.spot_history_by_pair(pair, lookback_start)
 
     sample_count = len(history)
     history_minutes = 0.0

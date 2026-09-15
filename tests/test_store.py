@@ -127,6 +127,30 @@ class TestSnapshotStore(unittest.TestCase):
         far_target = (T0 + timedelta(hours=5)).isoformat()
         self.assertIsNone(self.store.nearest_spot_snapshot("BTC", far_target, tolerance_seconds=60))
 
+    def test_pair_specific_spot_queries_exclude_other_quotes(self):
+        t1 = T0.isoformat()
+        t2 = (T0 + timedelta(minutes=15)).isoformat()
+        self.store.insert_spot_snapshot(spot_snap(t1, 100.0, 10, last=100.0, asset="BTC", pair="XBTUSD"))
+        self.store.insert_spot_snapshot(spot_snap(t2, 200.0, 20, last=110.0, asset="BTC", pair="XBTUSD"))
+        self.store.insert_spot_snapshot(spot_snap(t1, 100.0, 10, last=10.0, asset="BTC", pair="XXBTZEUR"))
+        self.store.insert_spot_snapshot(spot_snap(t2, 200.0, 20, last=1_000.0, asset="BTC", pair="XBTUSDT"))
+
+        nearest = self.store.nearest_spot_snapshot_by_pair("XBTUSD", t1, tolerance_seconds=60)
+        history = self.store.spot_history_by_pair("XBTUSD", t1)
+
+        self.assertEqual(nearest["pair"], "XBTUSD")
+        self.assertEqual(nearest["last"], 100.0)
+        self.assertEqual([row["pair"] for row in history], ["XBTUSD", "XBTUSD"])
+        self.assertEqual([row["last"] for row in history], [100.0, 110.0])
+
+    def test_pair_specific_queries_do_not_borrow_missing_history(self):
+        self.store.insert_spot_snapshot(
+            spot_snap(T0.isoformat(), 100.0, 10, last=100.0, asset="ETH", pair="ETHEUR")
+        )
+
+        self.assertIsNone(self.store.nearest_spot_snapshot_by_pair("ETHUSD", T0.isoformat(), tolerance_seconds=60))
+        self.assertEqual(self.store.spot_history_by_pair("ETHUSD", T0.isoformat()), [])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -580,8 +580,9 @@ class SnapshotStore:
         self, pair: str, target_ts: str, tolerance_seconds: float
     ) -> sqlite3.Row | None:
         """Like `nearest_spot_snapshot`, but scoped to one market (pair)
-        rather than every quote market of an asset - used by forward-return
-        labeling so BTC/EUR history can never contaminate a BTC/USD entry.
+        rather than every quote market of an asset. Used by L1 and
+        forward-return labeling so BTC/EUR history can never contaminate a
+        BTC/USD entry.
         """
         target_dt = datetime.fromisoformat(target_ts)
         low = (target_dt - timedelta(seconds=tolerance_seconds)).isoformat()
@@ -607,6 +608,15 @@ class SnapshotStore:
             cur.execute(
                 "SELECT * FROM spot_snapshots WHERE pair = ? AND ts BETWEEN ? AND ? ORDER BY ts",
                 (pair, start_ts, end_ts),
+            )
+            return cur.fetchall()
+
+    def spot_history_by_pair(self, pair: str, since_ts: str) -> list[sqlite3.Row]:
+        """Ascending spot price history for one exact selected market pair."""
+        with self._cursor() as cur:
+            cur.execute(
+                "SELECT * FROM spot_snapshots WHERE pair = ? AND ts >= ? ORDER BY ts",
+                (pair, since_ts),
             )
             return cur.fetchall()
 
