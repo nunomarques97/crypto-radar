@@ -24,18 +24,20 @@
     return lastAgents.find((a) => a.id === id);
   }
 
-  // -- TEST MODE (UI visibility only - never persisted, always OFF on load) --
+  // -- TEST MODE (browser-memory simulation, always OFF on load) --------------
   // Deliberately a plain in-memory variable, never read from or written to
   // ui_state.json (contrast with `last_tab` below, which IS persisted) - the
   // task requires startup to always be OFF, so there is nothing to restore.
   let testMode = false;
+  const testModeSession = window.RadarTestMode.createTestModeSession();
+  let pollTimer = null;
 
   function applyTestModeVisibility() {
     const activeTab = document.querySelector(".nav-item.active")?.dataset.tab;
     const view = window.RadarTestMode.computeTestModeView(testMode, activeTab);
 
-    document.querySelectorAll("[data-test-only]").forEach((el) => {
-      el.hidden = view.testOnlyHidden;
+    document.querySelectorAll("[data-test-mode-only]").forEach((el) => {
+      el.hidden = view.simulationHidden;
     });
     document.getElementById("test-mode-banner").hidden = view.bannerHidden;
 
@@ -43,12 +45,18 @@
     btn.classList.toggle("active", view.toggleActive);
     btn.setAttribute("aria-pressed", view.togglePressed);
     btn.textContent = view.toggleLabel;
-
-    if (view.redirectTab) selectTab(view.redirectTab);
   }
 
   document.getElementById("btn-test-mode").addEventListener("click", () => {
     testMode = !testMode;
+    if (testMode) {
+      testModeSession.enable();
+      stopPolling();
+      selectTab("agentes", false);
+    } else {
+      testModeSession.disable();
+      startPolling();
+    }
     applyTestModeVisibility();
   });
 
@@ -86,13 +94,10 @@
   }
 
   // -- tab routing -------------------------------------------------------------
-  function selectTab(tabName) {
-    // Never land on/keep a test-only tab (e.g. Mocks) while TEST MODE is off -
-    // covers a restored `last_tab` from a previous ON session, since TEST MODE
-    // itself is never persisted.
-    if (window.RadarTestMode.isTestOnlyTab(tabName) && !testMode) {
-      tabName = "dashboard";
-    }
+  function selectTab(tabName, persist = true) {
+    // TEST MODE is intentionally confined to the visual room. Do not fetch or
+    // persist state while it is active, even if a caller tries another tab.
+    if (testMode) tabName = "agentes";
     document.querySelectorAll(".nav-item[data-tab]").forEach((el) => {
       el.classList.toggle("active", el.dataset.tab === tabName);
     });
@@ -101,9 +106,9 @@
     });
     if (tabName === "alertas") loadAlerts();
     if (tabName === "historico") loadHistory();
-    if (tabName === "mocks") loadMocks();
+    if (tabName === "sistema") loadOperationalDiagnostics();
     if (tabName === "sistema") loadSystemInfo();
-    window.pywebview.api.save_ui_state({ last_tab: tabName });
+    if (persist && !testMode) window.pywebview.api.save_ui_state({ last_tab: tabName });
   }
 
   document.querySelectorAll(".nav-item[data-tab]").forEach((el) => {
@@ -216,6 +221,7 @@
   }
 
   async function tick() {
+    if (testMode) return;
     let state;
     try {
       state = await window.pywebview.api.get_state();
@@ -288,9 +294,9 @@
     wireCopyButtons(body);
   }
 
-  // -- mocks ----------------------------------------------------------------------
-  async function loadMocks() {
-    const rows = await window.pywebview.api.list_mock_alerts();
+  // -- explicit operational diagnostics (never part of TEST MODE) --------------
+  async function loadOperationalDiagnostics() {
+    const rows = await window.pywebview.api.list_operational_mock_alerts();
     const body = document.getElementById("mocks-body");
     document.getElementById("mocks-empty").hidden = rows.length !== 0;
     body.innerHTML = rows.map((a) => `<tr>
@@ -303,23 +309,29 @@
     wireCopyButtons(body);
   }
 
+  function showOperationalResult(text) {
+    const box = document.getElementById("operational-result");
+    box.hidden = false;
+    box.textContent = text;
+  }
+
   function showMockResult(text) {
-    const box = document.getElementById("mock-result");
+    const box = document.getElementById(testMode ? "test-mode-result" : "operational-result");
     box.hidden = false;
     box.textContent = text;
   }
 
   document.getElementById("btn-notify-test").addEventListener("click", async () => {
-    const r = await window.pywebview.api.run_notify_test();
+    const r = await window.pywebview.api.run_operational_notify_test();
     showMockResult(`TESTAR NTFY — exit_code=${r.exit_code}\n\n${r.output}`);
   });
   document.getElementById("btn-mock-alert").addEventListener("click", async () => {
-    const r = await window.pywebview.api.run_mock_alert();
+    const r = await window.pywebview.api.run_operational_mock_alert();
     showMockResult(r.report);
-    loadMocks();
+    loadOperationalDiagnostics();
   });
   document.getElementById("btn-clipboard-test").addEventListener("click", async () => {
-    const r = await window.pywebview.api.test_clipboard();
+    const r = await window.pywebview.api.run_operational_clipboard_test();
     showMockResult(`TESTAR CLIPBOARD — copied=${r.copied}\n"${r.text}"`);
   });
 
@@ -333,6 +345,8 @@
   // its real backend status isn't currently SLEEPING (task spec section 9) -
   // reactToArrival still reconciles to the REAL backend state afterwards.
   document.getElementById("btn-comm-test")?.addEventListener("click", () => {
+    const simulated = testModeSession.nextSimulatedCommunication();
+    if (simulated === null) return;
     const room = document.getElementById("agent-room");
     const beams = [...room.querySelectorAll(".connection")];
     if (beams.length === 0) {
@@ -342,8 +356,11 @@
     // Prefer the real Qwen -> Red Team pair (task spec section 9); fall back
     // to the first declared connection so the demo still works if topology
     // ever changes.
-    const el = beams.find((b) => b.dataset.from === "qwen-14b" && b.dataset.to === "qwen-red-team") || beams[0];
-    window.RadarAgentRoom.triggerCommunication(room, el.dataset.from, el.dataset.to, 1400, { resolveAgent, force: true });
+    const el = beams.find((b) => b.dataset.from === simulated.from && b.dataset.to === simulated.to) || beams[0];
+    window.RadarAgentRoom.triggerCommunication(room, el.dataset.from, el.dataset.to, 1400, {
+      resolveAgent: testModeSession.simulatedAgent,
+      force: true,
+    });
     showMockResult(`TESTAR COMUNICAÇÃO — pulso visual ${el.dataset.from} → ${el.dataset.to}, com reação de "acordar" do recetor (só UI, não é uma comunicação real; o estado do backend não é alterado e o recetor volta ao seu estado real no final).`);
   });
 
@@ -365,6 +382,18 @@
   document.getElementById("btn-stop").addEventListener("click", () => window.pywebview.api.stop_radar());
   document.getElementById("btn-restart").addEventListener("click", () => window.pywebview.api.restart_radar());
 
+  function startPolling() {
+    if (pollTimer !== null) return;
+    tick();
+    pollTimer = setInterval(tick, POLL_MS);
+  }
+
+  function stopPolling() {
+    if (pollTimer === null) return;
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+
   // -- boot -------------------------------------------------------------------------
   window.addEventListener("pywebviewready", async () => {
     applyTestModeVisibility(); // TEST MODE always starts OFF - hide test-only UI first
@@ -372,7 +401,6 @@
       const saved = await window.pywebview.api.get_ui_state();
       if (saved && saved.last_tab) selectTab(saved.last_tab);
     } catch (e) { /* default tab stays dashboard */ }
-    tick();
-    setInterval(tick, POLL_MS);
+    startPolling();
   });
 })();

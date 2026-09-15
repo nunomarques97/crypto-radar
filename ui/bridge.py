@@ -156,20 +156,23 @@ class Api:
             found = alerts.recover_prompt(self._store, event_id)
         return {"copied": found}
 
-    # -- mocks / testes -----------------------------------------------------------
+    # -- operational diagnostics --------------------------------------------------
+    # These legacy diagnostics are deliberately effectful and separate from
+    # browser TEST MODE. Old Test Mode route names refuse below before touching
+    # instance state, so stale or hidden controls cannot bypass this boundary.
 
-    def list_mock_alerts(self, limit: int | None = None) -> list[dict[str, Any]]:
+    def list_operational_mock_alerts(self, limit: int | None = None) -> list[dict[str, Any]]:
         with self._lock:
             rows = self._reader.mock_alerts(limit=limit)
             return [_serialize_alert_row(row, self._reader.event_lifecycle(row)) for row in rows]
 
-    def run_notify_test(self) -> dict[str, Any]:
+    def run_operational_notify_test(self) -> dict[str, Any]:
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             exit_code = _run_notify_test()
         return {"exit_code": exit_code, "output": buf.getvalue()}
 
-    def run_mock_alert(self) -> dict[str, Any]:
+    def run_operational_mock_alert(self) -> dict[str, Any]:
         with self._lock:
             outcome = mock_alert.run_mock_alert(self._store)
         return {
@@ -177,10 +180,36 @@ class Api:
             "report": mock_alert.format_mock_alert_report(outcome["event_id"], outcome["notify_result"]),
         }
 
-    def test_clipboard(self) -> dict[str, Any]:
+    def run_operational_clipboard_test(self) -> dict[str, Any]:
         text = f"Crypto Radar UI clipboard test — {time.strftime('%Y-%m-%d %H:%M:%S')}"
         copied = clipboard.copy_text_to_clipboard(text)
         return {"copied": copied, "text": text}
+
+    @staticmethod
+    def _refused_test_mode_effect(action: str) -> dict[str, Any]:
+        return {
+            "ok": False,
+            "status": "REFUSED",
+            "reason": f"TEST MODE is browser-local and visual-only; {action} is disabled.",
+        }
+
+    # Deprecated names were reachable from the old TEST MODE Mocks tab. Keep
+    # their API boundary closed rather than relying on a removed/hidden button.
+    def list_mock_alerts(self, limit: int | None = None) -> dict[str, Any]:
+        return self._refused_test_mode_effect("mock-alert history access")
+
+    def run_notify_test(self) -> dict[str, Any]:
+        return self._refused_test_mode_effect("notification diagnostics")
+
+    def run_mock_alert(self) -> dict[str, Any]:
+        return self._refused_test_mode_effect("mock-alert diagnostics")
+
+    def test_clipboard(self) -> dict[str, Any]:
+        return self._refused_test_mode_effect("clipboard diagnostics")
+
+    def run_test_mode_mock_alert(self) -> dict[str, Any]:
+        """Explicitly refuse a guessed/new TEST MODE route as well."""
+        return self._refused_test_mode_effect("mock-alert diagnostics")
 
     # -- sistema / logs -----------------------------------------------------------
 

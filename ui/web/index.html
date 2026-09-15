@@ -30,8 +30,6 @@
     <div class="nav-item" data-tab="agentes">Agentes</div>
     <div class="nav-item" data-tab="alertas">Alertas <span class="badge" id="alerts-badge">0</span></div>
     <div class="nav-item" data-tab="historico">Histórico</div>
-    <div class="sep"></div>
-    <div class="nav-item" data-tab="mocks" data-test-only="1" hidden>Mocks / Testes</div>
     <div class="nav-item" data-tab="sistema">Sistema / Logs</div>
   </div>
 
@@ -74,6 +72,13 @@
         <h3>Agent Control Room</h3>
         <div id="agent-room"></div>
       </div>
+      <div class="panel" id="test-mode-simulation" data-test-mode-only="1" hidden style="margin-top:16px;">
+        <h3>TEST MODE simulation <span class="test-marker">[browser-local only]</span></h3>
+        <div class="toolbar">
+          <button class="btn" id="btn-comm-test">ANIMATE SIMULATED HANDOFF</button>
+        </div>
+        <div id="test-mode-result" class="result-box" hidden></div>
+      </div>
     </section>
 
     <!-- ALERTAS -->
@@ -104,7 +109,7 @@
       </div>
     </section>
 
-    <!-- MOCKS -->
+    <!-- Legacy TEST MODE mock controls removed for T011:
     <section class="tab-panel" id="tab-mocks" data-test-only="1" hidden>
       <div class="panel">
         <h3>Mocks / Testes <span class="test-marker">[TESTE] — nunca toca Kraken/Qwen/Claude</span></h3>
@@ -126,6 +131,8 @@
       </div>
     </section>
 
+    -->
+
     <!-- SISTEMA -->
     <section class="tab-panel" id="tab-sistema" hidden>
       <div class="panel" style="max-width:640px;">
@@ -142,6 +149,24 @@
       <div class="panel" style="margin-top:16px; max-width:640px;">
         <h3>Últimas linhas de log</h3>
         <div class="log-box mono" id="log-lines">—</div>
+      </div>
+      <div class="panel" id="operational-diagnostics" style="margin-top:16px;">
+        <h3>Operational diagnostics <span class="test-marker">[EFFECTFUL - outside TEST MODE]</span></h3>
+        <p class="empty">These legacy actions may write mock state, notify, or copy to the clipboard. They are not simulations.</p>
+        <div class="toolbar">
+          <button class="btn" id="btn-notify-test">TEST NOTIFICATION</button>
+          <button class="btn" id="btn-mock-alert">RUN OPERATIONAL MOCK ALERT</button>
+          <button class="btn" id="btn-clipboard-test">TEST CLIPBOARD</button>
+        </div>
+        <div id="operational-result" class="result-box" hidden></div>
+      </div>
+      <div class="panel" style="margin-top:16px;">
+        <h3>Operational mock-alert history</h3>
+        <table>
+          <thead><tr><th>Time</th><th>Asset</th><th>Setup</th><th>Demand</th><th></th></tr></thead>
+          <tbody id="mocks-body"></tbody>
+        </table>
+        <div id="mocks-empty" class="empty" hidden>No operational mock alerts recorded.</div>
       </div>
     </section>
 
