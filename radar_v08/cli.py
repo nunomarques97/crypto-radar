@@ -32,7 +32,11 @@ def _run_bridge_and_render(output: dict, store: SnapshotStore) -> None:
     result = claude_bridge.run_bridge_cycle(
         store, notify_fn=lambda event: notifications.notify_for_event(event, store=store)
     )
-    notifications.retry_pending_ntfy(store)
+    # A contained bridge cycle must not turn a harmless queue drain into a
+    # legacy delivery side effect.  Historical notification retry behavior is
+    # otherwise untouched.
+    if result.skipped_reason != "LOCAL_ONLY_POLICY":
+        notifications.retry_pending_ntfy(store)
     counts = store.event_status_counts()
     last_event = store.latest_event()
     safe_print(render_terminal(
@@ -80,7 +84,8 @@ def run_mode(mode: str, argv: list[str] | None = None) -> int:
             result = claude_bridge.run_bridge_cycle(
                 store, notify_fn=lambda event: notifications.notify_for_event(event, store=store)
             )
-            notifications.retry_pending_ntfy(store)
+            if result.skipped_reason != "LOCAL_ONLY_POLICY":
+                notifications.retry_pending_ntfy(store)
             print(json.dumps({"health": result.health, "processed": result.processed, "recovered_stale": result.recovered_stale}, indent=2, ensure_ascii=False, default=str))
         finally:
             store.close()

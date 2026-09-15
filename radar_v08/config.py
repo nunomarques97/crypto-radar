@@ -305,6 +305,12 @@ EVENT_STATUSES = ("PENDING", "PROCESSING", "PROCESSED", "DEFERRED", "FAILED")
 # Never trading: no order placement, cancellation, leverage, or transfers.
 # Model choice is the Demand Router's alone: IGNORE | SONNET | FABLE, never OPUS.
 # --------------------------------------------------------------------------
+# T010 containment policy.  This is deliberately a source-level constant, not
+# an environment setting: credentials, a present SDK, or an injected client
+# must never grant a legacy cloud provider permission at runtime.
+CLAUDE_BRIDGE_DISPATCH_ENABLED = False
+CLAUDE_BRIDGE_DISABLED_REASON = "legacy Claude Bridge disabled; runtime analysis is local-only"
+
 ANTHROPIC_SONNET_MODEL = os.getenv("RADAR_ANTHROPIC_SONNET_MODEL", "claude-sonnet-5")
 ANTHROPIC_FABLE_MODEL = os.getenv("RADAR_ANTHROPIC_FABLE_MODEL", "claude-fable-5-1")
 CLAUDE_BRIDGE_MODEL_IDS = {"SONNET": ANTHROPIC_SONNET_MODEL, "FABLE": ANTHROPIC_FABLE_MODEL}

@@ -64,18 +64,23 @@ class TestRedTeamHonesty(AgentsTestCase):
 
 
 class TestBridgeModelHonesty(AgentsTestCase):
-    def test_no_bridge_health_row_yields_unknown_not_active(self):
+    def test_local_only_policy_yields_disabled_not_active(self):
         agents = build_agents(self.store)
         sonnet = next(a for a in agents if a.id == "sonnet")
         fable = next(a for a in agents if a.id == "fable")
-        self.assertEqual(sonnet.status, "UNKNOWN")
-        self.assertEqual(fable.status, "UNKNOWN")
+        self.assertEqual(sonnet.status, "DISABLED")
+        self.assertEqual(fable.status, "DISABLED")
+        self.assertIn("local-only", sonnet.role)
+        self.assertIsNone(sonnet.last_error)
 
-    def test_auth_error_health_is_surfaced_honestly(self):
-        self.store.set_bridge_health("AUTH_ERROR", "no api key", T0.isoformat())
+    def test_stale_online_health_and_pending_demand_never_show_processing(self):
+        create_event_if_new(self.store, **make_event_kwargs(model_demand="SONNET", status="PENDING"))
+        self.store.set_bridge_health("ONLINE", "legacy record", T0.isoformat())
         agents = build_agents(self.store)
         sonnet = next(a for a in agents if a.id == "sonnet")
-        self.assertEqual(sonnet.status, "AUTH_ERROR")
+        self.assertEqual(sonnet.status, "DISABLED")
+        self.assertIsNone(sonnet.current_event)
+        self.assertNotEqual(sonnet.status, "PROCESSING")
 
     def test_status_never_outside_valid_set(self):
         for health in list(HEALTH_STATES) + [None]:
@@ -99,14 +104,14 @@ class TestBridgeModelHonesty(AgentsTestCase):
         # the agent must reflect the real count, never the demand number.
         self.assertEqual(fable.events_processed, 1)
 
-    def test_processing_only_when_open_event_actually_demands_this_model(self):
+    def test_open_legacy_demand_cannot_make_disabled_role_processing(self):
         create_event_if_new(self.store, **make_event_kwargs(model_demand="SONNET", status="PENDING"))
         self.store.set_bridge_health("ONLINE", None, T0.isoformat())
         agents = build_agents(self.store)
         sonnet = next(a for a in agents if a.id == "sonnet")
         fable = next(a for a in agents if a.id == "fable")
-        self.assertEqual(sonnet.status, "PROCESSING")
-        self.assertEqual(fable.status, "ONLINE")  # not processing - no open FABLE-demand event
+        self.assertEqual(sonnet.status, "DISABLED")
+        self.assertEqual(fable.status, "DISABLED")
 
 
 class TestQwenScreener(AgentsTestCase):

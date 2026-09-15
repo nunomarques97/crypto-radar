@@ -144,9 +144,22 @@ def _build_claude_bridge_model(
     defn: AgentDefinition, store: SnapshotStore, call_counts: dict[str, int]
 ) -> Agent:
     model_id = config.CLAUDE_BRIDGE_MODEL_IDS.get(defn.bridge_model_key)
-    health = bridge_health_label(store)
-
     latest_analysis = _latest_model_analysis(store, model_id) if model_id else None
+
+    # T010 is a runtime policy, not a health failure.  Old bridge rows remain
+    # readable below, but no stale ONLINE row or queued legacy demand may make
+    # a disabled cloud role look active in the Control Room.
+    if not config.CLAUDE_BRIDGE_DISPATCH_ENABLED:
+        last_activity = latest_analysis["completed_at"] or latest_analysis["requested_at"] if latest_analysis else None
+        return Agent(
+            id=defn.id, name=defn.name, model=model_id,
+            role=f"{defn.role} (legacy cloud disabled; local-only runtime)",
+            status="DISABLED", current_event=None, last_activity=last_activity,
+            events_processed=call_counts.get(model_id, 0) if model_id else 0,
+            last_error=None,
+        )
+
+    health = bridge_health_label(store)
     latest_event_row = store.latest_event()
 
     # Only claim "PROCESSING" when the most recent radar event actually

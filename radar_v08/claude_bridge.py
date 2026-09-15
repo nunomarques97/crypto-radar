@@ -33,14 +33,16 @@ from .store import SnapshotStore
 logger = logging.getLogger("radar_v08.claude_bridge")
 
 CALL_STATUSES = (
+    "DISABLED",
     "SUCCESS", "TIMEOUT", "RATE_LIMITED", "QUOTA_EXHAUSTED", "AUTH_ERROR",
     "PROVIDER_UNAVAILABLE", "INVALID_RESPONSE",
 )
-HEALTH_STATES = ("ONLINE", "OFFLINE", "RATE_LIMITED", "QUOTA_EXHAUSTED", "AUTH_ERROR", "DEGRADED")
+HEALTH_STATES = ("DISABLED", "ONLINE", "OFFLINE", "RATE_LIMITED", "QUOTA_EXHAUSTED", "AUTH_ERROR", "DEGRADED")
 
 # Higher = worse. Used to pick the single health state a cycle reports when
 # several events land on different outcomes (task section 15).
 _HEALTH_SEVERITY = {
+    "DISABLED": 6,
     "ONLINE": 0,
     "DEGRADED": 1,
     "RATE_LIMITED": 2,
@@ -50,6 +52,7 @@ _HEALTH_SEVERITY = {
 }
 
 _STATUS_TO_HEALTH = {
+    "DISABLED": "DISABLED",
     "SUCCESS": "ONLINE",
     "TIMEOUT": "DEGRADED",
     "RATE_LIMITED": "RATE_LIMITED",
@@ -92,7 +95,16 @@ def _api_key_present(env: dict | None = None) -> bool:
     return bool(source.get("ANTHROPIC_API_KEY") or source.get("ANTHROPIC_AUTH_TOKEN"))
 
 
+def _dispatch_is_disabled() -> bool:
+    """Return the non-configurable T010 runtime containment decision."""
+    return not config.CLAUDE_BRIDGE_DISPATCH_ENABLED
+
+
 def _default_create(model: str, max_tokens: int, system: str, user_content: str, schema: dict[str, Any]) -> Any:
+    # Keep this legacy helper importable for compatibility, but make a direct
+    # call fail before importing/constructing the Anthropic SDK client.
+    if _dispatch_is_disabled():
+        raise RuntimeError(config.CLAUDE_BRIDGE_DISABLED_REASON)
     import anthropic  # lazy: Kraken/Qwen/router phases must work with no anthropic package installed
 
     client = anthropic.Anthropic(timeout=config.CLAUDE_BRIDGE_TIMEOUT_SECONDS)
@@ -157,6 +169,12 @@ def call_model(
     """
     if model_demand not in ("SONNET", "FABLE"):
         raise ValueError(f"Claude Bridge only dispatches SONNET or FABLE, never {model_demand!r}")
+
+    # This guard is intentionally inside the bridge dispatch boundary.  It
+    # runs before prompt construction, SDK checks, client construction, and
+    # injected fake-client calls, so no caller can opt into cloud inference.
+    if _dispatch_is_disabled():
+        return CallResult(status="DISABLED", error=config.CLAUDE_BRIDGE_DISABLED_REASON)
 
     model = config.CLAUDE_BRIDGE_MODEL_IDS[model_demand]
     max_tokens = (
@@ -259,6 +277,16 @@ def run_bridge_cycle(
     raises on provider trouble - every failure mode ends in a typed event
     status and a bridge health state, never an uncaught exception.
     """
+    # The cycle boundary is a second, independent guard for direct bridge
+    # mode and full/loop queue drains.  Do not claim/recover/defer queued rows
+    # or overwrite historical health: containment is read-only apart from its
+    # returned blocked result, preserving legacy analysis/history inspection.
+    if _dispatch_is_disabled():
+        return BridgeCycleResult(
+            health="DISABLED",
+            skipped_reason="LOCAL_ONLY_POLICY",
+        )
+
     now = now or datetime.now(timezone.utc)
     now_iso = now.isoformat()
     max_events = max_events if max_events is not None else config.CLAUDE_BRIDGE_MAX_EVENTS_PER_CYCLE
