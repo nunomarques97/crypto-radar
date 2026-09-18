@@ -169,9 +169,9 @@ def compute_features(
         baseline_15m = f.trade_count_1h / 4.0
         f.trade_intensity_15m = f.trade_count_15m / baseline_15m if baseline_15m > 0 else None
 
-    if f.return_15m is not None and btc_return_15m is not None:
+    if asset != config.BTC_ASSET and f.return_15m is not None and btc_return_15m is not None:
         f.relative_return_vs_btc_15m = f.return_15m - btc_return_15m
-    if f.return_1h is not None and btc_return_1h is not None:
+    if asset != config.BTC_ASSET and f.return_1h is not None and btc_return_1h is not None:
         f.relative_return_vs_btc_1h = f.return_1h - btc_return_1h
 
     if current_oi is not None:
@@ -227,6 +227,62 @@ def historical_return_series(rows: list[sqlite3.Row], horizon_minutes: int) -> l
     return results
 
 
+def _historical_return_observations(
+    rows: list[sqlite3.Row], horizon_minutes: int
+) -> list[tuple[datetime, float]]:
+    """Return timestamped, pair-pure returns for matching distributions."""
+    parsed = [(_row_dt(r), r["last"]) for r in rows]
+    tolerance = timedelta(seconds=max(horizon_minutes * 60 * config.LOOKUP_TOLERANCE_FRACTION, 30))
+    results: list[tuple[datetime, float]] = []
+
+    for i, (ts, price) in enumerate(parsed):
+        if not price or price <= 0:
+            continue
+        target = ts - timedelta(minutes=horizon_minutes)
+        best_diff: float | None = None
+        best_price: float | None = None
+        for pt, pp in parsed[:i]:
+            if not pp or pp <= 0:
+                continue
+            diff = abs((pt - target).total_seconds())
+            if diff <= tolerance.total_seconds() and (best_diff is None or diff < best_diff):
+                best_diff = diff
+                best_price = pp
+        if best_price is not None:
+            results.append((ts, (price / best_price - 1.0) * 100.0))
+
+    return results
+
+
+def historical_relative_btc_series(
+    asset_rows: list[sqlite3.Row], btc_rows: list[sqlite3.Row], horizon_minutes: int
+) -> list[float]:
+    """Build aligned asset-minus-BTC historical return residuals.
+
+    Both legs must be valid returns over the same horizon, and their endpoints
+    must match within the existing lookup tolerance. Missing pair-pure data on
+    either leg therefore removes that observation instead of borrowing raw
+    asset-return history.
+    """
+    asset_returns = _historical_return_observations(asset_rows, horizon_minutes)
+    btc_returns = _historical_return_observations(btc_rows, horizon_minutes)
+    tolerance_seconds = max(horizon_minutes * 60 * config.LOOKUP_TOLERANCE_FRACTION, 30)
+    results: list[float] = []
+
+    for asset_ts, asset_return in asset_returns:
+        best_diff: float | None = None
+        best_btc_return: float | None = None
+        for btc_ts, btc_return in btc_returns:
+            diff = abs((btc_ts - asset_ts).total_seconds())
+            if diff <= tolerance_seconds and (best_diff is None or diff < best_diff):
+                best_diff = diff
+                best_btc_return = btc_return
+        if best_btc_return is not None:
+            results.append(asset_return - best_btc_return)
+
+    return results
+
+
 def historical_delta_series(rows: list[sqlite3.Row], field_name: str, horizon_minutes: int) -> list[float]:
     parsed = [(_row_dt(r), r[field_name]) for r in rows]
     tolerance = timedelta(seconds=max(horizon_minutes * 60 * config.LOOKUP_TOLERANCE_FRACTION, 30))
@@ -259,6 +315,7 @@ def compute_anomaly(
     pair: str,
     now_dt: datetime,
     features: Features,
+    btc_pair: str | None = None,
 ) -> AnomalyResult:
     lookback_start = (now_dt - timedelta(hours=config.ANOMALY_HISTORY_LOOKBACK_HOURS)).isoformat()
     history = store.spot_history_by_pair(pair, lookback_start)
@@ -294,7 +351,11 @@ def compute_anomaly(
     volume_z = robust_z(features.volume_15m, volume_history)
     trades_z = robust_z(features.trade_count_15m, trades_history)
     oi_z = None  # needs futures history series; left None unless futures present
-    relative_btc_z = robust_z(features.relative_return_vs_btc_15m, price_history)
+    relative_btc_z = None
+    if asset != config.BTC_ASSET and btc_pair is not None:
+        btc_history = store.spot_history_by_pair(btc_pair, lookback_start)
+        relative_history = historical_relative_btc_series(history, btc_history, 15)
+        relative_btc_z = robust_z(features.relative_return_vs_btc_15m, relative_history)
 
     score = _combine_anomaly_score(
         {
@@ -309,6 +370,12 @@ def compute_anomaly(
     flags: list[str] = []
     if oi_z is None and features.futures_oi_delta_15m is not None:
         flags.append("oi_z_unavailable")
+    if (
+        asset != config.BTC_ASSET
+        and features.relative_return_vs_btc_15m is not None
+        and relative_btc_z is None
+    ):
+        flags.append("relative_btc_history_unavailable")
 
     return AnomalyResult(
         asset=asset,

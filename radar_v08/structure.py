@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import statistics
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from typing import Sequence
 
 from . import config
@@ -35,6 +36,30 @@ def bars_from_rows(rows: Sequence) -> list[Bar]:
         )
         for r in rows
     ]
+
+
+def _bar_datetime(bar: Bar) -> datetime:
+    return datetime.fromisoformat(bar.bar_time.replace("Z", "+00:00"))
+
+
+def closed_bars_as_of(bars: list[Bar], as_of: datetime, interval_minutes: int) -> list[Bar]:
+    """Keep only bars whose full interval closed at or before ``as_of``."""
+    return [
+        bar
+        for bar in bars
+        if _bar_datetime(bar) + timedelta(minutes=interval_minutes) <= as_of
+    ]
+
+
+def contiguous_tail(bars: list[Bar], count: int, interval_minutes: int) -> list[Bar]:
+    """Return the exact closed tail only when every interval is present."""
+    if len(bars) < count:
+        return []
+    window = bars[-count:]
+    interval = timedelta(minutes=interval_minutes)
+    if any(_bar_datetime(current) - _bar_datetime(previous) != interval for previous, current in zip(window, window[1:])):
+        return []
+    return window
 
 
 def true_range(bar: Bar, prev_close: float) -> float:
@@ -83,8 +108,20 @@ def resample_bars(bars: list[Bar], group_size: int) -> list[Bar]:
     -> 1h) without a second OHLC request per architecture doc section 3.
     """
     out: list[Bar] = []
-    for i in range(0, len(bars) - group_size + 1, group_size):
+    interval = timedelta(minutes=config.OHLC_INTERVAL_MINUTES)
+    group_minutes = config.OHLC_INTERVAL_MINUTES * group_size
+    i = 0
+    while i <= len(bars) - group_size:
         group = bars[i : i + group_size]
+        group_start = _bar_datetime(group[0])
+        aligned = group_start.minute % group_minutes == 0 and group_start.second == 0 and group_start.microsecond == 0
+        contiguous = all(
+            _bar_datetime(current) - _bar_datetime(previous) == interval
+            for previous, current in zip(group, group[1:])
+        )
+        if not aligned or not contiguous:
+            i += 1
+            continue
         out.append(
             Bar(
                 bar_time=group[0].bar_time,
@@ -97,6 +134,7 @@ def resample_bars(bars: list[Bar], group_size: int) -> list[Bar]:
                 trades=sum(b.trades for b in group),
             )
         )
+        i += group_size
     return out
 
 

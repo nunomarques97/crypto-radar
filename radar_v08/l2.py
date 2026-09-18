@@ -135,6 +135,7 @@ def run_l2(
             l1_return_15m_pct=c.l1_features.return_15m,
             l1_return_1h_pct=c.l1_features.return_1h,
             l1_return_4h_pct=c.l1_features.return_4h,
+            as_of=now,
         )
 
         setup = classify_setup(c.l1_features, l2f)

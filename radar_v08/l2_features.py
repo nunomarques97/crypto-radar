@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import statistics
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 
 from . import config
 from .structure import (
@@ -17,6 +18,8 @@ from .structure import (
     atr_series,
     breakout_distance_atr,
     breakout_state,
+    closed_bars_as_of,
+    contiguous_tail,
     higher_high,
     higher_low,
     lower_high,
@@ -25,14 +28,17 @@ from .structure import (
     realized_volatility,
     rejection_state,
     resample_bars,
-    vwap_distance_pct,
     volatility_percentile,
+    vwap_distance_pct,
     wilder_atr,
 )
+
+L2_FEATURE_SEMANTICS_VERSION = "l2-v2-closed-bars-horizon-specific-atr"
 
 
 @dataclass
 class L2Features:
+    feature_semantics_version: str = L2_FEATURE_SEMANTICS_VERSION
     l2_warmup: bool = True
     ohlc_bar_count: int = 0
 
@@ -130,6 +136,21 @@ def compute_exhaustion(bars: list[Bar], return_1h_atr: float | None) -> bool:
     return bars[-1].volume < recent_avg_volume * fade_ratio
 
 
+def _contiguous_suffix(bars: list[Bar], interval_minutes: int) -> list[Bar]:
+    """Return the newest uninterrupted run without crossing a missing bar."""
+    if not bars:
+        return []
+    interval = timedelta(minutes=interval_minutes)
+    start = len(bars) - 1
+    while start > 0:
+        current = datetime.fromisoformat(bars[start].bar_time.replace("Z", "+00:00"))
+        previous = datetime.fromisoformat(bars[start - 1].bar_time.replace("Z", "+00:00"))
+        if current - previous != interval:
+            break
+        start -= 1
+    return bars[start:]
+
+
 def compute_l2_features(
     bars: list[Bar],
     current_last: float,
@@ -138,38 +159,59 @@ def compute_l2_features(
     l1_return_15m_pct: float | None,
     l1_return_1h_pct: float | None,
     l1_return_4h_pct: float | None,
+    as_of: datetime,
 ) -> L2Features:
-    f = L2Features(ohlc_bar_count=len(bars))
+    closed_bars = closed_bars_as_of(bars, as_of, config.OHLC_INTERVAL_MINUTES)
+    f = L2Features(ohlc_bar_count=len(closed_bars))
+    if len(closed_bars) != len(bars):
+        f.flags.append("in_progress_ohlc_bars_excluded")
 
-    if len(bars) < config.L2_MIN_BARS:
+    if len(closed_bars) < config.L2_MIN_BARS:
         f.l2_warmup = True
         f.flags.append("l2_warmup")
         return f
 
     f.l2_warmup = False
 
-    atr_5m = wilder_atr(bars, config.ATR_PERIOD)
+    atr_5m_bars = contiguous_tail(closed_bars, config.ATR_PERIOD + 1, config.OHLC_INTERVAL_MINUTES)
+    atr_5m = wilder_atr(atr_5m_bars, config.ATR_PERIOD) if atr_5m_bars else None
     f.atr_5m = atr_5m
+    if atr_5m is None:
+        f.flags.append("atr_5m_unavailable_incomplete_closed_coverage")
 
-    hourly_bars = resample_bars(bars, config.ATR_1H_RESAMPLE_BARS)
-    atr_1h = wilder_atr(hourly_bars, config.ATR_PERIOD) if len(hourly_bars) > config.ATR_PERIOD else None
+    hourly_bars = resample_bars(closed_bars, config.ATR_1H_RESAMPLE_BARS)
+    hourly_atr_bars = contiguous_tail(hourly_bars, config.ATR_PERIOD + 1, 60)
+    atr_1h = wilder_atr(hourly_atr_bars, config.ATR_PERIOD) if hourly_atr_bars else None
     f.atr_1h = atr_1h
+    if atr_1h is None:
+        f.flags.append("atr_1h_unavailable_incomplete_closed_coverage")
 
     atr_5m_pct = _atr_as_pct(atr_5m, current_last)
     atr_1h_pct = _atr_as_pct(atr_1h, current_last)
 
     f.return_5m_atr = normalize_return_by_atr(l1_return_5m_pct, atr_5m_pct)
     f.return_15m_atr = normalize_return_by_atr(l1_return_15m_pct, atr_5m_pct)
-    f.return_1h_atr = normalize_return_by_atr(l1_return_1h_pct, atr_1h_pct if atr_1h_pct else atr_5m_pct)
-    f.return_4h_atr = normalize_return_by_atr(l1_return_4h_pct, atr_1h_pct if atr_1h_pct else atr_5m_pct)
+    f.return_1h_atr = normalize_return_by_atr(l1_return_1h_pct, atr_1h_pct)
+    f.return_4h_atr = normalize_return_by_atr(l1_return_4h_pct, atr_1h_pct)
+    if l1_return_1h_pct is not None and f.return_1h_atr is None:
+        f.flags.append("return_1h_atr_unavailable")
+    if l1_return_4h_pct is not None and f.return_4h_atr is None:
+        f.flags.append("return_4h_atr_unavailable")
 
-    bars_24h = bars[-config.STRUCTURE_24H_BARS :]
-    if len(bars_24h) >= 2 and bars_24h[0].close > 0:
+    bars_4h = contiguous_tail(closed_bars, config.STRUCTURE_4H_BARS, config.OHLC_INTERVAL_MINUTES)
+    bars_24h = contiguous_tail(closed_bars, config.STRUCTURE_24H_BARS, config.OHLC_INTERVAL_MINUTES)
+    if not bars_4h:
+        f.flags.append("coverage_4h_incomplete")
+    if not bars_24h:
+        f.flags.append("coverage_24h_incomplete")
+    if bars_24h and bars_24h[0].close > 0:
         f.return_24h_pct = (current_last / bars_24h[0].close - 1.0) * 100.0
 
-    f.realized_vol_24h_pct = realized_volatility(bars_24h, window=len(bars_24h))
+    if bars_24h:
+        f.realized_vol_24h_pct = realized_volatility(bars_24h, window=len(bars_24h))
 
-    atr_hist = atr_series(bars[-config.VOLATILITY_PERCENTILE_LOOKBACK_BARS :], config.ATR_PERIOD)
+    continuous_bars = _contiguous_suffix(closed_bars, config.OHLC_INTERVAL_MINUTES)
+    atr_hist = atr_series(continuous_bars[-config.VOLATILITY_PERCENTILE_LOOKBACK_BARS :], config.ATR_PERIOD)
     f.volatility_uncalibrated = len(atr_hist) < 30
     if atr_hist:
         f.volatility_percentile = volatility_percentile(atr_5m, atr_hist[:-1] or atr_hist)
@@ -188,30 +230,33 @@ def compute_l2_features(
     else:
         f.range_compression = None
 
-    high_4h, low_4h = _high_low(bars, config.STRUCTURE_4H_BARS)
-    high_24h, low_24h = _high_low(bars, config.STRUCTURE_24H_BARS)
+    high_4h, low_4h = _high_low(bars_4h, config.STRUCTURE_4H_BARS)
+    high_24h, low_24h = _high_low(bars_24h, config.STRUCTURE_24H_BARS)
     f.high_4h, f.low_4h = high_4h, low_4h
     f.high_24h, f.low_24h = high_24h, low_24h
 
     if high_4h is not None:
-        f.breakout_dist_4h_atr = breakout_distance_atr(current_last, high_4h, low_4h, atr_5m)
+        f.breakout_dist_4h_atr = breakout_distance_atr(current_last, high_4h, low_4h, atr_1h)
     if high_24h is not None:
-        f.breakout_dist_24h_atr = breakout_distance_atr(current_last, high_24h, low_24h, atr_1h or atr_5m)
+        f.breakout_dist_24h_atr = breakout_distance_atr(current_last, high_24h, low_24h, atr_1h)
 
-    f.higher_high = higher_high(bars)
-    f.higher_low = higher_low(bars)
-    f.lower_high = lower_high(bars)
-    f.lower_low = lower_low(bars)
+    trend_bars = contiguous_tail(closed_bars, config.STRUCTURE_TREND_BARS, config.OHLC_INTERVAL_MINUTES)
+    f.higher_high = higher_high(trend_bars)
+    f.higher_low = higher_low(trend_bars)
+    f.lower_high = lower_high(trend_bars)
+    f.lower_low = lower_low(trend_bars)
 
-    f.range_expansion = range_expansion(bars[-1], atr_5m)
+    f.range_expansion = range_expansion(closed_bars[-1], atr_5m)
     f.vwap_distance_pct = vwap_distance_pct(current_last, vwap_today)
 
     if high_24h is not None:
-        f.breakout_state = breakout_state(current_last, high_24h, low_24h, atr_1h or atr_5m)
-    f.rejection_state = rejection_state(bars[-1])
+        f.breakout_state = breakout_state(current_last, high_24h, low_24h, atr_1h)
+        if atr_1h is None:
+            f.flags.append("breakout_24h_atr_unavailable")
+    f.rejection_state = rejection_state(closed_bars[-1])
 
     f.freshness = compute_freshness(l1_return_1h_pct, f.return_24h_pct)
-    f.exhaustion = compute_exhaustion(bars, f.return_1h_atr)
+    f.exhaustion = compute_exhaustion(closed_bars, f.return_1h_atr)
 
     return f
 

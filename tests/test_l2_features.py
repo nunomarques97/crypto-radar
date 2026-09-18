@@ -28,6 +28,10 @@ def flat_bars(n, level=100.0, half_range=1.0, volume=100.0):
     return [make_bar(i, level, level + half_range, level - half_range, level, volume=volume) for i in range(n)]
 
 
+def as_of_after(bars):
+    return datetime.fromisoformat(bars[-1].bar_time) + timedelta(minutes=5)
+
+
 class TestAtrNormalization(unittest.TestCase):
     def test_normalize_return_by_atr(self):
         # 4% return with ATR at 2% of price -> 2 ATRs of movement.
@@ -42,6 +46,7 @@ class TestAtrNormalization(unittest.TestCase):
         f = compute_l2_features(
             bars=bars, current_last=100.0, vwap_today=100.0,
             l1_return_5m_pct=2.0, l1_return_15m_pct=4.0, l1_return_1h_pct=6.0, l1_return_4h_pct=6.0,
+            as_of=as_of_after(bars),
         )
         self.assertFalse(f.l2_warmup)
         self.assertIsNotNone(f.return_15m_atr)
@@ -95,6 +100,7 @@ class TestL2Warmup(unittest.TestCase):
         f = compute_l2_features(
             bars=bars, current_last=100.0, vwap_today=100.0,
             l1_return_5m_pct=1.0, l1_return_15m_pct=1.0, l1_return_1h_pct=1.0, l1_return_4h_pct=1.0,
+            as_of=as_of_after(bars),
         )
         self.assertTrue(f.l2_warmup)
         self.assertIsNone(f.atr_5m)
@@ -105,9 +111,99 @@ class TestL2Warmup(unittest.TestCase):
         f = compute_l2_features(
             bars=bars, current_last=100.0, vwap_today=100.0,
             l1_return_5m_pct=1.0, l1_return_15m_pct=1.0, l1_return_1h_pct=1.0, l1_return_4h_pct=1.0,
+            as_of=as_of_after(bars),
         )
         self.assertFalse(f.l2_warmup)
         self.assertIsNotNone(f.atr_5m)
+
+
+class TestT021FeatureSemantics(unittest.TestCase):
+    def test_1h_and_4h_returns_do_not_fall_back_to_5m_atr(self):
+        bars = flat_bars(100)
+        f = compute_l2_features(
+            bars=bars, current_last=100.0, vwap_today=100.0,
+            l1_return_5m_pct=1.0, l1_return_15m_pct=2.0, l1_return_1h_pct=3.0, l1_return_4h_pct=4.0,
+            as_of=as_of_after(bars),
+        )
+
+        self.assertIsNotNone(f.atr_5m)
+        self.assertIsNone(f.atr_1h)
+        self.assertIsNone(f.return_1h_atr)
+        self.assertIsNone(f.return_4h_atr)
+        self.assertIn("atr_1h_unavailable_incomplete_closed_coverage", f.flags)
+        self.assertEqual(f.feature_semantics_version, "l2-v2-closed-bars-horizon-specific-atr")
+
+    def test_in_progress_bar_is_excluded_using_as_of(self):
+        bars = flat_bars(config.L2_MIN_BARS + 1)
+        as_of = datetime.fromisoformat(bars[-1].bar_time)
+        f = compute_l2_features(
+            bars=bars, current_last=100.0, vwap_today=100.0,
+            l1_return_5m_pct=1.0, l1_return_15m_pct=1.0, l1_return_1h_pct=1.0, l1_return_4h_pct=1.0,
+            as_of=as_of,
+        )
+
+        self.assertEqual(f.ohlc_bar_count, config.L2_MIN_BARS)
+        self.assertFalse(f.l2_warmup)
+        self.assertIn("in_progress_ohlc_bars_excluded", f.flags)
+
+    def test_exact_4h_and_24h_closed_coverage_succeeds(self):
+        bars = flat_bars(config.STRUCTURE_24H_BARS)
+        f = compute_l2_features(
+            bars=bars, current_last=100.0, vwap_today=100.0,
+            l1_return_5m_pct=1.0, l1_return_15m_pct=1.0, l1_return_1h_pct=1.0, l1_return_4h_pct=1.0,
+            as_of=as_of_after(bars),
+        )
+
+        self.assertIsNotNone(f.high_4h)
+        self.assertIsNotNone(f.high_24h)
+        self.assertIsNotNone(f.return_24h_pct)
+        self.assertNotIn("coverage_4h_incomplete", f.flags)
+        self.assertNotIn("coverage_24h_incomplete", f.flags)
+
+    def test_24h_breakout_claim_does_not_fall_back_to_5m_atr(self):
+        # The bars are contiguous and closed, but offset from hour boundaries,
+        # so no complete 1h resampling coverage exists for the ATR claim.
+        bars = [
+            Bar(
+                bar_time=(T0 + timedelta(minutes=5 * i + 1)).isoformat(),
+                open=100.0, high=101.0, low=99.0, close=100.0, vwap=100.0, volume=100.0, trades=10,
+            )
+            for i in range(config.STRUCTURE_24H_BARS)
+        ]
+        f = compute_l2_features(
+            bars=bars, current_last=110.0, vwap_today=100.0,
+            l1_return_5m_pct=1.0, l1_return_15m_pct=1.0, l1_return_1h_pct=1.0, l1_return_4h_pct=1.0,
+            as_of=as_of_after(bars),
+        )
+
+        self.assertIsNotNone(f.atr_5m)
+        self.assertIsNone(f.atr_1h)
+        self.assertIsNotNone(f.high_24h)
+        self.assertIsNone(f.breakout_dist_24h_atr)
+        self.assertEqual(f.breakout_state, "UNKNOWN")
+        self.assertIn("breakout_24h_atr_unavailable", f.flags)
+
+    def test_insufficient_and_gapped_coverage_leave_only_affected_horizons_unavailable(self):
+        insufficient = flat_bars(config.STRUCTURE_4H_BARS - 1)
+        f_insufficient = compute_l2_features(
+            bars=insufficient, current_last=100.0, vwap_today=100.0,
+            l1_return_5m_pct=1.0, l1_return_15m_pct=1.0, l1_return_1h_pct=1.0, l1_return_4h_pct=1.0,
+            as_of=as_of_after(insufficient),
+        )
+        self.assertIsNone(f_insufficient.high_4h)
+        self.assertIsNone(f_insufficient.high_24h)
+        self.assertIn("coverage_4h_incomplete", f_insufficient.flags)
+
+        gapped = flat_bars(config.STRUCTURE_24H_BARS)
+        del gapped[100]  # Outside the final 4h, inside the claimed 24h window.
+        f_gapped = compute_l2_features(
+            bars=gapped, current_last=100.0, vwap_today=100.0,
+            l1_return_5m_pct=1.0, l1_return_15m_pct=1.0, l1_return_1h_pct=1.0, l1_return_4h_pct=1.0,
+            as_of=as_of_after(gapped),
+        )
+        self.assertIsNotNone(f_gapped.high_4h)
+        self.assertIsNone(f_gapped.high_24h)
+        self.assertIn("coverage_24h_incomplete", f_gapped.flags)
 
 
 if __name__ == "__main__":

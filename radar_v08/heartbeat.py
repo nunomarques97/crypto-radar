@@ -22,7 +22,7 @@ from .kraken_futures import fetch_tickers as fetch_futures_tickers
 from .kraken_futures import parse_perpetuals
 from .kraken_spot import fetch_ticker, get_asset_pairs, parse_ticker_row
 from .l2 import L2CandidateInput, L2Result, label_forward_returns, run_l2
-from .l3 import L3CandidateInput, select_finalists, run_l3
+from .l3 import L3CandidateInput, run_l3, select_finalists
 from .logging_setup import append_run_record, configure_logging
 from .output import build_candidate, build_output, write_json
 from .qwen import review_finalists
@@ -187,6 +187,7 @@ def run_heartbeat(
 
         # Step 7: L1 anomaly detection.
         btc_entry = assets.get(config.BTC_ASSET)
+        btc_pair = None
         btc_return_15m = None
         btc_return_1h = None
         if btc_entry is not None and btc_entry.primary_market is not None:
@@ -219,7 +220,7 @@ def run_heartbeat(
                 current_mark=fut.mark_price if fut else None,
                 current_index=fut.index_price if fut else None,
             )
-            result = compute_anomaly(store, entry.asset, m.pair_key, now, features)
+            result = compute_anomaly(store, entry.asset, m.pair_key, now, features, btc_pair)
             any_non_warmup = any_non_warmup or not result.warmup
             l1_by_asset[entry.asset] = (entry, features, result)
 

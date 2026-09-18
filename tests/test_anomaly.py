@@ -6,7 +6,17 @@ from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from radar_v08.anomaly import compute_anomaly, compute_features, compute_return, lookup_past_spot
+from radar_v08 import config
+from radar_v08.anomaly import (
+    Features,
+    compute_anomaly,
+    compute_features,
+    compute_return,
+    historical_relative_btc_series,
+    historical_return_series,
+    lookup_past_spot,
+    robust_z,
+)
 from radar_v08.store import SnapshotStore, SpotSnapshotInput
 
 NOW = datetime(2026, 9, 13, 14, 0, 0, tzinfo=timezone.utc)
@@ -30,6 +40,18 @@ def build_flat_history(store, asset, pair, now, hours=2, interval_minutes=5, pri
         t += timedelta(minutes=interval_minutes)
         volume += 50.0
         trades += 20
+
+
+def build_return_history(store, asset, pair, now, returns):
+    """Insert a pair-pure 15-minute return path ending at ``now - 15m``."""
+    price = 100.0
+    t = now - timedelta(minutes=15 * (len(returns) + 1))
+    store.insert_spot_snapshot(spot_snap(t.isoformat(), 1000.0, 500, price, asset, pair))
+    for index, return_pct in enumerate(returns, start=1):
+        price *= 1.0 + return_pct / 100.0
+        t = now - timedelta(minutes=15 * (len(returns) + 1 - index))
+        store.insert_spot_snapshot(spot_snap(t.isoformat(), 1000.0 + index, 500 + index, price, asset, pair))
+    return price
 
 
 class TestAnomaly(unittest.TestCase):
@@ -62,6 +84,80 @@ class TestAnomaly(unittest.TestCase):
         self.assertTrue(result.warmup)
         self.assertIsNone(result.anomaly_score)
         self.assertIn("warmup", result.flags)
+
+
+class TestT021BtcRelativeHistory(unittest.TestCase):
+    def setUp(self):
+        fd, self.path = tempfile.mkstemp(suffix=".sqlite")
+        os.close(fd)
+        os.remove(self.path)
+        self.store = SnapshotStore(self.path)
+
+    def tearDown(self):
+        self.store.close()
+        for suffix in ("", "-wal", "-shm"):
+            p = self.path + suffix
+            if os.path.exists(p):
+                os.remove(p)
+
+    def _matched_history(self):
+        residuals = [1.0, 2.0, 3.0, 4.0, 1.0, 2.0, 3.0, 4.0, 1.0, 2.0, 3.0]
+        build_return_history(self.store, "ETH", "ETHUSD", NOW, [1.0 + value for value in residuals])
+        build_return_history(self.store, "BTC", "XBTUSD", NOW, [1.0] * len(residuals))
+        return residuals
+
+    def test_matched_pair_pure_residual_history_has_hand_calculated_robust_z(self):
+        residuals = self._matched_history()
+        result = compute_anomaly(
+            self.store, "ETH", "ETHUSD", NOW,
+            Features(relative_return_vs_btc_15m=5.0), btc_pair="XBTUSD",
+        )
+
+        # median([1,2,3,4,1,2,3,4,1,2,3]) = 2; MAD = 1.
+        self.assertAlmostEqual(result.relative_btc_z, (5.0 - 2.0) / config.MAD_SCALE)
+        asset_history = self.store.spot_history_by_pair("ETHUSD", (NOW - timedelta(hours=48)).isoformat())
+        self.assertNotEqual(result.relative_btc_z, robust_z(5.0, historical_return_series(asset_history, 15)))
+        self.assertEqual(residuals.count(2.0), 3)
+
+    def test_missing_btc_or_asset_history_leaves_relative_statistic_unavailable(self):
+        build_return_history(self.store, "ETH", "ETHUSD", NOW, [2.0] * 11)
+        missing_btc = compute_anomaly(
+            self.store, "ETH", "ETHUSD", NOW,
+            Features(relative_return_vs_btc_15m=1.0), btc_pair="XBTUSD",
+        )
+        self.assertIsNone(missing_btc.relative_btc_z)
+        self.assertIn("relative_btc_history_unavailable", missing_btc.flags)
+
+        build_return_history(self.store, "BTC", "XBTUSD", NOW, [1.0] * 11)
+        missing_asset = compute_anomaly(
+            self.store, "SOL", "SOLUSD", NOW,
+            Features(relative_return_vs_btc_15m=1.0), btc_pair="XBTUSD",
+        )
+        self.assertTrue(missing_asset.warmup)
+        self.assertIsNone(missing_asset.relative_btc_z)
+
+    def test_mismatched_endpoints_do_not_create_residual_observations(self):
+        # Each row has a valid 15m return, but the endpoint series are 10m apart
+        # and therefore outside the existing 7.5-minute matching tolerance.
+        build_return_history(self.store, "ETH", "ETHUSD", NOW, [2.0, 2.0])
+        btc_now = NOW - timedelta(minutes=25)
+        build_return_history(self.store, "BTC", "XBTUSD", btc_now, [1.0])
+        asset_rows = self.store.spot_history_by_pair("ETHUSD", (NOW - timedelta(hours=48)).isoformat())
+        btc_rows = self.store.spot_history_by_pair("XBTUSD", (NOW - timedelta(hours=48)).isoformat())
+        self.assertEqual(historical_relative_btc_series(asset_rows, btc_rows, 15), [])
+
+    def test_btc_has_no_independent_btc_relative_residual(self):
+        self._matched_history()
+        features = compute_features(
+            store=self.store, asset="BTC", pair="XBTUSD", now_dt=NOW,
+            current_last=101.0, current_volume_today=5000.0, current_trades_today=3000,
+            current_spread_bps=5.0, current_bid=100.9, current_bid_size=1.0,
+            current_ask=101.1, current_ask_size=1.0,
+            btc_return_15m=1.0, btc_return_1h=1.0,
+        )
+        result = compute_anomaly(self.store, "BTC", "XBTUSD", NOW, features, btc_pair="XBTUSD")
+        self.assertIsNone(features.relative_return_vs_btc_15m)
+        self.assertIsNone(result.relative_btc_z)
 
     def test_score_exists_and_bounded_with_enough_history(self):
         build_flat_history(self.store, "BTC", "XBTUSD", NOW, price=100.0)
