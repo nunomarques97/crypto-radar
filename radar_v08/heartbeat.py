@@ -34,7 +34,7 @@ from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from . import budgets, config, cooldown, events, security
+from . import config, cooldown, events, security
 from .adapters.kraken_timestamps import (
     fetch_futures_tickers,
     fetch_spot_ticker,
@@ -746,6 +746,11 @@ def run_heartbeat(
                 router_results[c.asset] = router_result
 
                 if router_result.decision in ("SONNET", "FABLE"):
+                    # T031b: the heartbeat only records demand. It reads the
+                    # cooldown, then creates (or deduplicates) the event. It never
+                    # charges a budget and never starts a cooldown: the bridge
+                    # does both, once, when its atomic claim + reservation for
+                    # this event is accepted (budgets.py, cooldown.py).
                     allowed, cooldown_reason = cooldown.check_cooldown(
                         store, c.asset, router_result.decision, now,
                         c.l2_result.setup.setup_type, c.l2_result.setup.direction, c.l2_result.opportunity.score,
@@ -753,16 +758,6 @@ def run_heartbeat(
                     if not allowed:
                         router_result.reasons.append(f"suppressed_by_cooldown:{cooldown_reason}")
                         continue
-
-                    budget_ok, _budget_status = budgets.try_consume_budget(store, router_result.decision, now)
-                    event_status = "PENDING" if budget_ok else "DEFERRED"
-                    if not budget_ok:
-                        router_result.reasons.append("budget_exhausted")
-
-                    cooldown.record_send(
-                        store, c.asset, router_result.decision, now,
-                        c.l2_result.setup.setup_type, c.l2_result.setup.direction, c.l2_result.opportunity.score,
-                    )
 
                     entry = l1_by_asset[c.asset][0]
                     fut = entry.futures if c_futures_ok else None
@@ -802,7 +797,7 @@ def run_heartbeat(
                         _integrity_record(seal_reports[c.asset], clock_reference, l3r.futures_book_result)
                     )
 
-                    event_id, _created = events.create_event_if_new(
+                    event_id, created = events.create_event_if_new(
                         store, ts=ts, type_="RADAR_ALERT", asset=c.asset,
                         setup_type=c.l2_result.setup.setup_type, direction=c.l2_result.setup.direction,
                         market=event_market,
@@ -810,9 +805,17 @@ def run_heartbeat(
                         opportunity_score=c.l2_result.opportunity.score,
                         tradeability_score=l3r.tradeability.score,
                         confidence=router_result.confidence, model_demand=router_result.decision,
-                        reason="; ".join(router_result.reasons), status=event_status,
+                        reason="; ".join(router_result.reasons), status="PENDING",
                         context=event_context,
                     )
+                    if created:
+                        event_status = "PENDING"
+                    else:
+                        # Dedup hit: an equivalent open event already exists. Report
+                        # its real status; nothing is charged or started for it.
+                        router_result.reasons.append("deduplicated_open_event")
+                        existing = store.get_event(event_id)
+                        event_status = existing["status"] if existing is not None else "UNKNOWN"
                     event_by_asset[c.asset] = (event_id, event_status)
 
         shortlist = []

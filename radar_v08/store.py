@@ -23,6 +23,7 @@ from .adapters import evidence_store, invocation_store
 from .domain.evidence import SealedEvidence
 from .domain.integrity import InstrumentId
 from .domain.invocation import (
+    BudgetUsage,
     ClaimResult,
     InvocationRecord,
     InvocationRequest,
@@ -420,36 +421,55 @@ class SnapshotStore:
     # -- invocation claims, budget reservations, lease fencing (T031a) ---------
     # Each call is one short BEGIN IMMEDIATE transaction in the adapter; nothing here
     # runs network or model work. Budget limits are passed in by the caller.
+    # T031b: `now` is optional (default: the aware UTC wall clock) so the bridge can
+    # use one injected clock for claims, leases and budget windows.
+
+    @staticmethod
+    def _now(now: datetime | None) -> datetime:
+        return datetime.now(timezone.utc) if now is None else now
 
     def claim_invocation(
-        self, request: InvocationRequest, budget: ModelBudget, owner: str, lease_seconds: int
+        self,
+        request: InvocationRequest,
+        budget: ModelBudget,
+        owner: str,
+        lease_seconds: int,
+        *,
+        now: datetime | None = None,
     ) -> ClaimResult:
         with self._lock:
             return invocation_store.claim_invocation(
-                self._conn, request, budget, owner=owner, now=datetime.now(timezone.utc), lease_seconds=lease_seconds
+                self._conn, request, budget, owner=owner, now=self._now(now), lease_seconds=lease_seconds
             )
 
-    def record_invocation_attempt(self, lease: Lease, budget: ModelBudget) -> Transition:
+    def record_invocation_attempt(self, lease: Lease, budget: ModelBudget, *, now: datetime | None = None) -> Transition:
         with self._lock:
-            return invocation_store.record_attempt(self._conn, lease, budget, now=datetime.now(timezone.utc))
+            return invocation_store.record_attempt(self._conn, lease, budget, now=self._now(now))
 
-    def complete_invocation(self, lease: Lease) -> Transition:
+    def complete_invocation(self, lease: Lease, *, now: datetime | None = None) -> Transition:
         with self._lock:
-            return invocation_store.complete_invocation(self._conn, lease, now=datetime.now(timezone.utc))
+            return invocation_store.complete_invocation(self._conn, lease, now=self._now(now))
 
-    def release_invocation(self, lease: Lease, reason: ReleaseReason) -> Transition:
+    def release_invocation(self, lease: Lease, reason: ReleaseReason, *, now: datetime | None = None) -> Transition:
         with self._lock:
-            return invocation_store.release_invocation(self._conn, lease, reason, now=datetime.now(timezone.utc))
+            return invocation_store.release_invocation(self._conn, lease, reason, now=self._now(now))
 
-    def recover_expired_invocations(self, owner: str, lease_seconds: int, limit: int = 16) -> tuple[Lease, ...]:
+    def recover_expired_invocations(
+        self, owner: str, lease_seconds: int, limit: int = 16, *, now: datetime | None = None
+    ) -> tuple[Lease, ...]:
         with self._lock:
             return invocation_store.recover_expired(
-                self._conn, owner=owner, now=datetime.now(timezone.utc), lease_seconds=lease_seconds, limit=limit
+                self._conn, owner=owner, now=self._now(now), lease_seconds=lease_seconds, limit=limit
             )
 
     def load_invocation(self, invocation_id: str) -> InvocationRecord | None:
         with self._lock:
             return invocation_store.load_invocation(self._conn, invocation_id)
+
+    def invocation_budget_usage(self, budget: ModelBudget, *, now: datetime | None = None) -> BudgetUsage:
+        """Reserved units in the UTC hour/day windows of `now` (read only)."""
+        with self._lock:
+            return invocation_store.budget_usage(self._conn, budget, now=self._now(now))
 
     @contextmanager
     def _cursor(self) -> Iterator[sqlite3.Cursor]:

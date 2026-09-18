@@ -4,6 +4,13 @@ Default 4h, configurable. Exceptions that bypass an active cooldown: the
 deterministic setup_type changed, direction changed, or opportunity_score
 jumped by >= config.COOLDOWN_OPPORTUNITY_JUMP points - all spelled out in
 config.py, none hidden inline.
+
+When a cooldown starts (T031b): `record_send` is called only after the intended
+transition was accepted - the Claude Bridge took the event (PENDING/DEFERRED ->
+PROCESSING) and won the atomic claim + budget reservation for it. It is never
+called for a deduplicated event, a claim refused for budget (the event is
+DEFERRED), a claim lost to another connection, or anything the heartbeat does:
+the heartbeat only reads the cooldown (`check_cooldown`) before recording demand.
 """
 
 from __future__ import annotations
@@ -54,4 +61,5 @@ def record_send(
     direction: str,
     opportunity_score: float | None,
 ) -> None:
+    """Start (or restart) the cooldown for (asset, model) at `now`. See the module note for when."""
     store.set_cooldown(asset, model, now.isoformat(), setup_type, direction, opportunity_score)

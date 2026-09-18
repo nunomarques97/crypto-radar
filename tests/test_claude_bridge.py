@@ -9,6 +9,8 @@ from unittest import mock
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from radar_v08 import budgets, claude_bridge, config
+from radar_v08.domain.integrity import InstrumentKind
+from radar_v08.domain.invocation import Direction, InvocationIdentity, InvocationRequest
 from radar_v08.events import create_event_if_new
 from radar_v08.store import SnapshotStore
 
@@ -298,10 +300,18 @@ class TestRunBridgeCycleContainment(BridgeCycleTestCase):
 
     def test_budget_exhausted_event_is_not_deferred_or_charged(self):
         event_id, _ = create_event_if_new(self.store, **make_event_kwargs(model_demand="FABLE"))
-        for _ in range(config.MODEL_BUDGETS["FABLE"]["hourly"]):
-            self.store.increment_budget("FABLE", "hour", T0.strftime("%Y-%m-%dT%H:00:00"))
-            self.store.increment_budget("FABLE", "day", T0.strftime("%Y-%m-%d"))
+        # T031b: the budget is the T031a reservation counter (the legacy
+        # model_budget_usage table is no longer charged), so exhaust that one.
+        for index in range(config.MODEL_BUDGETS["FABLE"]["hourly"]):
+            identity = InvocationIdentity(
+                venue="kraken", market_kind=InstrumentKind.SPOT, native_instrument="XBT/USD", setup="BREAKOUT",
+                direction=Direction.LONG, evidence_hash="sha256:" + f"{index:064x}", policy_version="OC-1/test",
+            )
+            self.store.claim_invocation(
+                InvocationRequest(identity, "FABLE"), budgets.model_budget("FABLE"), "other-holder", 600, now=T0
+            )
         before_budget = budgets.budget_status(self.store, "FABLE", T0)
+        self.assertEqual(before_budget["hourly_used"], before_budget["hourly_limit"])
         self.assert_disabled_cycle_is_read_only(
             [event_id], create_fn=mock.Mock(side_effect=AssertionError("cloud client must not run"))
         )

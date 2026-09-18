@@ -1,9 +1,19 @@
-"""Hourly/daily model budgets, SQLite-backed (task section 12).
+"""Hourly/daily model budgets (task section 12), charged once per genuine call (T031b).
 
-Initial values are declared UNCALIBRATED in config.py. If a budget is
-exhausted the event is never lost - the caller marks it DEFERRED and still
-writes it to the event queue (task section 12/13), it just doesn't consume
-that model's quota.
+The only way a budget unit is spent is the atomic claim + reservation of T031a
+(`SnapshotStore.claim_invocation`, one `BEGIN IMMEDIATE` transaction in
+`radar_v08/adapters/invocation_store.py`), made by the Claude Bridge when it takes
+an event for a model call. The heartbeat never charges a budget: it only records
+the router's demand as an event (created or deduplicated). A claim refused for
+budget writes no reservation; the bridge then marks the event DEFERRED, so the
+event is never lost (task section 12/13).
+
+This module maps `config.MODEL_BUDGETS` (UNCALIBRATED initial values) onto the
+domain `ModelBudget` and reads the reserved counters back for display. The old
+check-then-increment `try_consume_budget` on the legacy `model_budget_usage`
+table was removed in T031b: it was not atomic across connections and made the
+heartbeat and the bridge each charge the same opportunity (TAKEOVER_AUDIT P1).
+The legacy table is kept (never dropped, D19) but is no longer written.
 """
 
 from __future__ import annotations
@@ -11,38 +21,25 @@ from __future__ import annotations
 from datetime import datetime
 
 from . import config
+from .domain.invocation import ModelBudget
 from .store import SnapshotStore
 
 
-def _hour_window_start(now: datetime) -> str:
-    return now.strftime("%Y-%m-%dT%H:00:00")
-
-
-def _day_window_start(now: datetime) -> str:
-    return now.strftime("%Y-%m-%d")
+def model_budget(model: str) -> ModelBudget:
+    """The configured limits for `model`; an unknown model gets 0/0 (every claim refused)."""
+    limits = config.MODEL_BUDGETS.get(model, {"hourly": 0, "daily": 0})
+    return ModelBudget(model=model, hourly_limit=int(limits["hourly"]), daily_limit=int(limits["daily"]))
 
 
 def budget_status(store: SnapshotStore, model: str, now: datetime) -> dict[str, int]:
-    limits = config.MODEL_BUDGETS.get(model, {"hourly": 0, "daily": 0})
-    hourly_used = store.get_budget_count(model, "hour", _hour_window_start(now))
-    daily_used = store.get_budget_count(model, "day", _day_window_start(now))
+    """Reserved units vs limits in the UTC hour and day windows containing `now`.
+
+    Reads the T031a reservation counters, the ones a claim actually charges.
+    """
+    usage = store.invocation_budget_usage(model_budget(model), now=now)
     return {
-        "hourly_used": hourly_used,
-        "hourly_limit": limits["hourly"],
-        "daily_used": daily_used,
-        "daily_limit": limits["daily"],
+        "hourly_used": usage.hourly_reserved,
+        "hourly_limit": usage.hourly_limit,
+        "daily_used": usage.daily_reserved,
+        "daily_limit": usage.daily_limit,
     }
-
-
-def try_consume_budget(store: SnapshotStore, model: str, now: datetime) -> tuple[bool, dict[str, int]]:
-    """Atomically (within this process) checks both hourly and daily budgets
-    and only increments if BOTH have room. Returns (allowed, status)."""
-    status = budget_status(store, model, now)
-    if status["hourly_used"] >= status["hourly_limit"] or status["daily_used"] >= status["daily_limit"]:
-        return False, status
-
-    store.increment_budget(model, "hour", _hour_window_start(now))
-    store.increment_budget(model, "day", _day_window_start(now))
-    status["hourly_used"] += 1
-    status["daily_used"] += 1
-    return True, status

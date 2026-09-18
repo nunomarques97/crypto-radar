@@ -12,21 +12,52 @@ never OPUS, and never a model choice made by the LLM itself.
 SQLite (the `events` table) is the source of state; `events.jsonl` stays the
 append-only audit log (events.py already writes both). This module only ever
 transitions events through their SQLite row - never edits the jsonl log.
+
+Budget, claim and cooldown (T031b, TAKEOVER_AUDIT P1): an event is taken in
+this order - (1) the event row moves PENDING/DEFERRED -> PROCESSING (a lost
+race means someone else has it: skip, nothing charged); (2) the T031a atomic
+claim + budget reservation for the event's invocation identity, which is the
+only place a budget unit is spent (refused -> event DEFERRED, nothing charged;
+an identical active invocation held elsewhere -> event DEFERRED, nothing
+charged); (3) only then the cooldown starts; (4) the attempt is recorded
+before the call. After the call the result commits only if the lease still
+holds (`complete_invocation` / `release_invocation` return APPLIED): a holder
+fenced by crash recovery writes no analysis, no event transition and no
+notification. Every retry is a new claim, so each genuine call costs exactly
+one unit.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
 import time
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
-from . import budgets, config, events
+from . import budgets, config, cooldown, events
 from .analysis_schema import ANALYSIS_RESPONSE_SCHEMA, validate_analysis
 from .context_builder import build_model_context
+from .domain.integrity import POLICY_VERSION, InstrumentKind
+from .domain.invocation import (
+    HASH_PREFIX,
+    MAX_LEASE_SECONDS,
+    MIN_LEASE_SECONDS,
+    Direction,
+    Duplicate,
+    InvocationError,
+    InvocationFailure,
+    InvocationIdentity,
+    InvocationRequest,
+    Lease,
+    Refused,
+    ReleaseReason,
+    TransitionStatus,
+)
 from .prompts import BRIDGE_SYSTEM_PROMPT_V1, MODEL_TASK_INSTRUCTIONS, build_user_message
 from .store import SnapshotStore
 
@@ -264,6 +295,98 @@ def _apply_outcome(store: SnapshotStore, event_row: Any, result: CallResult, now
     return "DEFERRED"
 
 
+VENUE = "kraken"
+# Identity field for the prompt/routing policy an invocation runs under.
+INVOCATION_POLICY_VERSION = f"{POLICY_VERSION}/{config.MODEL_VERSION_TAG['SONNET']}"
+
+
+def _lease_seconds() -> int:
+    """The invocation lease matches the stale-PROCESSING window (bounded by T031a's limits)."""
+    return min(MAX_LEASE_SECONDS, max(MIN_LEASE_SECONDS, int(config.CLAUDE_BRIDGE_PROCESSING_STALE_SECONDS)))
+
+
+def _new_owner() -> str:
+    return f"bridge-{os.getpid()}-{uuid.uuid4().hex[:12]}"
+
+
+def event_evidence_hash(event_row: Any) -> str:
+    """``sha256:<hex>`` of the event's persisted, immutable evidence version.
+
+    The hash covers the event ID and the context JSON exactly as stored when the
+    event was created (never rewritten afterwards). It is not a T030 sealed
+    evidence hash: sealed evidence is not attached to events yet (T032/T033).
+    """
+    payload = json.dumps(
+        {"event_id": event_row["event_id"], "context_json": event_row["context_json"]},
+        sort_keys=True,
+        ensure_ascii=True,
+        separators=(",", ":"),
+    )
+    return HASH_PREFIX + hashlib.sha256(payload.encode("ascii")).hexdigest()
+
+
+def invocation_request_for_event(event_row: Any) -> InvocationRequest:
+    """The OC-1 invocation identity of one event, for the model the router chose.
+
+    Raises `InvocationError(INVALID_FIELD)` when the persisted event does not name
+    its market, native instrument, setup or direction: an unknown identity is
+    never guessed (fail closed).
+    """
+    market = event_row["market"]
+    try:
+        persisted = json.loads(event_row["context_json"]) if event_row["context_json"] else {}
+    except (TypeError, ValueError) as exc:
+        raise InvocationError(InvocationFailure.INVALID_FIELD, "event context is not valid JSON") from exc
+    if not isinstance(persisted, dict):
+        raise InvocationError(InvocationFailure.INVALID_FIELD, "event context is not a JSON object")
+    if market == "FUTURES":
+        kind, native = InstrumentKind.FUTURES, persisted.get("futures_symbol")
+    elif market == "SPOT":
+        kind, native = InstrumentKind.SPOT, persisted.get("spot_pair")
+    else:
+        raise InvocationError(InvocationFailure.INVALID_FIELD, "event market is neither SPOT nor FUTURES")
+    if not isinstance(native, str):
+        raise InvocationError(InvocationFailure.INVALID_FIELD, "event context does not name its native instrument")
+    try:
+        direction = Direction(event_row["direction"])
+    except ValueError as exc:
+        raise InvocationError(InvocationFailure.INVALID_FIELD, "event direction is not LONG/SHORT/NONE") from exc
+    identity = InvocationIdentity(
+        venue=VENUE,
+        market_kind=kind,
+        native_instrument=native,
+        setup=event_row["setup_type"],
+        direction=direction,
+        evidence_hash=event_evidence_hash(event_row),
+        policy_version=INVOCATION_POLICY_VERSION,
+    )
+    return InvocationRequest(identity=identity, model=event_row["model_demand"])
+
+
+def _recover_expired_leases(store: SnapshotStore, owner: str, now: datetime) -> int:
+    """Fence every expired invocation lease (generation + 1), then release it.
+
+    The crashed or stalled holder can no longer complete: its generation is stale
+    and the invocation is RELEASED. Nothing is reserved or refunded and no
+    attempt count changes; the event's next claim is a new invocation.
+    """
+    leases = store.recover_expired_invocations(owner, _lease_seconds(), limit=1000, now=now)
+    for lease in leases:
+        store.release_invocation(lease, ReleaseReason.FAILED, now=now)
+    return len(leases)
+
+
+def _defer_uncharged(
+    store: SnapshotStore, row: Any, now: datetime, now_iso: str, reason: str, processed: list[dict[str, Any]]
+) -> None:
+    """Put a taken event back as DEFERRED with a backoff; no budget unit was spent for it."""
+    event_id = row["event_id"]
+    next_attempt_at = (now + timedelta(seconds=_backoff_seconds((row["attempts"] or 0) + 1))).isoformat()
+    store.mark_event_deferred(event_id, now_iso, reason, next_attempt_at)
+    events.snapshot_to_jsonl(store, event_id)
+    processed.append({"event_id": event_id, "asset": row["asset"], "outcome": "DEFERRED", "reason": reason})
+
+
 def run_bridge_cycle(
     store: SnapshotStore,
     now: datetime | None = None,
@@ -271,11 +394,18 @@ def run_bridge_cycle(
     create_fn: Callable[..., Any] | None = None,
     notify_fn: Callable[[dict[str, Any]], None] | None = None,
     env: dict | None = None,
+    *,
+    clock: Callable[[], datetime] | None = None,
+    owner: str | None = None,
 ) -> BridgeCycleResult:
     """One pass over the actionable event queue. Safe to call repeatedly
     (loop mode) or once (single `--mode full`/`--mode bridge` run). Never
     raises on provider trouble - every failure mode ends in a typed event
     status and a bridge health state, never an uncaught exception.
+
+    `clock` (aware UTC) times claims, leases, budget windows and the cooldown;
+    by default it is the wall clock, or the fixed `now` when only `now` is given.
+    `owner` names this cycle's lease holder (default: a fresh per-cycle name).
     """
     # The cycle boundary is a second, independent guard for direct bridge
     # mode and full/loop queue drains.  Do not claim/recover/defer queued rows
@@ -287,9 +417,25 @@ def run_bridge_cycle(
             skipped_reason="LOCAL_ONLY_POLICY",
         )
 
-    now = now or datetime.now(timezone.utc)
+    if clock is None:
+        fixed = now
+        clock = (lambda: fixed) if fixed is not None else (lambda: datetime.now(timezone.utc))
+    now = now or clock()
     now_iso = now.isoformat()
     max_events = max_events if max_events is not None else config.CLAUDE_BRIDGE_MAX_EVENTS_PER_CYCLE
+    owner = owner or _new_owner()
+
+    # Fence first: an expired invocation lease gets a new generation and is
+    # released, so its old holder can no longer complete. Only then are stale
+    # PROCESSING events handed back to the queue.
+    try:
+        fenced = _recover_expired_leases(store, owner, clock())
+    except InvocationError as exc:
+        logger.warning("Invocation store unavailable during lease recovery (%s)", exc.code.value)
+        store.set_bridge_health("DEGRADED", f"invocation_store_{exc.code.value}", now_iso)
+        return BridgeCycleResult(health="DEGRADED", skipped_reason="INVOCATION_STORE_UNAVAILABLE")
+    if fenced:
+        logger.warning("Fenced and released %d expired invocation lease(s)", fenced)
 
     cutoff_iso = (now - timedelta(seconds=config.CLAUDE_BRIDGE_PROCESSING_STALE_SECONDS)).isoformat()
     recovered_ids = store.recover_stale_processing(cutoff_iso, now_iso)
@@ -327,22 +473,87 @@ def run_bridge_cycle(
             events.snapshot_to_jsonl(store, event_id)
             continue
 
-        budget_ok, _budget_status = budgets.try_consume_budget(store, model_demand, now)
-        if not budget_ok:
-            next_attempt_at = (now + timedelta(seconds=_backoff_seconds((row["attempts"] or 0) + 1))).isoformat()
-            store.mark_event_deferred(event_id, now_iso, "budget_exhausted", next_attempt_at)
-            events.snapshot_to_jsonl(store, event_id)
-            processed.append({"event_id": event_id, "asset": row["asset"], "outcome": "DEFERRED", "reason": "budget_exhausted"})
+        # (1) Take the event. A lost race means another connection has it:
+        # nothing was charged, nothing is touched.
+        if not store.claim_event_for_processing(event_id, clock().isoformat()):
             continue
-
-        if not store.claim_event_for_processing(event_id, now_iso):
-            continue  # claimed/settled by someone else since find_actionable_events ran
         events.snapshot_to_jsonl(store, event_id)
 
-        context = build_model_context(row)
-        requested_at = datetime.now(timezone.utc).isoformat()
-        result = call_model(model_demand, context, create_fn=create_fn)
-        completed_at = datetime.now(timezone.utc).isoformat()
+        try:
+            request = invocation_request_for_event(row)
+        except InvocationError as exc:
+            # The persisted event does not name its instrument/direction: never
+            # guessed, never dispatched, never charged.
+            store.mark_event_failed(event_id, now_iso, f"invocation_identity_invalid: {exc.code.value}")
+            events.snapshot_to_jsonl(store, event_id)
+            processed.append(
+                {"event_id": event_id, "asset": row["asset"], "outcome": "FAILED", "reason": "invocation_identity_invalid"}
+            )
+            continue
+
+        budget = budgets.model_budget(model_demand)
+        try:
+            # (2) The one and only budget charge: the atomic claim + reservation.
+            claim = store.claim_invocation(request, budget, owner, _lease_seconds(), now=clock())
+            if isinstance(claim, Refused):
+                _defer_uncharged(store, row, now, now_iso, f"budget_exhausted: {claim.reason.value}", processed)
+                continue
+            if isinstance(claim, Duplicate):
+                _defer_uncharged(store, row, now, now_iso, "invocation_active_elsewhere", processed)
+                continue
+            lease: Lease = claim.lease
+
+            # (3) The intended transition was accepted: only now does the cooldown start.
+            cooldown.record_send(
+                store, row["asset"], model_demand, clock(),
+                row["setup_type"], row["direction"], row["opportunity_score"],
+            )
+
+            # (4) Record the genuine attempt before the call (the claim's unit covers it).
+            attempt = store.record_invocation_attempt(lease, budget, now=clock())
+            if attempt.status is not TransitionStatus.APPLIED:
+                logger.warning("Lease lost before the call for event %s (%s)", event_id, attempt.status.value)
+                cycle_health = _worse_health(cycle_health, "DEGRADED")
+                processed.append(
+                    {"event_id": event_id, "asset": row["asset"], "outcome": "FENCED", "reason": attempt.status.value}
+                )
+                continue
+
+            context = build_model_context(row)
+            requested_at = datetime.now(timezone.utc).isoformat()
+            result = call_model(model_demand, context, create_fn=create_fn)
+            completed_at = datetime.now(timezone.utc).isoformat()
+
+            # The result commits only while this lease still holds the invocation.
+            if result.status == "SUCCESS":
+                transition = store.complete_invocation(lease, now=clock())
+            else:
+                transition = store.release_invocation(lease, ReleaseReason.FAILED, now=clock())
+        except InvocationError as exc:
+            # Storage trouble (busy, not migrated, ...): fail closed and stop the
+            # cycle. Only the typed code is recorded; the detail stays in the log.
+            logger.warning("Invocation store unavailable for event %s (%s)", event_id, exc.code.value)
+            logger.debug("Invocation store detail: %s", exc.detail)
+            cycle_health = _worse_health(cycle_health, "DEGRADED")
+            current = store.get_event(event_id)
+            if current is not None and current["status"] == "PROCESSING":
+                _defer_uncharged(store, row, now, now_iso, f"invocation_store_{exc.code.value}", processed)
+            break
+
+        if transition.status is not TransitionStatus.APPLIED:
+            # Fenced by crash recovery (or the lease ran out): this old holder
+            # writes no analysis, no event transition and no notification.
+            logger.warning(
+                "Discarded %s result for event %s: invocation lease %s", result.status, event_id, transition.status.value
+            )
+            cycle_health = _worse_health(cycle_health, "DEGRADED")
+            processed.append(
+                {
+                    "event_id": event_id, "asset": row["asset"], "model": model_demand,
+                    "outcome": "FENCED", "status": result.status, "reason": transition.status.value,
+                }
+            )
+            continue
 
         store.insert_model_analysis(
             event_id=event_id,
