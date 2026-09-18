@@ -14,6 +14,7 @@ it appears in the output.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 
 from . import config
@@ -36,7 +37,9 @@ class RouterContext:
     range_expansion: bool | None
     breakout_state: str
     derivatives_coherence_credit: float  # 0.0/1.0, from opportunity.breakdown
-    taker_buy_ratio: float | None  # from L3 trades, APPROXIMATE
+    # From L3 trades that passed OC-1 integrity (T023b), APPROXIMATE. None =
+    # unavailable (no/invalid/unvalidated trades) - never read as 0.
+    taker_buy_ratio: float | None
     qwen_status: str  # OK | INVALID_JSON | TIMEOUT | UNAVAILABLE
     qwen_veto: bool = False
     qwen_call_sonnet: bool = False
@@ -52,6 +55,18 @@ class RouterResult:
     confidence: str
     confirmations: list[str] = field(default_factory=list)
     reasons: list[str] = field(default_factory=list)
+
+
+def valid_taker_buy_ratio(value: float | None) -> float | None:
+    """Entry-seam check (T023b): a taker-buy ratio is evidence only as a finite
+    number in [0, 1]. Anything else (None, NaN, inf, out of range, bool) is
+    unavailable and returns None - it is never coerced to 0 or clamped.
+    """
+    if value is None or isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    if not math.isfinite(value) or not 0.0 <= value <= 1.0:
+        return None
+    return float(value)
 
 
 def _direction_sign(direction: str) -> int:
@@ -86,12 +101,13 @@ def count_confirmations(ctx: RouterContext) -> tuple[int, list[str]]:
         names.append("derivatives_coherent")
 
     direction_sign = _direction_sign(ctx.direction)
+    taker_buy_ratio = valid_taker_buy_ratio(ctx.taker_buy_ratio)
     if (
-        ctx.taker_buy_ratio is not None
+        taker_buy_ratio is not None
         and direction_sign != 0
         and (
-            (direction_sign == 1 and ctx.taker_buy_ratio >= config.ROUTER_TAKER_IMBALANCE_CONFIRM_RATIO)
-            or (direction_sign == -1 and (1.0 - ctx.taker_buy_ratio) >= config.ROUTER_TAKER_IMBALANCE_CONFIRM_RATIO)
+            (direction_sign == 1 and taker_buy_ratio >= config.ROUTER_TAKER_IMBALANCE_CONFIRM_RATIO)
+            or (direction_sign == -1 and (1.0 - taker_buy_ratio) >= config.ROUTER_TAKER_IMBALANCE_CONFIRM_RATIO)
         )
     ):
         names.append("taker_imbalance")
