@@ -6,7 +6,7 @@ A Windows desktop and Python market-analysis system using public Kraken spot/per
 
 ## Documentation and status
 
-The September 14, 2026 takeover audit established 411 tests: 410 passing and one pre-existing environmental failure. T001–T013, T020 and T021 have since been PO-accepted; the latest accepted suite result is 458 passing tests, including both Node wrappers, with no skips. T022 is the next eligible task. See `TESTING.md` and `docs/tasks/results/` for task-level evidence and limitations.
+The September 14, 2026 takeover audit established 411 tests: 410 passing and one pre-existing environmental failure. T001–T013, T020 and T021 have since been PO-accepted; the latest accepted suite result is 458 passing tests, including both Node wrappers, with no skips. T004a (Forja run R-20260918-eb85, accepted in-run by Reviewer APPROVE) raises the suite to 472 passing tests with no skips. T022 is the next eligible task. See `TESTING.md` and `docs/tasks/results/` for task-level evidence and limitations.
 
 | Document | Responsibility |
 |---|---|

@@ -1,0 +1,388 @@
+{
+  "format_version": 1,
+  "description": "Legacy ruff/mypy findings accepted as debt. Written only by 'python scripts/run_quality.py --write-baseline'; fingerprints carry no line number. Critical packages (radar_v08/domain, workflow, adapters, execution) may never appear here.",
+  "tools": {
+    "ruff": "0.16.7",
+    "mypy": "2.3.1"
+  },
+  "findings": [
+    {
+      "tool": "mypy",
+      "path": "radar.py",
+      "code": "arg-type",
+      "message": "Argument \"json\" to \"post\" has incompatible type \"dict[str, object]\"; expected \"JsonType\"",
+      "count": 1
+    },
+    {
+      "tool": "mypy",
+      "path": "radar_v08/anomaly.py",
+      "code": "arg-type",
+      "message": "Argument 1 to \"append\" of \"list\" has incompatible type \"float | int | None\"; expected \"float\"",
+      "count": 1
+    },
+    {
+      "tool": "mypy",
+      "path": "radar_v08/claude_bridge.py",
+      "code": "import-not-found",
+      "message": "Cannot find implementation or library stub for module named \"anthropic\"",
+      "count": 1
+    },
+    {
+      "tool": "mypy",
+      "path": "radar_v08/cli.py",
+      "code": "arg-type",
+      "message": "Argument \"notify_fn\" to \"run_bridge_cycle\" has incompatible type \"Callable[[dict[str, Any]], dict[str, Any]]\"; expected \"Callable[[dict[str, Any]], None] | None\"",
+      "count": 2
+    },
+    {
+      "tool": "mypy",
+      "path": "radar_v08/cli.py",
+      "code": "assignment",
+      "message": "Incompatible types in assignment (expression has type \"dict[str, Any]\", variable has type \"BridgeCycleResult\")",
+      "count": 1
+    },
+    {
+      "tool": "mypy",
+      "path": "radar_v08/cli.py",
+      "code": "index",
+      "message": "Value of type \"BridgeCycleResult\" is not indexable",
+      "count": 1
+    },
+    {
+      "tool": "mypy",
+      "path": "radar_v08/heartbeat.py",
+      "code": "assignment",
+      "message": "Incompatible types in assignment (expression has type \"None\", variable has type \"str\")",
+      "count": 1
+    },
+    {
+      "tool": "mypy",
+      "path": "radar_v08/heartbeat.py",
+      "code": "assignment",
+      "message": "Incompatible types in assignment (expression has type \"SpotMarket | None\", variable has type \"SpotMarket\")",
+      "count": 1
+    },
+    {
+      "tool": "mypy",
+      "path": "radar_v08/kraken_spot.py",
+      "code": "return-value",
+      "message": "Incompatible return value type (got \"tuple[dict[str, Any] | None, bool]\", expected \"tuple[dict[str, dict[str, Any]], bool]\")",
+      "count": 1
+    },
+    {
+      "tool": "mypy",
+      "path": "radar_v08/kraken_spot.py",
+      "code": "union-attr",
+      "message": "Item \"None\" of \"dict[str, Any] | None\" has no attribute \"keys\"",
+      "count": 1
+    },
+    {
+      "tool": "mypy",
+      "path": "radar_v08/l2_features.py",
+      "code": "arg-type",
+      "message": "Argument 3 to \"breakout_distance_atr\" has incompatible type \"float | None\"; expected \"float\"",
+      "count": 2
+    },
+    {
+      "tool": "mypy",
+      "path": "radar_v08/l2_features.py",
+      "code": "arg-type",
+      "message": "Argument 3 to \"breakout_state\" has incompatible type \"float | None\"; expected \"float\"",
+      "count": 1
+    },
+    {
+      "tool": "mypy",
+      "path": "radar_v08/l3.py",
+      "code": "assignment",
+      "message": "Incompatible types in assignment (expression has type \"Future[tuple[TradesMetrics | None, str | None]]\", variable has type \"Future[tuple[DepthMetrics | None, str | None]]\")",
+      "count": 1
+    },
+    {
+      "tool": "mypy",
+      "path": "radar_v08/l3.py",
+      "code": "assignment",
+      "message": "Incompatible types in assignment (expression has type \"tuple[DepthMetrics | None, str | None]\", target has type \"tuple[TradesMetrics | None, str | None]\")",
+      "count": 1
+    },
+    {
+      "tool": "mypy",
+      "path": "radar_v08/mock_alert.py",
+      "code": "var-annotated",
+      "message": "Need type annotation for \"data_quality_notes\" (hint: \"data_quality_notes: list[<type>] = ...\")",
+      "count": 1
+    },
+    {
+      "tool": "mypy",
+      "path": "radar_v08/notifications.py",
+      "code": "arg-type",
+      "message": "Argument 1 to \"notification_level_for_model\" has incompatible type \"Any | None\"; expected \"str\"",
+      "count": 1
+    },
+    {
+      "tool": "mypy",
+      "path": "radar_v08/setups.py",
+      "code": "arg-type",
+      "message": "Argument 1 to \"abs\" has incompatible type \"float | None\"; expected \"SupportsAbs[float]\"",
+      "count": 2
+    },
+    {
+      "tool": "mypy",
+      "path": "radar_v08/universe.py",
+      "code": "arg-type",
+      "message": "Argument 1 to \"_price_vs_usd\" has incompatible type \"SpotMarket | None\"; expected \"SpotMarket\"",
+      "count": 1
+    },
+    {
+      "tool": "mypy",
+      "path": "radar_v08/universe.py",
+      "code": "union-attr",
+      "message": "Item \"None\" of \"SpotMarket | None\" has no attribute \"non_crypto_like\"",
+      "count": 1
+    },
+    {
+      "tool": "mypy",
+      "path": "radar_v08/universe.py",
+      "code": "union-attr",
+      "message": "Item \"None\" of \"SpotMarket | None\" has no attribute \"range_24h_pct\"",
+      "count": 1
+    },
+    {
+      "tool": "mypy",
+      "path": "radar_v08/universe.py",
+      "code": "union-attr",
+      "message": "Item \"None\" of \"SpotMarket | None\" has no attribute \"spread_bps\"",
+      "count": 2
+    },
+    {
+      "tool": "mypy",
+      "path": "radar_v08/universe.py",
+      "code": "union-attr",
+      "message": "Item \"None\" of \"SpotMarket | None\" has no attribute \"status\"",
+      "count": 3
+    },
+    {
+      "tool": "mypy",
+      "path": "radar_v08/universe.py",
+      "code": "union-attr",
+      "message": "Item \"None\" of \"SpotMarket | None\" has no attribute \"trades_24h\"",
+      "count": 1
+    },
+    {
+      "tool": "mypy",
+      "path": "ui/agents.py",
+      "code": "arg-type",
+      "message": "Argument 1 to \"get\" of \"dict\" has incompatible type \"str | None\"; expected \"str\"",
+      "count": 1
+    },
+    {
+      "tool": "mypy",
+      "path": "ui/agents.py",
+      "code": "index",
+      "message": "Value of type \"Row | None\" is not indexable",
+      "count": 1
+    },
+    {
+      "tool": "mypy",
+      "path": "ui/app.py",
+      "code": "import-not-found",
+      "message": "Cannot find implementation or library stub for module named \"webview\"",
+      "count": 1
+    },
+    {
+      "tool": "ruff",
+      "path": "radar_v08/alerts.py",
+      "code": "I001",
+      "message": "Import block is un-sorted or un-formatted",
+      "count": 1
+    },
+    {
+      "tool": "ruff",
+      "path": "radar_v08/analysis_schema.py",
+      "code": "F401",
+      "message": "`dataclasses.field` imported but unused",
+      "count": 1
+    },
+    {
+      "tool": "ruff",
+      "path": "radar_v08/claude_bridge.py",
+      "code": "I001",
+      "message": "Import block is un-sorted or un-formatted",
+      "count": 1
+    },
+    {
+      "tool": "ruff",
+      "path": "radar_v08/cli.py",
+      "code": "F401",
+      "message": "`datetime.datetime` imported but unused",
+      "count": 1
+    },
+    {
+      "tool": "ruff",
+      "path": "radar_v08/cli.py",
+      "code": "F401",
+      "message": "`datetime.timezone` imported but unused",
+      "count": 1
+    },
+    {
+      "tool": "ruff",
+      "path": "radar_v08/l3.py",
+      "code": "I001",
+      "message": "Import block is un-sorted or un-formatted",
+      "count": 1
+    },
+    {
+      "tool": "ruff",
+      "path": "radar_v08/mock_alert.py",
+      "code": "I001",
+      "message": "Import block is un-sorted or un-formatted",
+      "count": 1
+    },
+    {
+      "tool": "ruff",
+      "path": "radar_v08/opportunity.py",
+      "code": "I001",
+      "message": "Import block is un-sorted or un-formatted",
+      "count": 1
+    },
+    {
+      "tool": "ruff",
+      "path": "scripts/run_tests.py",
+      "code": "I001",
+      "message": "Import block is un-sorted or un-formatted",
+      "count": 1
+    },
+    {
+      "tool": "ruff",
+      "path": "tests/test_cli_mode_parsing.py",
+      "code": "I001",
+      "message": "Import block is un-sorted or un-formatted",
+      "count": 1
+    },
+    {
+      "tool": "ruff",
+      "path": "tests/test_l2_ohlc.py",
+      "code": "E741",
+      "message": "Ambiguous variable name: `l`",
+      "count": 1
+    },
+    {
+      "tool": "ruff",
+      "path": "tests/test_l3.py",
+      "code": "F401",
+      "message": "`radar_v08.anomaly.Features` imported but unused",
+      "count": 1
+    },
+    {
+      "tool": "ruff",
+      "path": "tests/test_mock_alert.py",
+      "code": "F401",
+      "message": "`radar_v08.context_builder.UNAVAILABLE` imported but unused",
+      "count": 1
+    },
+    {
+      "tool": "ruff",
+      "path": "tests/test_mock_alert.py",
+      "code": "F841",
+      "message": "Local variable `event_id` is assigned to but never used",
+      "count": 1
+    },
+    {
+      "tool": "ruff",
+      "path": "tests/test_normalize.py",
+      "code": "I001",
+      "message": "Import block is un-sorted or un-formatted",
+      "count": 1
+    },
+    {
+      "tool": "ruff",
+      "path": "tests/test_ntfy.py",
+      "code": "F401",
+      "message": "`logging` imported but unused",
+      "count": 1
+    },
+    {
+      "tool": "ruff",
+      "path": "tests/test_security.py",
+      "code": "I001",
+      "message": "Import block is un-sorted or un-formatted",
+      "count": 1
+    },
+    {
+      "tool": "ruff",
+      "path": "tests/test_store.py",
+      "code": "I001",
+      "message": "Import block is un-sorted or un-formatted",
+      "count": 1
+    },
+    {
+      "tool": "ruff",
+      "path": "tests/test_structure.py",
+      "code": "I001",
+      "message": "Import block is un-sorted or un-formatted",
+      "count": 1
+    },
+    {
+      "tool": "ruff",
+      "path": "tests/test_test_runner.py",
+      "code": "I001",
+      "message": "Import block is un-sorted or un-formatted",
+      "count": 1
+    },
+    {
+      "tool": "ruff",
+      "path": "tests/ui_tests/test_data_reader.py",
+      "code": "F401",
+      "message": "`datetime.timedelta` imported but unused",
+      "count": 1
+    },
+    {
+      "tool": "ruff",
+      "path": "tests/ui_tests/test_test_mode_isolation.py",
+      "code": "I001",
+      "message": "Import block is un-sorted or un-formatted",
+      "count": 1
+    },
+    {
+      "tool": "ruff",
+      "path": "ui/agents.py",
+      "code": "F401",
+      "message": "`datetime.datetime` imported but unused",
+      "count": 1
+    },
+    {
+      "tool": "ruff",
+      "path": "ui/agents.py",
+      "code": "F401",
+      "message": "`datetime.timezone` imported but unused",
+      "count": 1
+    },
+    {
+      "tool": "ruff",
+      "path": "ui/agents.py",
+      "code": "F401",
+      "message": "`radar_v08.budgets` imported but unused",
+      "count": 1
+    },
+    {
+      "tool": "ruff",
+      "path": "ui/bridge.py",
+      "code": "F401",
+      "message": "`radar_v08.prompt_builder` imported but unused",
+      "count": 1
+    },
+    {
+      "tool": "ruff",
+      "path": "ui/bridge.py",
+      "code": "I001",
+      "message": "Import block is un-sorted or un-formatted",
+      "count": 1
+    },
+    {
+      "tool": "ruff",
+      "path": "ui/data_reader.py",
+      "code": "I001",
+      "message": "Import block is un-sorted or un-formatted",
+      "count": 1
+    }
+  ]
+}

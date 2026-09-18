@@ -8,6 +8,8 @@ select = ["E4", "E7", "E9", "F", "I"]
 python_version = "3.12"
 show_error_codes = true
 warn_unused_configs = true
+# Global-only flag: mypy ignores it inside per-module overrides.
+warn_redundant_casts = true
 
 [[tool.mypy.overrides]]
 module = [
@@ -30,6 +32,5 @@ disallow_untyped_defs = true
 extra_checks = true
 no_implicit_reexport = true
 strict_equality = true
-warn_redundant_casts = true
 warn_return_any = true
 warn_unused_ignores = true

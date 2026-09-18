@@ -2,7 +2,7 @@
 
 Owner: PO/architect. Baseline: 2026-09-14. This replaces inherited phase numbering; previous phase labels describe history only. No calendar estimates are credible before the foundation tasks are reviewed. The target is autonomous **analysis**, not execution.
 
-Every phase is delivered through small briefs, not one prompt. A phase completes only when its acceptance criteria and tests are evidenced. T001–T013, T020 and T021 are PO-accepted and locally committed; T022 is the next eligible task. Accepted design remains distinct from implemented status.
+Every phase is delivered through small briefs, not one prompt. A phase completes only when its acceptance criteria and tests are evidenced. T001–T013, T020 and T021 are PO-accepted and locally committed; T022 is the next eligible task. In Forja run R-20260918-eb85, T004a (quality gate on the real layout with a versioned baseline) is accepted in-run (Reviewer APPROVE); T004b follows. Accepted design remains distinct from implemented status.
 
 ## R0 — Ownership and reproducible development
 

@@ -53,6 +53,8 @@ T001 accepted 2026-09-15: **415 tests passed in 31.994s, exit 0, no skips**. Bot
 
 T002–T013 accepted 2026-09-15: environment reproducibility/quality gates and containment hardening increased the accepted full-suite count successively to **420, 427, 431, 434, 441, and 443 tests**, each exit 0 with no skips and both embedded Node wrappers passing. See the individual notes in docs/tasks/results/ for commands, scope, limitations, and commit references. T020 accepted 2026-09-15: **449 tests passed in 31.553s, exit 0, no skips**; both embedded Node wrappers passed. The PO independently re-ran the 18 focused tests and the isolated full runner. See `docs/tasks/results/T020.md`. T021 is the next eligible task.
 
+T004a (Forja run R-20260918-eb85, accepted in-run by Reviewer APPROVE): **472 tests in 33.576s, exit 0, no skips**; both embedded Node suites ran (43 and 7 passing, 0 skipped). The quality gate `scripts/run_quality.py` now inspects 99 files with Ruff and 53 with mypy and passes only against the versioned baseline `scripts/quality_baseline.json`. See `docs/tasks/results/T004.md`.
+
 ## Sextant verification scope
 
 247 selected tests passed in 19.34s using `.venv/Scripts/python.exe -m pytest -p no:cacheprovider` against money/time, capabilities, LLM risk boundary, costs, backtest correctness, market data, HTTP transport, registry, preflight, carry accounting and registered-value perturbation modules. Full suite/coverage/type/lint checks were not run. See `docs/audit/2026-09-14/sextant-selected.log` and `docs/SEXTANT_REUSE.md`.
