@@ -2,7 +2,7 @@
 
 Owner: PO/architect. Baseline: 2026-09-14. This replaces inherited phase numbering; previous phase labels describe history only. No calendar estimates are credible before the foundation tasks are reviewed. The target is autonomous **analysis**, not execution.
 
-Every phase is delivered through small briefs, not one prompt. A phase completes only when its acceptance criteria and tests are evidenced. T001–T013 and T020 are PO-accepted and locally committed; T021 is the next eligible task. Accepted design remains distinct from implemented status.
+Every phase is delivered through small briefs, not one prompt. A phase completes only when its acceptance criteria and tests are evidenced. T001–T013, T020 and T021 are PO-accepted and locally committed; T022 is the next eligible task. Accepted design remains distinct from implemented status.
 
 ## R0 — Ownership and reproducible development
 
@@ -30,7 +30,7 @@ Every phase is delivered through small briefs, not one prompt. A phase completes
 
 ## R2 — Correct facts and qualify data
 
-- **Status:** T020 pair-pure L1 history is PO-accepted; T021 is the next eligible feature-semantics task.
+- **Status:** T020 pair-pure L1 history and T021 feature semantics are PO-accepted; T022 is the next eligible task.
 - **Goal / why now:** prevent every analyst from agreeing on incorrect market inputs. Cross-quote L1 history is a concrete first correctness task, not speculative infrastructure.
 - **Dependencies:** R0; R1 before any user-run autonomous trial.
 - **Scope:** separate brief for pair-specific L1 history and BTC-relative distributions; separate brief for history coverage/ATR horizon semantics; per-instrument source/receive timestamps, clock injection, closed/gap-consistent candles, finite values, book/trade/status/mapping checks; reject stale futures independently. Wire real taker-buy evidence into routing only through a reviewed change.
