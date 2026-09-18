@@ -2,11 +2,11 @@
 
 Owner: PO/architect. Baseline: 2026-09-14. This replaces inherited phase numbering; previous phase labels describe history only. No calendar estimates are credible before the foundation tasks are reviewed. The target is autonomous **analysis**, not execution.
 
-Every phase is delivered through small briefs, not one prompt. A phase completes only when its acceptance criteria and tests are evidenced. T001–T013, T020 and T021 are PO-accepted and locally committed; T022 is the next eligible task. In Forja run R-20260918-eb85, T004a (quality gate on the real layout with a versioned baseline) is accepted in-run (Reviewer APPROVE); T004b follows. Accepted design remains distinct from implemented status.
+Every phase is delivered through small briefs, not one prompt. A phase completes only when its acceptance criteria and tests are evidenced. T001–T003, T010–T013, T020 and T021 are PO-accepted and locally committed; T022 is the next eligible task. In Forja run R-20260918-eb85, T004 (quality gate on the real layout, versioned baseline, legacy findings registered as follow-up tasks T005–T009 in `docs/tasks/TASK_CATALOG.md`) is accepted in-run (Reviewer APPROVE) in full; those follow-ups plus the T021 follow-ups (T024, T025) and T026 (pre-existing flaky real-timer tests in `tests/ui_tests/js/test_agent_room.mjs`, tests only) are side-line and do not block T022. Accepted design remains distinct from implemented status.
 
 ## R0 — Ownership and reproducible development
 
-- **Status:** complete for the accepted foundation scope: reproducible Windows/Python 3.12 dependency verification and the critical quality gate were accepted in T002/T003. The audited Git baseline and subsequent accepted task commits exist locally. The original historical baseline remains preserved in `TESTING.md`.
+- **Status:** complete for the accepted foundation scope: reproducible Windows/Python 3.12 dependency verification and the critical quality gate were accepted in T002/T003. T004 (Forja run R-20260918-eb85) pointed the gate at the real package layout instead of nonexistent directories, added a versioned baseline for the legacy findings that surfaced (`scripts/quality_baseline.json`), and registered those findings as follow-up tasks T005–T009 grouped by module in `docs/tasks/TASK_CATALOG.md`. The audited Git baseline and subsequent accepted task commits exist locally. The original historical baseline remains preserved in `TESTING.md`.
 - **Goal / why now:** establish trustworthy inputs to development and recoverable changes before modifying product behavior.
 - **Dependencies:** inspected source and baseline; no runtime dependency.
 - **Scope:** source recovery archive/inventory, authoritative documents, Codex instructions, isolated test command, deterministic optional-SDK tests; observed direct dependency manifests, then a verified lock/clean environment and user-controlled local Git baseline.
@@ -30,7 +30,7 @@ Every phase is delivered through small briefs, not one prompt. A phase completes
 
 ## R2 — Correct facts and qualify data
 
-- **Status:** T020 pair-pure L1 history and T021 feature semantics are PO-accepted; T022 is the next eligible task.
+- **Status:** T020 pair-pure L1 history and T021 feature semantics are PO-accepted; T022 is the next eligible task. Two T021 findings are registered as separate follow-ups in `docs/tasks/TASK_CATALOG.md` (D8 in `docs/forja/DECISIONS.md`): T024 (the `resample_bars` hour-alignment test, planned, not yet done) and T025 (the `_contiguous_suffix`/`contiguous_tail` duplication, backlog, no refactor this run).
 - **Goal / why now:** prevent every analyst from agreeing on incorrect market inputs. Cross-quote L1 history is a concrete first correctness task, not speculative infrastructure.
 - **Dependencies:** R0; R1 before any user-run autonomous trial.
 - **Scope:** separate brief for pair-specific L1 history and BTC-relative distributions; separate brief for history coverage/ATR horizon semantics; per-instrument source/receive timestamps, clock injection, closed/gap-consistent candles, finite values, book/trade/status/mapping checks; reject stale futures independently. Wire real taker-buy evidence into routing only through a reviewed change.
