@@ -14,6 +14,11 @@ new tables, indexes and triggers only. No existing table or row is altered.
   legacy-unversioned. Nothing is backfilled: old rows never get invented facts,
   hashes or links.
 
+Version 3 (T031a, ``INVOCATION_MIGRATION``) adds ``invocations``, ``invocation_budget`` and
+``invocation_demand`` for ``radar_v08.adapters.invocation_store``: new tables, one partial
+unique index on the new ``invocations`` table, and guard triggers. No legacy table gets a
+constraint, index, column or row change (DECISIONS.md D19).
+
 Migrations (``apply_schema_migrations``):
 
 * A fast read-only check returns at once when the ledger is current, so a second run
@@ -127,7 +132,76 @@ BEGIN SELECT RAISE(ABORT, 'event_evidence rows are immutable'); END""",
     ),
 )
 
-SCHEMA_MIGRATIONS: tuple[Migration, ...] = (LEDGER_MIGRATION, EVIDENCE_MIGRATION)
+# T031a (D19): new tables only. Active-identity uniqueness is a partial unique index on the
+# new ``invocations`` table (rows in state CLAIMED); no legacy table (``events`` included)
+# gets a constraint or index. Counters are guarded by triggers so they can only grow.
+INVOCATION_MIGRATION = Migration(
+    version=3,
+    name="invocations_budget_and_demand",
+    statements=(
+        """CREATE TABLE invocations (
+    invocation_id TEXT PRIMARY KEY,
+    venue TEXT NOT NULL,
+    market_kind TEXT NOT NULL,
+    native_instrument TEXT NOT NULL,
+    setup TEXT NOT NULL,
+    direction TEXT NOT NULL,
+    evidence_hash TEXT NOT NULL,
+    policy_version TEXT NOT NULL,
+    model TEXT NOT NULL,
+    state TEXT NOT NULL CHECK (state IN ('CLAIMED', 'COMPLETED', 'RELEASED')),
+    generation INTEGER NOT NULL CHECK (generation >= 1),
+    lease_owner TEXT NOT NULL,
+    lease_expires_at TEXT NOT NULL,
+    demand_count INTEGER NOT NULL CHECK (demand_count >= 1),
+    attempt_count INTEGER NOT NULL CHECK (attempt_count >= 0),
+    hour_window TEXT NOT NULL,
+    day_window TEXT NOT NULL,
+    claimed_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    ended_at TEXT,
+    end_reason TEXT
+)""",
+        """CREATE UNIQUE INDEX uq_invocations_active_identity ON invocations(
+    venue, market_kind, native_instrument, setup, direction, evidence_hash, policy_version
+) WHERE state = 'CLAIMED'""",
+        "CREATE INDEX idx_invocations_state_lease ON invocations(state, lease_expires_at)",
+        """CREATE TRIGGER invocations_identity_immutable BEFORE UPDATE OF
+    invocation_id, venue, market_kind, native_instrument, setup, direction, evidence_hash, policy_version,
+    model, hour_window, day_window, claimed_at ON invocations
+BEGIN SELECT RAISE(ABORT, 'invocation identity is immutable'); END""",
+        """CREATE TRIGGER invocations_terminal_is_final BEFORE UPDATE ON invocations
+WHEN OLD.state <> 'CLAIMED'
+BEGIN SELECT RAISE(ABORT, 'a completed or released invocation is final'); END""",
+        """CREATE TRIGGER invocations_counters_never_decrease BEFORE UPDATE ON invocations
+WHEN NEW.attempt_count < OLD.attempt_count OR NEW.demand_count < OLD.demand_count
+    OR NEW.generation < OLD.generation
+BEGIN SELECT RAISE(ABORT, 'invocation counters and generation never decrease'); END""",
+        """CREATE TABLE invocation_budget (
+    model TEXT NOT NULL,
+    window_kind TEXT NOT NULL CHECK (window_kind IN ('hour', 'day')),
+    window_start TEXT NOT NULL,
+    reserved INTEGER NOT NULL CHECK (reserved >= 0),
+    PRIMARY KEY (model, window_kind, window_start)
+)""",
+        """CREATE TRIGGER invocation_budget_never_decreases BEFORE UPDATE ON invocation_budget
+WHEN NEW.reserved < OLD.reserved
+BEGIN SELECT RAISE(ABORT, 'budget reservations are never returned'); END""",
+        """CREATE TABLE invocation_demand (
+    model TEXT NOT NULL,
+    window_kind TEXT NOT NULL CHECK (window_kind IN ('hour', 'day')),
+    window_start TEXT NOT NULL,
+    observed INTEGER NOT NULL CHECK (observed >= 0),
+    refused INTEGER NOT NULL CHECK (refused >= 0),
+    PRIMARY KEY (model, window_kind, window_start)
+)""",
+        """CREATE TRIGGER invocation_demand_never_decreases BEFORE UPDATE ON invocation_demand
+WHEN NEW.observed < OLD.observed OR NEW.refused < OLD.refused
+BEGIN SELECT RAISE(ABORT, 'demand counters never decrease'); END""",
+    ),
+)
+
+SCHEMA_MIGRATIONS: tuple[Migration, ...] = (LEDGER_MIGRATION, EVIDENCE_MIGRATION, INVOCATION_MIGRATION)
 
 
 # --- typed failures -----------------------------------------------------------------------

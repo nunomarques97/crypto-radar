@@ -19,9 +19,18 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Iterator
 
-from .adapters import evidence_store
+from .adapters import evidence_store, invocation_store
 from .domain.evidence import SealedEvidence
 from .domain.integrity import InstrumentId
+from .domain.invocation import (
+    ClaimResult,
+    InvocationRecord,
+    InvocationRequest,
+    Lease,
+    ModelBudget,
+    ReleaseReason,
+    Transition,
+)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS assets (
@@ -407,6 +416,40 @@ class SnapshotStore:
     def load_event_evidence(self, event_id: str) -> evidence_store.EventEvidence:
         with self._lock:
             return evidence_store.load_event_evidence(self._conn, event_id)
+
+    # -- invocation claims, budget reservations, lease fencing (T031a) ---------
+    # Each call is one short BEGIN IMMEDIATE transaction in the adapter; nothing here
+    # runs network or model work. Budget limits are passed in by the caller.
+
+    def claim_invocation(
+        self, request: InvocationRequest, budget: ModelBudget, owner: str, lease_seconds: int
+    ) -> ClaimResult:
+        with self._lock:
+            return invocation_store.claim_invocation(
+                self._conn, request, budget, owner=owner, now=datetime.now(timezone.utc), lease_seconds=lease_seconds
+            )
+
+    def record_invocation_attempt(self, lease: Lease, budget: ModelBudget) -> Transition:
+        with self._lock:
+            return invocation_store.record_attempt(self._conn, lease, budget, now=datetime.now(timezone.utc))
+
+    def complete_invocation(self, lease: Lease) -> Transition:
+        with self._lock:
+            return invocation_store.complete_invocation(self._conn, lease, now=datetime.now(timezone.utc))
+
+    def release_invocation(self, lease: Lease, reason: ReleaseReason) -> Transition:
+        with self._lock:
+            return invocation_store.release_invocation(self._conn, lease, reason, now=datetime.now(timezone.utc))
+
+    def recover_expired_invocations(self, owner: str, lease_seconds: int, limit: int = 16) -> tuple[Lease, ...]:
+        with self._lock:
+            return invocation_store.recover_expired(
+                self._conn, owner=owner, now=datetime.now(timezone.utc), lease_seconds=lease_seconds, limit=limit
+            )
+
+    def load_invocation(self, invocation_id: str) -> InvocationRecord | None:
+        with self._lock:
+            return invocation_store.load_invocation(self._conn, invocation_id)
 
     @contextmanager
     def _cursor(self) -> Iterator[sqlite3.Cursor]:
