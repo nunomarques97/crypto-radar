@@ -11,7 +11,7 @@ dist/
 .env
 .env.*
 !.env.example
-.claude/
+.claude/settings.local.json
 .codex/
 ui/.state/
 *.sqlite
