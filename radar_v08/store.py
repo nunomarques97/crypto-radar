@@ -19,6 +19,10 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Iterator
 
+from .adapters import evidence_store
+from .domain.evidence import SealedEvidence
+from .domain.integrity import InstrumentId
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS assets (
     asset TEXT PRIMARY KEY,
@@ -346,6 +350,14 @@ class SnapshotStore:
             self._conn.commit()
         except sqlite3.Error as exc:
             raise StoreError(f"Failed to open/initialize snapshot store at {path}: {exc}") from exc
+        # T030b: additive, ledgered migrations (new tables only) in one short
+        # transaction. Already current -> no write at all. Any failure rolls back
+        # and is raised as a typed SchemaMigrationError; the store is not usable.
+        try:
+            self.migrate_schema()
+        except BaseException:
+            self._conn.close()
+            raise
 
     def _migrate_forward_returns(self) -> None:
         existing = {row["name"] for row in self._conn.execute("PRAGMA table_info(forward_returns)").fetchall()}
@@ -361,6 +373,40 @@ class SnapshotStore:
 
     def close(self) -> None:
         self._conn.close()
+
+    # -- schema-version ledger and sealed evidence (T030b) ---------------------
+
+    def migrate_schema(self) -> tuple[int, ...]:
+        """Apply pending ledgered migrations; returns the versions applied (empty if current)."""
+        with self._lock:
+            return evidence_store.apply_schema_migrations(self._conn, now=datetime.now(timezone.utc))
+
+    def schema_ledger(self) -> tuple[evidence_store.LedgerEntry, ...]:
+        with self._lock:
+            return evidence_store.read_ledger(self._conn)
+
+    def save_evidence(self, evidence: SealedEvidence) -> bool:
+        with self._lock:
+            return evidence_store.save_evidence(self._conn, evidence, now=datetime.now(timezone.utc))
+
+    def load_evidence(self, evidence_id: str) -> SealedEvidence | None:
+        with self._lock:
+            return evidence_store.load_evidence(self._conn, evidence_id)
+
+    def link_event_evidence(self, event_id: str, evidence_id: str, run_id: str, instrument: InstrumentId) -> bool:
+        with self._lock:
+            return evidence_store.link_event_evidence(
+                self._conn,
+                event_id=event_id,
+                evidence_id=evidence_id,
+                run_id=run_id,
+                instrument=instrument,
+                now=datetime.now(timezone.utc),
+            )
+
+    def load_event_evidence(self, event_id: str) -> evidence_store.EventEvidence:
+        with self._lock:
+            return evidence_store.load_event_evidence(self._conn, event_id)
 
     @contextmanager
     def _cursor(self) -> Iterator[sqlite3.Cursor]:

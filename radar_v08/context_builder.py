@@ -18,6 +18,14 @@ Two halves:
 Every leaf value that is missing is the literal string "UNAVAILABLE" (task
 section 3), never a fabricated number, so the model can tell "confirmed zero"
 apart from "we don't know".
+
+Evidence (T030b): when the caller passes the event's stored evidence
+(`SnapshotStore.load_event_evidence`), `build_model_context` first checks the
+event's claim against the sealed evidence - evidence id/hash, run, instrument
+and the event's own asset - and raises `ContextEvidenceRejected` (a typed
+`EvidenceRejected`) on any mismatch. It never returns an empty or partial
+context in that case. An event with no link is labelled legacy-unversioned:
+it keeps its old persisted context and gets no facts or hash.
 """
 
 from __future__ import annotations
@@ -26,6 +34,15 @@ import json
 from dataclasses import asdict, is_dataclass
 from typing import Any
 
+from .adapters.evidence_store import EventEvidence, LinkedEvidence, verify_link
+from .domain.evidence import (
+    EvidenceRejected,
+    LegacyUnversionedEvidence,
+    RejectionCode,
+    SealedEvidence,
+    evidence_to_json,
+)
+
 UNAVAILABLE = "UNAVAILABLE"
 
 PORTFOLIO_NOTE = (
@@ -33,6 +50,14 @@ PORTFOLIO_NOTE = (
     "(market analysis only - no Kraken private endpoints, no account access). "
     "Treat every field in this block as genuinely unknown, not as \"flat/no position\"."
 )
+
+
+class ContextEvidenceRejected(EvidenceRejected):
+    """The context for `event_id` was refused because its evidence does not match."""
+
+    def __init__(self, event_id: Any, code: RejectionCode, field: str, detail: str) -> None:
+        super().__init__(code, field, f"event {event_id!r}: {detail}")
+        self.event_id = event_id
 
 
 def mark_unavailable(value: Any) -> Any:
@@ -153,18 +178,60 @@ def _load_persisted_context(event_row: Any) -> dict[str, Any]:
     return parsed if isinstance(parsed, dict) else {}
 
 
-def build_model_context(event_row: Any) -> dict[str, Any]:
+def _row_get(event_row: Any, key: str) -> Any:
+    try:
+        return event_row[key]
+    except (KeyError, IndexError):
+        return None
+
+
+def verify_event_evidence(event_row: Any, evidence: EventEvidence) -> SealedEvidence | LegacyUnversionedEvidence:
+    """Checks an event's evidence claim; raises `ContextEvidenceRejected` on any mismatch."""
+    event_id = _row_get(event_row, "event_id")
+    if isinstance(evidence, LegacyUnversionedEvidence):
+        if evidence.source_ref != f"events:{event_id}":
+            raise ContextEvidenceRejected(
+                event_id, RejectionCode.INVALID_FIELD, "evidence.source_ref", f"{evidence.source_ref!r} is another row"
+            )
+        return evidence
+    if not isinstance(evidence, LinkedEvidence):
+        raise ContextEvidenceRejected(event_id, RejectionCode.INVALID_FIELD, "evidence", "not an event evidence result")
+    try:
+        return verify_link(evidence.link, evidence.record, event_id=event_id, event_asset=_row_get(event_row, "asset"))
+    except EvidenceRejected as error:
+        raise ContextEvidenceRejected(event_id, error.code, error.field, error.detail) from error
+
+
+def _evidence_block(verified: SealedEvidence | LegacyUnversionedEvidence) -> dict[str, Any]:
+    if isinstance(verified, LegacyUnversionedEvidence):
+        # Old row: say so, with only what the row really has. No facts, no hash.
+        return {
+            "state": verified.state.value,
+            "source_ref": verified.source_ref,
+            "citable": False,
+            "fields_present": list(verified.fields_present),
+        }
+    block: dict[str, Any] = json.loads(evidence_to_json(verified))
+    block["state"] = verified.state.value
+    block["citable"] = True
+    return block
+
+
+def build_model_context(event_row: Any, *, evidence: EventEvidence | None = None) -> dict[str, Any]:
     """Reconstructs the context sent to Claude from PERSISTED data only
     (task section 2/3: the Bridge must reconstruct context from what is
     stored, never assume live radar state is still around).
+
+    With `evidence`, the claim is verified first (`verify_event_evidence`) and
+    the context gains an `evidence` block; a mismatch raises
+    `ContextEvidenceRejected` instead of returning any context. Without it the
+    output is unchanged from before T030b.
     """
+    verified = verify_event_evidence(event_row, evidence) if evidence is not None else None
     persisted = _load_persisted_context(event_row)
 
     def row_get(key: str) -> Any:
-        try:
-            return event_row[key]
-        except (KeyError, IndexError):
-            return None
+        return _row_get(event_row, key)
 
     context: dict[str, Any] = {
         "event_id": row_get("event_id"),
@@ -206,4 +273,26 @@ def build_model_context(event_row: Any) -> dict[str, Any]:
         },
     }
 
-    return deep_mark_unavailable(context)
+    result: dict[str, Any] = deep_mark_unavailable(context)
+    if verified is not None:
+        # Added after deep_mark_unavailable so sealed evidence stays byte-faithful.
+        result["evidence"] = _evidence_block(verified)
+    return result
+
+
+def build_verified_model_context(store: Any, event_id: str) -> dict[str, Any]:
+    """Loads an event and its stored evidence from `store` and builds the verified context.
+
+    Any evidence failure - tampered stored row, missing evidence, run/instrument/hash
+    mismatch - raises `ContextEvidenceRejected`; there is no empty-context fallback.
+    """
+    row = store.get_event(event_id)
+    if row is None:
+        raise ContextEvidenceRejected(event_id, RejectionCode.UNKNOWN_DEPENDENCY, "event_id", "event is not stored")
+    try:
+        evidence = store.load_event_evidence(event_id)
+    except ContextEvidenceRejected:
+        raise
+    except EvidenceRejected as error:
+        raise ContextEvidenceRejected(event_id, error.code, error.field, error.detail) from error
+    return build_model_context(row, evidence=evidence)

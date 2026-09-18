@@ -27,3 +27,13 @@ ui/.state/
 /shadow_comparison*.jsonl
 /_radar_copy_prompt_popup.py
 /_radar_toast_notify.ps1
+
+# Credential files (global rule)
+*.key
+*.pem
+*.jks
+*.keystore
+google-services.json
+credentials.json
+*token*
+*secret*
