@@ -12,6 +12,7 @@ ONLY") - it must only ever be called for the L1 shortlist, incrementally via
 from __future__ import annotations
 
 import json
+import math
 import os
 import time
 from dataclasses import dataclass
@@ -235,6 +236,34 @@ def _parse_trade_row(row: list[Any]) -> TradeRow:
     )
 
 
+def _parse_book_level(entry: list[Any]) -> tuple[float, float, float | None]:
+    """One Depth bid/ask entry: ``[price, volume]`` or ``[price, volume,
+    timestamp]`` (epoch seconds). Kraken includes the per-level update time
+    on this endpoint; a missing third element is ``None``, never a
+    fabricated 0 (T022b: radar_v08/adapters maps this into ``SourceTiming``).
+    """
+    price, volume, *rest = entry
+    return float(price), float(volume), _level_epoch(rest[0] if rest else None)
+
+
+def _level_epoch(raw: Any) -> float | None:
+    """Kraken's per-level time as a finite float, or ``None``.
+
+    Tolerant on purpose: the level's time is an extra field, so an absent,
+    empty, non-numeric (``''``, ``'x'``), boolean or non-finite (NaN, inf)
+    value makes only that level's time unknown - it never fails the fetch.
+    Range/unit checks (e.g. a milliseconds-sized value) belong to
+    ``radar_v08.adapters.kraken_timestamps``, which never rescales.
+    """
+    if raw is None or isinstance(raw, bool):
+        return None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return None
+    return value if math.isfinite(value) else None
+
+
 def fetch_depth(session: GuardedSession, pair: str, count: int = 25) -> tuple[list[tuple[float, float]], list[tuple[float, float]]]:
     """Order book for a single pair - FINALIST ONLY (architecture doc), never
     called for the shortlist or the whole universe. Returns (bids, asks) as
@@ -247,6 +276,27 @@ def fetch_depth(session: GuardedSession, pair: str, count: int = 25) -> tuple[li
 
     bids = [(float(p), float(v)) for p, v, *_ in book.get("bids", [])]
     asks = [(float(p), float(v)) for p, v, *_ in book.get("asks", [])]
+    return bids, asks
+
+
+def fetch_depth_with_times(
+    session: GuardedSession, pair: str, count: int = 25
+) -> tuple[list[tuple[float, float, float | None]], list[tuple[float, float, float | None]]]:
+    """Same request and caller contract as `fetch_depth`, plus each level's
+    Kraken-reported update time (epoch seconds) when the response supplies
+    one. T022b: exposes a field the response already carries and
+    `fetch_depth` used to discard; not wired to any consumer here (see
+    radar_v08/adapters, T023b wires a validator). `fetch_depth` keeps its
+    own original parsing and does not go through this function, so a
+    malformed level time can never change what current consumers get.
+    """
+    result = _get_json(session, "Depth", {"pair": pair, "count": count})
+    keys = list(result.keys())
+    pair_key = pair if pair in result else (keys[0] if keys else None)
+    book = result.get(pair_key, {}) if pair_key else {}
+
+    bids = [_parse_book_level(entry) for entry in book.get("bids", [])]
+    asks = [_parse_book_level(entry) for entry in book.get("asks", [])]
     return bids, asks
 
 

@@ -42,6 +42,17 @@ class FuturesTickerRow:
 
 
 def fetch_tickers(session: GuardedSession) -> list[dict[str, Any]]:
+    rows, _server_time_raw = fetch_tickers_with_server_time(session)
+    return rows
+
+
+def fetch_tickers_with_server_time(session: GuardedSession) -> tuple[list[dict[str, Any]], str | None]:
+    """Same request and caller contract as `fetch_tickers`, plus Kraken
+    Futures' own `serverTime` (raw ISO8601 string, unparsed) when the
+    envelope supplies one. T022b: exposes a field the response already
+    carries and `fetch_tickers` used to discard; not wired to any consumer
+    here (see radar_v08/adapters, T023b wires a validator).
+    """
     response = session.get(f"{config.FUTURES_URL}/tickers")
     payload = response.json()
     if payload.get("result") != "success":
@@ -49,7 +60,8 @@ def fetch_tickers(session: GuardedSession) -> list[dict[str, Any]]:
     rows = payload.get("tickers", [])
     if not isinstance(rows, list):
         raise FuturesApiError("Futures payload 'tickers' is not a list")
-    return [row for row in rows if isinstance(row, dict)]
+    server_time = payload.get("serverTime")
+    return [row for row in rows if isinstance(row, dict)], (server_time if isinstance(server_time, str) else None)
 
 
 def fetch_orderbook(session: GuardedSession, symbol: str) -> tuple[list[tuple[float, float]], list[tuple[float, float]]]:
@@ -57,6 +69,19 @@ def fetch_orderbook(session: GuardedSession, symbol: str) -> tuple[list[tuple[fl
     when a matching perpetual exists (architecture doc section 3: "Futures:
     ... obter order book público do contrato"). Returns (bids, asks) as
     (price, volume) tuples, best price first.
+    """
+    bids, asks, _server_time_raw = fetch_orderbook_with_server_time(session, symbol)
+    return bids, asks
+
+
+def fetch_orderbook_with_server_time(
+    session: GuardedSession, symbol: str
+) -> tuple[list[tuple[float, float]], list[tuple[float, float]], str | None]:
+    """Same request and caller contract as `fetch_orderbook`, plus Kraken
+    Futures' own `serverTime` (raw ISO8601 string, unparsed) when the
+    envelope supplies one. T022b: exposes a field the response already
+    carries and `fetch_orderbook` used to discard; not wired to any consumer
+    here (see radar_v08/adapters, T023b wires a validator).
     """
     response = session.get(f"{config.FUTURES_URL}/orderbook", params={"symbol": symbol})
     payload = response.json()
@@ -66,7 +91,8 @@ def fetch_orderbook(session: GuardedSession, symbol: str) -> tuple[list[tuple[fl
     book = payload.get("orderBook", {})
     bids = [(float(p), float(v)) for p, v, *_ in book.get("bids", [])]
     asks = [(float(p), float(v)) for p, v, *_ in book.get("asks", [])]
-    return bids, asks
+    server_time = payload.get("serverTime")
+    return bids, asks, (server_time if isinstance(server_time, str) else None)
 
 
 def _base_from_pair(row: dict[str, Any]) -> str:

@@ -59,6 +59,8 @@ T004b (Forja run R-20260918-eb85, accepted in-run by Reviewer APPROVE, docs-only
 
 T022a (Forja run R-20260918-eb85, accepted in-run by Reviewer APPROVE): **541 tests in 33.680s, exit 0, no skips** (472 + 69 new pure tests in `tests/test_domain_integrity.py`); both embedded Node suites ran (43 and 7 passing, 0 skipped). `scripts/run_quality.py` exits 0 and now inspects the critical package `radar_v08/domain` (2 files, strict mypy, import boundary) with zero findings; legacy findings unchanged (28 ruff / 32 mypy, all baselined). See `docs/tasks/results/T022.md`.
 
+T022b (Forja run R-20260918-eb85, «Aceite no run Forja R-20260918-eb85 (Reviewer APPROVE)»): **574 tests in 36.096s, exit 0, no skips** (541 + 33 new fixture tests in `tests/test_kraken_timestamps.py`); both embedded Node suites ran (43 and 7 passing, 0 skipped). `scripts/run_quality.py` exits 0 and now also inspects the critical package `radar_v08/adapters` (2 files, strict mypy, import boundary) with zero findings; legacy findings unchanged (28 ruff / 32 mypy, all baselined). `radar_v08/kraken_spot.py`/`kraken_futures.py`'s existing fetch functions are behavior-unchanged (explicit compatibility tests, including malformed and milliseconds-sized depth level times). See `docs/tasks/results/T022.md`.
+
 ## Sextant verification scope
 
 247 selected tests passed in 19.34s using `.venv/Scripts/python.exe -m pytest -p no:cacheprovider` against money/time, capabilities, LLM risk boundary, costs, backtest correctness, market data, HTTP transport, registry, preflight, carry accounting and registered-value perturbation modules. Full suite/coverage/type/lint checks were not run. See `docs/audit/2026-09-14/sextant-selected.log` and `docs/SEXTANT_REUSE.md`.
