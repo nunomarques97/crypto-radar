@@ -9,6 +9,9 @@ here. Every guard is deliberately loud (raises) rather than silently skipping.
 from __future__ import annotations
 
 import os
+from urllib.parse import urlsplit
+
+from . import config
 
 PRIVATE_ENV_VARS = ("KRAKEN_API_KEY", "KRAKEN_SECRET")
 
@@ -47,6 +50,66 @@ def assert_public_get(method: str, url: str) -> None:
         raise SecurityViolation(
             f"Refusing request to a private endpoint: {url}. "
             "This radar may only use public market data endpoints."
+        )
+
+
+class RedirectRefused(SecurityViolation):
+    """Raised when a response redirects to a target outside the public allowlist.
+
+    The redirect is never followed: GuardedSession sends every request with
+    allow_redirects=False and raises this instead of reaching the target.
+    """
+
+
+def _has_unsafe_characters(url: str) -> bool:
+    # urllib.parse silently strips tab/CR/LF and leading C0 controls/space, so
+    # a URL carrying any of them could be parsed differently from how it is
+    # sent. Backslashes are refused because some parsers treat them as "/".
+    return any(ord(ch) <= 0x20 or ord(ch) == 0x7F or ch == "\\" for ch in url)
+
+
+def assert_allowed_request(method: str, url: str) -> None:
+    """Abort unless (method, url) matches the exact public HTTP allowlist (T023a).
+
+    Allowed only when: method is GET; scheme is https; the authority is exactly
+    an allowlisted host (no userinfo, no port - not even :443 - no trailing
+    dot, no case variant); the path is exactly one allowlisted path for that
+    host (no percent-encoding, dot segments, trailing slash or `;params`); and
+    there is no query string or fragment in the URL itself (query parameters
+    are passed separately and encoded by requests). Everything else raises
+    SecurityViolation before any byte leaves the process.
+    """
+    if not isinstance(method, str) or method.upper() not in config.HTTP_ALLOWED_METHODS:
+        raise SecurityViolation(
+            f"Refusing non-GET request ({method!r} {url!r}). This radar may only issue public GET requests."
+        )
+    if not isinstance(url, str) or _has_unsafe_characters(url):
+        raise SecurityViolation(f"Refusing malformed request URL: {url!r}.")
+    if "/private/" in url.lower():
+        raise SecurityViolation(
+            f"Refusing request to a private endpoint: {url}. This radar may only use public market data endpoints."
+        )
+    try:
+        parts = urlsplit(url)
+        port = parts.port
+    except ValueError as exc:
+        raise SecurityViolation(f"Refusing unparsable request URL: {url!r} ({exc}).") from exc
+    if parts.scheme != config.HTTP_ALLOWED_SCHEME or not url.startswith(f"{config.HTTP_ALLOWED_SCHEME}://"):
+        raise SecurityViolation(f"Refusing non-https request URL: {url!r}.")
+    if "@" in parts.netloc or parts.username is not None or parts.password is not None:
+        raise SecurityViolation(f"Refusing request URL with userinfo: {url!r}.")
+    if port is not None or ":" in parts.netloc:
+        raise SecurityViolation(f"Refusing request URL with an explicit port: {url!r}.")
+    allowed_paths = config.HTTP_PUBLIC_ALLOWLIST.get(parts.netloc)
+    if allowed_paths is None:
+        raise SecurityViolation(f"Refusing request to a host outside the public allowlist: {parts.netloc!r}.")
+    if parts.path not in allowed_paths:
+        raise SecurityViolation(
+            f"Refusing request to a path outside the public allowlist: {parts.netloc}{parts.path!r}."
+        )
+    if parts.query or parts.fragment or "?" in url or "#" in url:
+        raise SecurityViolation(
+            f"Refusing request URL with an inline query or fragment: {url!r}. Pass query parameters separately."
         )
 
 

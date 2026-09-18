@@ -8,12 +8,42 @@ have enough history to justify a number (see architecture doc section 5, 15-B).
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
+from types import MappingProxyType
 
 # --------------------------------------------------------------------------
 # Endpoints (public only - see security.py for the enforcement of this)
 # --------------------------------------------------------------------------
 SPOT_URL = "https://api.kraken.com/0/public"
 FUTURES_URL = "https://futures.kraken.com/derivatives/api/v3"
+
+# T023a: exact public-HTTP allowlist enforced by security.assert_allowed_request
+# for every GuardedSession call. Scheme https only, default port only, no
+# userinfo, GET only, and only the exact paths the radar calls today
+# (kraken_spot.py / kraken_futures.py). Hardcoded on purpose - never read from
+# the environment. Ollama (OLLAMA_ALLOWED_HOSTS) and ntfy are NOT here: they
+# keep their own guards and are never reachable through GuardedSession.
+HTTP_ALLOWED_SCHEME = "https"
+HTTP_ALLOWED_METHODS = frozenset({"GET"})
+HTTP_PUBLIC_ALLOWLIST: Mapping[str, frozenset[str]] = MappingProxyType(
+    {
+        "api.kraken.com": frozenset(
+            {
+                "/0/public/AssetPairs",
+                "/0/public/Ticker",
+                "/0/public/OHLC",
+                "/0/public/Depth",
+                "/0/public/Trades",
+            }
+        ),
+        "futures.kraken.com": frozenset(
+            {
+                "/derivatives/api/v3/tickers",
+                "/derivatives/api/v3/orderbook",
+            }
+        ),
+    }
+)
 
 HTTP_TIMEOUT = float(os.getenv("RADAR_HTTP_TIMEOUT", "20"))
 HTTP_MAX_RETRIES = int(os.getenv("RADAR_HTTP_MAX_RETRIES", "3"))
