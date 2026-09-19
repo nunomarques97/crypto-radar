@@ -22,12 +22,22 @@ import threading
 import time
 from typing import Any
 
-from radar_v08 import alerts, clipboard, config, mock_alert, notifications, prompt_builder
+from radar_v08 import (
+    alerts,
+    clipboard,
+    config,
+    mock_alert,
+    notifications,
+)
 from radar_v08.cli import _run_notify_test
 from radar_v08.store import SnapshotStore
-
 from ui import paths, process_manager, ui_state
-from ui.agents import AGENT_REGISTRY, Agent, build_connections, collect_real_agent_communications
+from ui.agents import (
+    AGENT_REGISTRY,
+    Agent,
+    build_connections,
+    collect_real_agent_communications,
+)
 from ui.data_reader import DataReader
 
 

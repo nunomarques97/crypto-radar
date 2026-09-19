@@ -162,20 +162,6 @@
     },
     {
       "tool": "mypy",
-      "path": "ui/agents.py",
-      "code": "arg-type",
-      "message": "Argument 1 to \"get\" of \"dict\" has incompatible type \"str | None\"; expected \"str\"",
-      "count": 1
-    },
-    {
-      "tool": "mypy",
-      "path": "ui/agents.py",
-      "code": "index",
-      "message": "Value of type \"Row | None\" is not indexable",
-      "count": 1
-    },
-    {
-      "tool": "mypy",
       "path": "ui/app.py",
       "code": "import-not-found",
       "message": "Cannot find implementation or library stub for module named \"webview\"",
@@ -324,48 +310,6 @@
     {
       "tool": "ruff",
       "path": "tests/ui_tests/test_test_mode_isolation.py",
-      "code": "I001",
-      "message": "Import block is un-sorted or un-formatted",
-      "count": 1
-    },
-    {
-      "tool": "ruff",
-      "path": "ui/agents.py",
-      "code": "F401",
-      "message": "`datetime.datetime` imported but unused",
-      "count": 1
-    },
-    {
-      "tool": "ruff",
-      "path": "ui/agents.py",
-      "code": "F401",
-      "message": "`datetime.timezone` imported but unused",
-      "count": 1
-    },
-    {
-      "tool": "ruff",
-      "path": "ui/agents.py",
-      "code": "F401",
-      "message": "`radar_v08.budgets` imported but unused",
-      "count": 1
-    },
-    {
-      "tool": "ruff",
-      "path": "ui/bridge.py",
-      "code": "F401",
-      "message": "`radar_v08.prompt_builder` imported but unused",
-      "count": 1
-    },
-    {
-      "tool": "ruff",
-      "path": "ui/bridge.py",
-      "code": "I001",
-      "message": "Import block is un-sorted or un-formatted",
-      "count": 1
-    },
-    {
-      "tool": "ruff",
-      "path": "ui/data_reader.py",
       "code": "I001",
       "message": "Import block is un-sorted or un-formatted",
       "count": 1

@@ -13,10 +13,9 @@ templates or JS: they iterate `build_agents()`'s output generically.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from typing import Any
 
-from radar_v08 import budgets, config
+from radar_v08 import config
 from radar_v08.adapters.outbox_store import MAX_READ_LIMIT, OutboxError, OutboxKind
 from radar_v08.claude_bridge import HEALTH_STATES, bridge_health_label
 from radar_v08.store import SnapshotStore
@@ -144,7 +143,7 @@ def _latest_model_analysis(store: SnapshotStore, model: str) -> dict[str, Any] |
 def _build_claude_bridge_model(
     defn: AgentDefinition, store: SnapshotStore, call_counts: dict[str, int]
 ) -> Agent:
-    model_id = config.CLAUDE_BRIDGE_MODEL_IDS.get(defn.bridge_model_key)
+    model_id = config.CLAUDE_BRIDGE_MODEL_IDS.get(defn.bridge_model_key or "")
     latest_analysis = _latest_model_analysis(store, model_id) if model_id else None
 
     # T010 is a runtime policy, not a health failure.  Old bridge rows remain
@@ -173,7 +172,7 @@ def _build_claude_bridge_model(
     )
     status = "PROCESSING" if is_processing else health
 
-    current_event = latest_event_row["event_id"] if is_processing else None
+    current_event = latest_event_row["event_id"] if is_processing and latest_event_row is not None else None
     last_activity = latest_analysis["completed_at"] or latest_analysis["requested_at"] if latest_analysis else None
     last_error = latest_analysis["error"] if latest_analysis else None
 
