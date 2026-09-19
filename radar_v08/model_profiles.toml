@@ -1,0 +1,48 @@
+# Versioned local model profiles (T050a, docs/OPERATING_CONTRACTS.md section 3).
+#
+# Read only by radar_v08/adapters/model_profiles.py (stdlib tomllib, opened "rb").
+# Edited by people through commits; the application never writes this file.
+# The loader fails closed: an unknown key, a duplicate id, a wrong type, a role
+# limit exceeded or a non-loopback endpoint rejects the whole file with a typed
+# error. There is no silent fallback to a built-in default.
+#
+# Keys per [[profiles]] table (all required):
+#   id                    stable profile id, lowercase [a-z0-9._-]
+#   role                  screener | challenger | deep_analyst (OC-1 roles)
+#   enabled               challenger and deep_analyst must stay false in OC-1
+#   model                 local Ollama model with an explicit tag; no cloud tags
+#   endpoint              http://localhost:<port> or http://127.0.0.1:<port> only
+#   output_format         json_schema (structured output via Ollama "format")
+#   hard_timeout_seconds  whole call: load, prompt processing and generation
+#   context_tokens        total context window, within the role's OC-1 limit
+#   output_cap_tokens     within the role's OC-1 output cap
+#   temperature           must be 0
+#   think                 must be false
+#   reserve_vram_gib      VRAM kept free for the rest of the system, >= 1.5
+#   reserve_ram_gib       RAM kept free for the rest of the system, >= 4
+#
+# Not wired yet: radar_v08/qwen.py still reads config.QWEN_* (follow-up T050c).
+
+schema_version = 1
+default_profile = "screener-qwen3-14b"
+
+# Rationale: this is exactly what the radar runs today (config.QWEN_MODEL
+# "qwen3:14b", QWEN_TIMEOUT_SECONDS 30, QWEN_TEMPERATURE 0, QWEN_THINK false,
+# OLLAMA_URL http://localhost:11434), bounded by the OC-1 Screener limits
+# (4,096 context tokens total with input <= 2,800, 768 output tokens, 30 s hard
+# call limit) and the OC-1 resource reserve (1.5 GiB VRAM, 4 GiB RAM). Qwen3 14B
+# is the current baseline, not a permanent assignment: T051 may replace it.
+[[profiles]]
+id = "screener-qwen3-14b"
+role = "screener"
+enabled = true
+model = "qwen3:14b"
+endpoint = "http://localhost:11434"
+output_format = "json_schema"
+hard_timeout_seconds = 30
+context_tokens = 4096
+output_cap_tokens = 768
+temperature = 0.0
+think = false
+reserve_vram_gib = 1.5
+reserve_ram_gib = 4.0
