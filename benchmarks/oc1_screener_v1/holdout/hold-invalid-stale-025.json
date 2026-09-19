@@ -1,0 +1,67 @@
+{
+  "case_id": "hold-invalid-stale-025",
+  "category": "invalid_or_stale",
+  "construction": {
+    "details": {
+      "integrity": {
+        "function": "radar_v08.domain.integrity.evaluate_ohlc",
+        "policy": "OC-1",
+        "reasons": [
+          "nonpositive_price"
+        ],
+        "required_bars": 24,
+        "status": "FAIL"
+      },
+      "mutation": {
+        "bar_index": 8,
+        "field": "close",
+        "kind": "impossible_value",
+        "mutated": "0",
+        "original": "3779.87"
+      }
+    },
+    "rule": "mutation:impossible_value",
+    "rules_version": "oc1-corpus-rules-1"
+  },
+  "evidence_ids": [
+    "ev-bars",
+    "ev-cost"
+  ],
+  "gold": {
+    "abstain_expected": true,
+    "human_review": null,
+    "rule": "integrity-fail:reject-input",
+    "source": "deterministic_rule"
+  },
+  "gold_status": "deterministic",
+  "partition": "holdout",
+  "prompt": {
+    "system": "You are the Screener role in an offline evaluation of recorded public Kraken spot data (5-minute OHLC bars, UTC; no order book was observed). An admissible claim needs 24 contiguous closed bars ending at the decision instant, the last closed at most 6 minutes before it, with coherent prices in the pair's quote currency. Classify the evidence into exactly one category: invalid_or_stale, conflicting_evidence, admissible_positive, admissible_no_edge or insufficient_evidence. Set abstain to true when the evidence is invalid, stale or insufficient. Cite only the evidence ids supplied. Answer only with the JSON object of the response schema. Risk values are owned by deterministic code and are never part of the answer.",
+    "user": "Pair: ETH/USD (Kraken spot). Decision instant: 2025-07-30T11:00:00Z.\nev-bars: 5-minute bars of 2025-07-30 UTC, prices in USD; columns open_time,open,high,low,close:\n09:00,3817.17,3817.17,3808.12,3812.47\n09:05,3811.7,3819.28,3811.7,3816.04\n09:10,3816.5,3816.52,3807.1,3807.1\n09:15,3807.09,3807.42,3805.0,3805.2\n09:20,3805.6,3806.59,3805.01,3805.01\n09:25,3805.0,3805.27,3796.0,3798.22\n09:30,3796.61,3796.61,3780.01,3786.03\n09:35,3787.41,3787.64,3777.94,3779.7\n09:40,3779.7,3781.0,3777.32,0\n09:45,3779.78,3782.28,3778.56,3780.68\n09:50,3780.69,3784.69,3780.68,3781.83\n09:55,3781.83,3787.68,3781.82,3785.93\n10:00,3785.93,3795.0,3785.93,3795.0\n10:05,3794.62,3795.99,3789.27,3791.5\n10:10,3792.78,3799.24,3792.78,3798.29\n10:15,3798.3,3798.48,3792.65,3795.59\n10:20,3795.6,3800.45,3795.6,3800.45\n10:25,3800.52,3801.24,3796.79,3798.59\n10:30,3798.58,3799.68,3793.12,3797.62\n10:35,3797.23,3804.22,3797.23,3804.22\n10:40,3804.96,3804.99,3803.0,3803.78\n10:45,3803.01,3803.01,3796.44,3796.45\n10:50,3796.44,3796.44,3780.01,3780.94\n10:55,3780.01,3780.01,3770.0,3772.86\nev-cost: known minimum round-trip cost 52 bps (taker fee 26.0 bps per leg, uncalibrated assumption); spread and slippage not observed."
+  },
+  "provenance": {
+    "bar_seconds": 300,
+    "base": "ETH",
+    "decision_at_utc": "2025-07-30T11:00:00Z",
+    "fee": {
+      "basis": "uncalibrated_assumption",
+      "bps_per_leg": "26.0",
+      "legs": 2,
+      "origin_file": "radar_v08/config.py",
+      "origin_key": "UNCALIBRATED_FEES['spot_taker_bps']"
+    },
+    "pair": "ETHUSD",
+    "quote": "USD",
+    "source": {
+      "member": "ETHUSD_5.csv",
+      "zip": "Kraken_OHLCVT_Q3_2025.zip",
+      "zip_sha256": "1f8cbd36977e47384d396c90dc813d54c234873c56afd7da03b0a55e6af6fd81"
+    },
+    "venue": "kraken",
+    "window_end_utc": "2025-07-30T11:00:00Z",
+    "window_start_utc": "2025-07-30T09:00:00Z"
+  },
+  "role": "screener",
+  "schema_version": 2,
+  "synthetic": false
+}

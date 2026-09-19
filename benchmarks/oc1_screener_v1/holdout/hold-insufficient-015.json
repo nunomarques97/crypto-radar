@@ -1,0 +1,65 @@
+{
+  "case_id": "hold-insufficient-015",
+  "category": "insufficient_evidence",
+  "construction": {
+    "details": {
+      "coverage": {
+        "bars_required": 24,
+        "bars_shown": 13,
+        "kind": "real_gap"
+      },
+      "integrity": {
+        "function": "radar_v08.domain.integrity.evaluate_ohlc",
+        "policy": "OC-1",
+        "reasons": [
+          "insufficient_bars"
+        ],
+        "required_bars": 24,
+        "status": "UNKNOWN"
+      }
+    },
+    "rule": "coverage:real_gap",
+    "rules_version": "oc1-corpus-rules-1"
+  },
+  "evidence_ids": [
+    "ev-bars",
+    "ev-cost"
+  ],
+  "gold": {
+    "abstain_expected": true,
+    "human_review": null,
+    "rule": "integrity-unknown:abstain",
+    "source": "deterministic_rule"
+  },
+  "gold_status": "deterministic",
+  "partition": "holdout",
+  "prompt": {
+    "system": "You are the Screener role in an offline evaluation of recorded public Kraken spot data (5-minute OHLC bars, UTC; no order book was observed). An admissible claim needs 24 contiguous closed bars ending at the decision instant, the last closed at most 6 minutes before it, with coherent prices in the pair's quote currency. Classify the evidence into exactly one category: invalid_or_stale, conflicting_evidence, admissible_positive, admissible_no_edge or insufficient_evidence. Set abstain to true when the evidence is invalid, stale or insufficient. Cite only the evidence ids supplied. Answer only with the JSON object of the response schema. Risk values are owned by deterministic code and are never part of the answer.",
+    "user": "Pair: MINA/USD (Kraken spot). Decision instant: 2024-12-01T11:00:00Z.\nev-bars: 5-minute bars of 2024-12-01 UTC, prices in USD; columns open_time,open,high,low,close:\n09:05,0.864,0.864,0.864,0.864\n09:20,0.858,0.858,0.858,0.858\n09:30,0.856,0.858,0.856,0.858\n09:40,0.86,0.86,0.86,0.86\n09:45,0.858,0.858,0.858,0.858\n10:00,0.86,0.86,0.86,0.86\n10:20,0.859,0.859,0.859,0.859\n10:25,0.86,0.86,0.858,0.858\n10:30,0.855,0.855,0.85,0.85\n10:35,0.85,0.85,0.85,0.85\n10:40,0.85,0.85,0.85,0.85\n10:50,0.852,0.852,0.85,0.85\n10:55,0.85,0.851,0.85,0.851\nev-cost: known minimum round-trip cost 52 bps (taker fee 26.0 bps per leg, uncalibrated assumption); spread and slippage not observed."
+  },
+  "provenance": {
+    "bar_seconds": 300,
+    "base": "MINA",
+    "decision_at_utc": "2024-12-01T11:00:00Z",
+    "fee": {
+      "basis": "uncalibrated_assumption",
+      "bps_per_leg": "26.0",
+      "legs": 2,
+      "origin_file": "radar_v08/config.py",
+      "origin_key": "UNCALIBRATED_FEES['spot_taker_bps']"
+    },
+    "pair": "MINAUSD",
+    "quote": "USD",
+    "source": {
+      "member": "MINAUSD_5.csv",
+      "zip": "Kraken_OHLCVT_Q4_2024.zip",
+      "zip_sha256": "91146d26fa0d17a06e09b5b1be5d113d5ea70ae984764046a12b0f2df93e6307"
+    },
+    "venue": "kraken",
+    "window_end_utc": "2024-12-01T11:00:00Z",
+    "window_start_utc": "2024-12-01T09:05:00Z"
+  },
+  "role": "screener",
+  "schema_version": 2,
+  "synthetic": false
+}

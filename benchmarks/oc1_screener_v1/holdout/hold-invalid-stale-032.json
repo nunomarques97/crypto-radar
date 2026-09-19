@@ -1,0 +1,67 @@
+{
+  "case_id": "hold-invalid-stale-032",
+  "category": "invalid_or_stale",
+  "construction": {
+    "details": {
+      "integrity": {
+        "function": "radar_v08.domain.integrity.evaluate_ohlc",
+        "policy": "OC-1",
+        "reasons": [
+          "bar_order"
+        ],
+        "required_bars": 24,
+        "status": "FAIL"
+      },
+      "mutation": {
+        "bar_index": 16,
+        "field": "open_time",
+        "kind": "timestamp_out_of_order",
+        "mutated": "19:15",
+        "original": "19:20"
+      }
+    },
+    "rule": "mutation:timestamp_out_of_order",
+    "rules_version": "oc1-corpus-rules-1"
+  },
+  "evidence_ids": [
+    "ev-bars",
+    "ev-cost"
+  ],
+  "gold": {
+    "abstain_expected": true,
+    "human_review": null,
+    "rule": "integrity-fail:reject-input",
+    "source": "deterministic_rule"
+  },
+  "gold_status": "deterministic",
+  "partition": "holdout",
+  "prompt": {
+    "system": "You are the Screener role in an offline evaluation of recorded public Kraken spot data (5-minute OHLC bars, UTC; no order book was observed). An admissible claim needs 24 contiguous closed bars ending at the decision instant, the last closed at most 6 minutes before it, with coherent prices in the pair's quote currency. Classify the evidence into exactly one category: invalid_or_stale, conflicting_evidence, admissible_positive, admissible_no_edge or insufficient_evidence. Set abstain to true when the evidence is invalid, stale or insufficient. Cite only the evidence ids supplied. Answer only with the JSON object of the response schema. Risk values are owned by deterministic code and are never part of the answer.",
+    "user": "Pair: AVAX/USD (Kraken spot). Decision instant: 2025-11-13T20:00:00Z.\nev-bars: 5-minute bars of 2025-11-13 UTC, prices in USD; columns open_time,open,high,low,close:\n18:00,16.38,16.41,16.32,16.32\n18:05,16.32,16.36,16.29,16.29\n18:10,16.28,16.3,16.25,16.27\n18:15,16.27,16.31,16.23,16.29\n18:20,16.27,16.3,16.27,16.28\n18:25,16.27,16.27,16.18,16.24\n18:30,16.26,16.26,16.14,16.14\n18:35,16.13,16.16,16.12,16.16\n18:40,16.13,16.25,16.13,16.25\n18:45,16.26,16.29,16.17,16.18\n18:50,16.16,16.16,16.1,16.1\n18:55,16.11,16.23,16.1,16.18\n19:00,16.16,16.22,16.16,16.22\n19:05,16.23,16.27,16.15,16.17\n19:10,16.18,16.21,16.12,16.12\n19:15,16.11,16.11,16.04,16.1\n19:15,16.07,16.13,16.04,16.12\n19:25,16.15,16.23,16.15,16.22\n19:30,16.21,16.22,16.05,16.05\n19:35,16.04,16.04,15.97,16.03\n19:40,16.01,16.08,16.0,16.08\n19:45,16.06,16.06,15.98,15.98\n19:50,16.0,16.03,16.0,16.02\n19:55,16.0,16.0,15.91,15.97\nev-cost: known minimum round-trip cost 52 bps (taker fee 26.0 bps per leg, uncalibrated assumption); spread and slippage not observed."
+  },
+  "provenance": {
+    "bar_seconds": 300,
+    "base": "AVAX",
+    "decision_at_utc": "2025-11-13T20:00:00Z",
+    "fee": {
+      "basis": "uncalibrated_assumption",
+      "bps_per_leg": "26.0",
+      "legs": 2,
+      "origin_file": "radar_v08/config.py",
+      "origin_key": "UNCALIBRATED_FEES['spot_taker_bps']"
+    },
+    "pair": "AVAXUSD",
+    "quote": "USD",
+    "source": {
+      "member": "AVAXUSD_5.csv",
+      "zip": "Kraken_OHLCVT_Q4_2025.zip",
+      "zip_sha256": "3ce889809ab31ad2e5320f16dc22bb92bf40c37f708ad76d88829cbabb636664"
+    },
+    "venue": "kraken",
+    "window_end_utc": "2025-11-13T20:00:00Z",
+    "window_start_utc": "2025-11-13T18:00:00Z"
+  },
+  "role": "screener",
+  "schema_version": 2,
+  "synthetic": false
+}

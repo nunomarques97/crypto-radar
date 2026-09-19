@@ -1,0 +1,96 @@
+{
+  "case_id": "hold-no-edge-006",
+  "category": "admissible_no_edge",
+  "construction": {
+    "details": {
+      "comparison": "visible gross edge < cost lower bound (exact Decimal)",
+      "cost_lower_bound": {
+        "bps": "52",
+        "fee_lines": [
+          {
+            "bps": "26",
+            "leg": "entry",
+            "source": "uncalibrated_assumption: radar_v08/config.py UNCALIBRATED_FEES['spot_taker_bps'] literal default"
+          },
+          {
+            "bps": "26",
+            "leg": "exit",
+            "source": "uncalibrated_assumption: radar_v08/config.py UNCALIBRATED_FEES['spot_taker_bps'] literal default"
+          }
+        ],
+        "function": "radar_v08.domain.costs.round_trip_cost_lower_bound",
+        "kind": "COST_LOWER_BOUND",
+        "missing": [
+          {
+            "component": "spread",
+            "leg": "entry",
+            "reason": "not_observed"
+          },
+          {
+            "component": "spread",
+            "leg": "exit",
+            "reason": "not_observed"
+          },
+          {
+            "component": "slippage",
+            "leg": "entry",
+            "reason": "not_observed"
+          },
+          {
+            "component": "slippage",
+            "leg": "exit",
+            "reason": "not_observed"
+          }
+        ],
+        "status": "COST_INCOMPLETE"
+      },
+      "visible_gross_edge": {
+        "bps_rounded_up": "26.1113",
+        "definition": "(max high - min low) / last close over the bars shown, all closed at or before the decision instant"
+      }
+    },
+    "rule": "no-edge:visible-edge-below-cost-lower-bound",
+    "rules_version": "oc1-corpus-rules-1"
+  },
+  "evidence_ids": [
+    "ev-bars",
+    "ev-cost"
+  ],
+  "gold": {
+    "abstain_expected": false,
+    "human_review": null,
+    "rule": "no-edge:visible-edge-below-cost-lower-bound",
+    "source": "deterministic_rule"
+  },
+  "gold_status": "deterministic",
+  "partition": "holdout",
+  "prompt": {
+    "system": "You are the Screener role in an offline evaluation of recorded public Kraken spot data (5-minute OHLC bars, UTC; no order book was observed). An admissible claim needs 24 contiguous closed bars ending at the decision instant, the last closed at most 6 minutes before it, with coherent prices in the pair's quote currency. Classify the evidence into exactly one category: invalid_or_stale, conflicting_evidence, admissible_positive, admissible_no_edge or insufficient_evidence. Set abstain to true when the evidence is invalid, stale or insufficient. Cite only the evidence ids supplied. Answer only with the JSON object of the response schema. Risk values are owned by deterministic code and are never part of the answer.",
+    "user": "Pair: XBT/USD (Kraken spot). Decision instant: 2024-06-08T02:00:00Z.\nev-bars: 5-minute bars of 2024-06-08 UTC, prices in USD; columns open_time,open,high,low,close:\n00:00,69317.1,69317.1,69257.1,69278.5\n00:05,69278.4,69299.6,69265.0,69296.0\n00:10,69296.0,69296.0,69270.0,69286.6\n00:15,69286.5,69319.0,69286.5,69319.0\n00:20,69332.6,69360.0,69332.6,69347.6\n00:25,69347.6,69411.2,69347.6,69411.2\n00:30,69411.2,69438.4,69410.7,69410.8\n00:35,69410.8,69438.4,69404.2,69415.5\n00:40,69415.5,69418.7,69415.5,69418.7\n00:45,69418.6,69418.7,69418.6,69418.6\n00:50,69418.6,69418.7,69357.7,69375.5\n00:55,69375.5,69392.2,69363.6,69363.7\n01:00,69363.6,69377.0,69363.6,69376.9\n01:05,69376.9,69396.5,69376.9,69396.5\n01:10,69398.3,69398.3,69351.6,69351.7\n01:15,69351.7,69351.7,69315.1,69315.2\n01:20,69315.2,69315.3,69315.1,69315.3\n01:25,69315.2,69325.0,69315.2,69325.0\n01:30,69325.0,69325.0,69324.9,69325.0\n01:35,69325.0,69398.1,69324.9,69374.1\n01:40,69374.0,69400.0,69374.0,69399.9\n01:45,69400.0,69412.1,69399.9,69412.1\n01:50,69412.1,69427.7,69412.1,69427.6\n01:55,69427.7,69436.1,69427.6,69433.8\nev-cost: known minimum round-trip cost 52 bps (taker fee 26.0 bps per leg, uncalibrated assumption); spread and slippage not observed."
+  },
+  "provenance": {
+    "bar_seconds": 300,
+    "base": "XBT",
+    "decision_at_utc": "2024-06-08T02:00:00Z",
+    "fee": {
+      "basis": "uncalibrated_assumption",
+      "bps_per_leg": "26.0",
+      "legs": 2,
+      "origin_file": "radar_v08/config.py",
+      "origin_key": "UNCALIBRATED_FEES['spot_taker_bps']"
+    },
+    "pair": "XBTUSD",
+    "quote": "USD",
+    "source": {
+      "member": "XBTUSD_5.csv",
+      "zip": "Kraken_OHLCVT_Q2_2024.zip",
+      "zip_sha256": "52d648891453a3f331e9388477d7287ce3df19a20859c4023b02928250c8dd97"
+    },
+    "venue": "kraken",
+    "window_end_utc": "2024-06-08T02:00:00Z",
+    "window_start_utc": "2024-06-08T00:00:00Z"
+  },
+  "role": "screener",
+  "schema_version": 2,
+  "synthetic": false
+}

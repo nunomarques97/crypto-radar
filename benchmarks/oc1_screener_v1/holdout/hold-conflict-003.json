@@ -1,0 +1,49 @@
+{
+  "case_id": "hold-conflict-003",
+  "category": "conflicting_evidence",
+  "construction": {
+    "details": {
+      "cost_lower_bound_bps": "52",
+      "gold_unavailable_reason": "needs two independent human reviews (OC-1 section 6)",
+      "selection": "clean window; the whole-window move (last close / first open - 1) and the last-hour move (close of bar 24 / close of bar 12 - 1) have opposite signs and each is at least the cost lower bound"
+    },
+    "rule": "selection:conflicting-moves",
+    "rules_version": "oc1-corpus-rules-1"
+  },
+  "evidence_ids": [
+    "ev-bars",
+    "ev-cost"
+  ],
+  "gold": null,
+  "gold_status": "gold_unavailable",
+  "partition": "holdout",
+  "prompt": {
+    "system": "You are the Screener role in an offline evaluation of recorded public Kraken spot data (5-minute OHLC bars, UTC; no order book was observed). An admissible claim needs 24 contiguous closed bars ending at the decision instant, the last closed at most 6 minutes before it, with coherent prices in the pair's quote currency. Classify the evidence into exactly one category: invalid_or_stale, conflicting_evidence, admissible_positive, admissible_no_edge or insufficient_evidence. Set abstain to true when the evidence is invalid, stale or insufficient. Cite only the evidence ids supplied. Answer only with the JSON object of the response schema. Risk values are owned by deterministic code and are never part of the answer.",
+    "user": "Pair: ATOM/USD (Kraken spot). Decision instant: 2024-04-12T20:00:00Z.\nev-bars: 5-minute bars of 2024-04-12 UTC, prices in USD; columns open_time,open,high,low,close:\n18:00,9.8438,9.8488,9.821,9.8365\n18:05,9.8332,9.8571,9.8332,9.85\n18:10,9.8845,9.8977,9.8695,9.8701\n18:15,9.8693,9.8693,9.7933,9.7982\n18:20,9.7631,9.7631,9.7231,9.75\n18:25,9.75,9.75,9.6294,9.7151\n18:30,9.7086,9.7086,9.0,9.1787\n18:35,9.2137,9.2172,8.4833,8.9612\n18:40,8.9703,9.0409,8.9442,8.9851\n18:45,9.0132,9.0301,8.9101,8.9563\n18:50,8.9631,9.0699,8.8889,9.0328\n18:55,9.0257,9.0857,8.9693,9.0671\n19:00,9.002,9.0059,8.9401,8.9969\n19:05,9.0178,9.098,9.0178,9.096\n19:10,9.1008,9.1158,9.0418,9.0418\n19:15,9.0744,9.1125,9.0415,9.1125\n19:20,9.127,9.1792,9.127,9.1753\n19:25,9.1829,9.2083,9.1486,9.1486\n19:30,9.1564,9.2351,9.1564,9.1929\n19:35,9.1658,9.1658,9.0853,9.0853\n19:40,9.0916,9.1182,9.0758,9.1182\n19:45,9.1247,9.1247,9.0273,9.0645\n19:50,9.0605,9.0634,9.0455,9.0455\n19:55,9.0741,9.1405,9.0741,9.1287\nev-cost: known minimum round-trip cost 52 bps (taker fee 26.0 bps per leg, uncalibrated assumption); spread and slippage not observed."
+  },
+  "provenance": {
+    "bar_seconds": 300,
+    "base": "ATOM",
+    "decision_at_utc": "2024-04-12T20:00:00Z",
+    "fee": {
+      "basis": "uncalibrated_assumption",
+      "bps_per_leg": "26.0",
+      "legs": 2,
+      "origin_file": "radar_v08/config.py",
+      "origin_key": "UNCALIBRATED_FEES['spot_taker_bps']"
+    },
+    "pair": "ATOMUSD",
+    "quote": "USD",
+    "source": {
+      "member": "ATOMUSD_5.csv",
+      "zip": "Kraken_OHLCVT_Q2_2024.zip",
+      "zip_sha256": "52d648891453a3f331e9388477d7287ce3df19a20859c4023b02928250c8dd97"
+    },
+    "venue": "kraken",
+    "window_end_utc": "2024-04-12T20:00:00Z",
+    "window_start_utc": "2024-04-12T18:00:00Z"
+  },
+  "role": "screener",
+  "schema_version": 2,
+  "synthetic": false
+}

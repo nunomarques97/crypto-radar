@@ -1,0 +1,96 @@
+{
+  "case_id": "hold-no-edge-023",
+  "category": "admissible_no_edge",
+  "construction": {
+    "details": {
+      "comparison": "visible gross edge < cost lower bound (exact Decimal)",
+      "cost_lower_bound": {
+        "bps": "52",
+        "fee_lines": [
+          {
+            "bps": "26",
+            "leg": "entry",
+            "source": "uncalibrated_assumption: radar_v08/config.py UNCALIBRATED_FEES['spot_taker_bps'] literal default"
+          },
+          {
+            "bps": "26",
+            "leg": "exit",
+            "source": "uncalibrated_assumption: radar_v08/config.py UNCALIBRATED_FEES['spot_taker_bps'] literal default"
+          }
+        ],
+        "function": "radar_v08.domain.costs.round_trip_cost_lower_bound",
+        "kind": "COST_LOWER_BOUND",
+        "missing": [
+          {
+            "component": "spread",
+            "leg": "entry",
+            "reason": "not_observed"
+          },
+          {
+            "component": "spread",
+            "leg": "exit",
+            "reason": "not_observed"
+          },
+          {
+            "component": "slippage",
+            "leg": "entry",
+            "reason": "not_observed"
+          },
+          {
+            "component": "slippage",
+            "leg": "exit",
+            "reason": "not_observed"
+          }
+        ],
+        "status": "COST_INCOMPLETE"
+      },
+      "visible_gross_edge": {
+        "bps_rounded_up": "40.5727",
+        "definition": "(max high - min low) / last close over the bars shown, all closed at or before the decision instant"
+      }
+    },
+    "rule": "no-edge:visible-edge-below-cost-lower-bound",
+    "rules_version": "oc1-corpus-rules-1"
+  },
+  "evidence_ids": [
+    "ev-bars",
+    "ev-cost"
+  ],
+  "gold": {
+    "abstain_expected": false,
+    "human_review": null,
+    "rule": "no-edge:visible-edge-below-cost-lower-bound",
+    "source": "deterministic_rule"
+  },
+  "gold_status": "deterministic",
+  "partition": "holdout",
+  "prompt": {
+    "system": "You are the Screener role in an offline evaluation of recorded public Kraken spot data (5-minute OHLC bars, UTC; no order book was observed). An admissible claim needs 24 contiguous closed bars ending at the decision instant, the last closed at most 6 minutes before it, with coherent prices in the pair's quote currency. Classify the evidence into exactly one category: invalid_or_stale, conflicting_evidence, admissible_positive, admissible_no_edge or insufficient_evidence. Set abstain to true when the evidence is invalid, stale or insufficient. Cite only the evidence ids supplied. Answer only with the JSON object of the response schema. Risk values are owned by deterministic code and are never part of the answer.",
+    "user": "Pair: TRX/USD (Kraken spot). Decision instant: 2025-10-13T17:00:00Z.\nev-bars: 5-minute bars of 2025-10-13 UTC, prices in USD; columns open_time,open,high,low,close:\n15:00,0.320306,0.320433,0.320291,0.320331\n15:05,0.320585,0.320757,0.320447,0.320669\n15:10,0.320683,0.320914,0.320683,0.320886\n15:15,0.32088,0.321004,0.320573,0.320852\n15:20,0.320903,0.320934,0.320736,0.320826\n15:25,0.3208,0.32099,0.320789,0.320881\n15:30,0.321101,0.321165,0.320995,0.321128\n15:35,0.32113,0.321267,0.320973,0.320973\n15:40,0.32104,0.32104,0.320893,0.320938\n15:45,0.320987,0.32104,0.320768,0.321017\n15:50,0.32104,0.321177,0.320949,0.321031\n15:55,0.321067,0.321215,0.321067,0.321215\n16:00,0.321112,0.321277,0.321051,0.321092\n16:05,0.321193,0.321242,0.321081,0.321232\n16:10,0.321265,0.321267,0.321168,0.321229\n16:15,0.321178,0.32121,0.320857,0.320952\n16:20,0.320932,0.320941,0.320616,0.320672\n16:25,0.320952,0.321594,0.320952,0.321094\n16:30,0.321019,0.321087,0.320954,0.321087\n16:35,0.320944,0.32106,0.320944,0.32106\n16:40,0.321059,0.321059,0.320852,0.320852\n16:45,0.320741,0.320793,0.320705,0.320792\n16:50,0.320793,0.320853,0.320793,0.320853\n16:55,0.320853,0.321165,0.320852,0.321152\nev-cost: known minimum round-trip cost 52 bps (taker fee 26.0 bps per leg, uncalibrated assumption); spread and slippage not observed."
+  },
+  "provenance": {
+    "bar_seconds": 300,
+    "base": "TRX",
+    "decision_at_utc": "2025-10-13T17:00:00Z",
+    "fee": {
+      "basis": "uncalibrated_assumption",
+      "bps_per_leg": "26.0",
+      "legs": 2,
+      "origin_file": "radar_v08/config.py",
+      "origin_key": "UNCALIBRATED_FEES['spot_taker_bps']"
+    },
+    "pair": "TRXUSD",
+    "quote": "USD",
+    "source": {
+      "member": "TRXUSD_5.csv",
+      "zip": "Kraken_OHLCVT_Q4_2025.zip",
+      "zip_sha256": "3ce889809ab31ad2e5320f16dc22bb92bf40c37f708ad76d88829cbabb636664"
+    },
+    "venue": "kraken",
+    "window_end_utc": "2025-10-13T17:00:00Z",
+    "window_start_utc": "2025-10-13T15:00:00Z"
+  },
+  "role": "screener",
+  "schema_version": 2,
+  "synthetic": false
+}

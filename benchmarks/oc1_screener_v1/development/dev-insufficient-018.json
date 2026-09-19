@@ -1,0 +1,65 @@
+{
+  "case_id": "dev-insufficient-018",
+  "category": "insufficient_evidence",
+  "construction": {
+    "details": {
+      "coverage": {
+        "bars_required": 24,
+        "bars_shown": 23,
+        "kind": "real_gap"
+      },
+      "integrity": {
+        "function": "radar_v08.domain.integrity.evaluate_ohlc",
+        "policy": "OC-1",
+        "reasons": [
+          "insufficient_bars"
+        ],
+        "required_bars": 24,
+        "status": "UNKNOWN"
+      }
+    },
+    "rule": "coverage:real_gap",
+    "rules_version": "oc1-corpus-rules-1"
+  },
+  "evidence_ids": [
+    "ev-bars",
+    "ev-cost"
+  ],
+  "gold": {
+    "abstain_expected": true,
+    "human_review": null,
+    "rule": "integrity-unknown:abstain",
+    "source": "deterministic_rule"
+  },
+  "gold_status": "deterministic",
+  "partition": "development",
+  "prompt": {
+    "system": "You are the Screener role in an offline evaluation of recorded public Kraken spot data (5-minute OHLC bars, UTC; no order book was observed). An admissible claim needs 24 contiguous closed bars ending at the decision instant, the last closed at most 6 minutes before it, with coherent prices in the pair's quote currency. Classify the evidence into exactly one category: invalid_or_stale, conflicting_evidence, admissible_positive, admissible_no_edge or insufficient_evidence. Set abstain to true when the evidence is invalid, stale or insufficient. Cite only the evidence ids supplied. Answer only with the JSON object of the response schema. Risk values are owned by deterministic code and are never part of the answer.",
+    "user": "Pair: LINK/USD (Kraken spot). Decision instant: 2023-10-25T02:00:00Z.\nev-bars: 5-minute bars of 2023-10-25 UTC, prices in USD; columns open_time,open,high,low,close:\n00:00,10.37,10.40343,10.35404,10.38579\n00:05,10.3639,10.39714,10.36221,10.38973\n00:10,10.36194,10.42027,10.35805,10.35805\n00:15,10.34951,10.45226,10.34951,10.43723\n00:25,10.40237,10.40237,10.38751,10.38751\n00:30,10.38526,10.49002,10.38526,10.49002\n00:35,10.48409,10.775,10.46584,10.72985\n00:40,10.73088,10.78519,10.66351,10.77908\n00:45,10.77996,10.85052,10.73413,10.85052\n00:50,10.853,10.93466,10.83143,10.93466\n00:55,10.93466,11.01412,10.89013,10.99056\n01:00,10.98677,11.33043,10.93818,11.24277\n01:05,11.23062,11.35,11.15981,11.21823\n01:10,11.21428,11.27686,11.2,11.23444\n01:15,11.23124,11.37844,11.2,11.37238\n01:20,11.37844,11.385,11.20577,11.21077\n01:25,11.21477,11.47805,11.21085,11.3011\n01:30,11.30986,11.44914,11.29442,11.44913\n01:35,11.46011,11.47922,11.37186,11.37906\n01:40,11.37163,11.37999,11.31876,11.37616\n01:45,11.39041,11.43404,11.33176,11.43404\n01:50,11.43727,11.63998,11.41714,11.59115\n01:55,11.58515,11.63992,11.48953,11.52945\nev-cost: known minimum round-trip cost 52 bps (taker fee 26.0 bps per leg, uncalibrated assumption); spread and slippage not observed."
+  },
+  "provenance": {
+    "bar_seconds": 300,
+    "base": "LINK",
+    "decision_at_utc": "2023-10-25T02:00:00Z",
+    "fee": {
+      "basis": "uncalibrated_assumption",
+      "bps_per_leg": "26.0",
+      "legs": 2,
+      "origin_file": "radar_v08/config.py",
+      "origin_key": "UNCALIBRATED_FEES['spot_taker_bps']"
+    },
+    "pair": "LINKUSD",
+    "quote": "USD",
+    "source": {
+      "member": "LINKUSD_5.csv",
+      "zip": "Kraken_OHLCVT_Q4_2023.zip",
+      "zip_sha256": "f95cd4c6458b0e7ebf4866e434b3aabaf0b260089dac8fd867966023ab8087d7"
+    },
+    "venue": "kraken",
+    "window_end_utc": "2023-10-25T02:00:00Z",
+    "window_start_utc": "2023-10-25T00:00:00Z"
+  },
+  "role": "screener",
+  "schema_version": 2,
+  "synthetic": false
+}

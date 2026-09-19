@@ -1,0 +1,96 @@
+{
+  "case_id": "dev-no-edge-016",
+  "category": "admissible_no_edge",
+  "construction": {
+    "details": {
+      "comparison": "visible gross edge < cost lower bound (exact Decimal)",
+      "cost_lower_bound": {
+        "bps": "52",
+        "fee_lines": [
+          {
+            "bps": "26",
+            "leg": "entry",
+            "source": "uncalibrated_assumption: radar_v08/config.py UNCALIBRATED_FEES['spot_taker_bps'] literal default"
+          },
+          {
+            "bps": "26",
+            "leg": "exit",
+            "source": "uncalibrated_assumption: radar_v08/config.py UNCALIBRATED_FEES['spot_taker_bps'] literal default"
+          }
+        ],
+        "function": "radar_v08.domain.costs.round_trip_cost_lower_bound",
+        "kind": "COST_LOWER_BOUND",
+        "missing": [
+          {
+            "component": "spread",
+            "leg": "entry",
+            "reason": "not_observed"
+          },
+          {
+            "component": "spread",
+            "leg": "exit",
+            "reason": "not_observed"
+          },
+          {
+            "component": "slippage",
+            "leg": "entry",
+            "reason": "not_observed"
+          },
+          {
+            "component": "slippage",
+            "leg": "exit",
+            "reason": "not_observed"
+          }
+        ],
+        "status": "COST_INCOMPLETE"
+      },
+      "visible_gross_edge": {
+        "bps_rounded_up": "31.3167",
+        "definition": "(max high - min low) / last close over the bars shown, all closed at or before the decision instant"
+      }
+    },
+    "rule": "no-edge:visible-edge-below-cost-lower-bound",
+    "rules_version": "oc1-corpus-rules-1"
+  },
+  "evidence_ids": [
+    "ev-bars",
+    "ev-cost"
+  ],
+  "gold": {
+    "abstain_expected": false,
+    "human_review": null,
+    "rule": "no-edge:visible-edge-below-cost-lower-bound",
+    "source": "deterministic_rule"
+  },
+  "gold_status": "deterministic",
+  "partition": "development",
+  "prompt": {
+    "system": "You are the Screener role in an offline evaluation of recorded public Kraken spot data (5-minute OHLC bars, UTC; no order book was observed). An admissible claim needs 24 contiguous closed bars ending at the decision instant, the last closed at most 6 minutes before it, with coherent prices in the pair's quote currency. Classify the evidence into exactly one category: invalid_or_stale, conflicting_evidence, admissible_positive, admissible_no_edge or insufficient_evidence. Set abstain to true when the evidence is invalid, stale or insufficient. Cite only the evidence ids supplied. Answer only with the JSON object of the response schema. Risk values are owned by deterministic code and are never part of the answer.",
+    "user": "Pair: XDG/USD (Kraken spot). Decision instant: 2023-10-18T17:00:00Z.\nev-bars: 5-minute bars of 2023-10-18 UTC, prices in USD; columns open_time,open,high,low,close:\n15:00,0.0585795,0.0586271,0.0585795,0.0585812\n15:05,0.058599,0.0585996,0.058558,0.0585996\n15:10,0.0585996,0.0586401,0.0585996,0.0586401\n15:15,0.0586318,0.0586545,0.0586297,0.0586364\n15:20,0.0586231,0.0586232,0.0585684,0.0585999\n15:25,0.0586052,0.0586503,0.0585838,0.0585925\n15:30,0.0585927,0.0586068,0.0585889,0.0585995\n15:35,0.0585937,0.0586199,0.0585937,0.0586019\n15:40,0.0585894,0.0585894,0.0585621,0.0585705\n15:45,0.0585756,0.0585907,0.0585756,0.0585898\n15:50,0.0585908,0.0586244,0.0585908,0.05862\n15:55,0.0586112,0.0586112,0.0586112,0.0586112\n16:00,0.0585758,0.0586311,0.0585733,0.0586309\n16:05,0.0586525,0.0586679,0.0586302,0.0586679\n16:10,0.0586586,0.0586586,0.0586397,0.0586554\n16:15,0.0586625,0.0586712,0.0586625,0.0586712\n16:20,0.0586756,0.0586756,0.0586128,0.0586128\n16:25,0.058607,0.0586128,0.0586,0.0586\n16:30,0.0585915,0.0585916,0.0585915,0.0585915\n16:35,0.0585371,0.0585371,0.0584921,0.0585193\n16:40,0.0585207,0.0585515,0.0585207,0.0585515\n16:45,0.0585516,0.0586158,0.0585516,0.0586158\n16:50,0.0586422,0.0586423,0.0586357,0.0586357\n16:55,0.0586385,0.0586385,0.058595,0.058595\nev-cost: known minimum round-trip cost 52 bps (taker fee 26.0 bps per leg, uncalibrated assumption); spread and slippage not observed."
+  },
+  "provenance": {
+    "bar_seconds": 300,
+    "base": "XDG",
+    "decision_at_utc": "2023-10-18T17:00:00Z",
+    "fee": {
+      "basis": "uncalibrated_assumption",
+      "bps_per_leg": "26.0",
+      "legs": 2,
+      "origin_file": "radar_v08/config.py",
+      "origin_key": "UNCALIBRATED_FEES['spot_taker_bps']"
+    },
+    "pair": "XDGUSD",
+    "quote": "USD",
+    "source": {
+      "member": "XDGUSD_5.csv",
+      "zip": "Kraken_OHLCVT_Q4_2023.zip",
+      "zip_sha256": "f95cd4c6458b0e7ebf4866e434b3aabaf0b260089dac8fd867966023ab8087d7"
+    },
+    "venue": "kraken",
+    "window_end_utc": "2023-10-18T17:00:00Z",
+    "window_start_utc": "2023-10-18T15:00:00Z"
+  },
+  "role": "screener",
+  "schema_version": 2,
+  "synthetic": false
+}
