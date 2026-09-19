@@ -100,6 +100,37 @@ class TestSendNtfyNotification(unittest.TestCase):
         self.assertEqual(result, ntfy.RESULT_SUCCESS)
         self.assertEqual(post.call_count, 2)
 
+    def test_notification_id_rides_the_x_id_header(self):
+        fake_response = mock.Mock(status_code=200)
+        with mock.patch("requests.post", return_value=fake_response) as post:
+            ntfy.send_ntfy_notification("title", "message", notification_id="abc123")
+        headers = post.call_args.kwargs["headers"]
+        self.assertEqual(headers["X-ID"], "abc123")
+
+    def test_no_notification_id_omits_the_x_id_header(self):
+        fake_response = mock.Mock(status_code=200)
+        with mock.patch("requests.post", return_value=fake_response) as post:
+            ntfy.send_ntfy_notification("title", "message")
+        headers = post.call_args.kwargs["headers"]
+        self.assertNotIn("X-ID", headers)
+
+    def test_non_latin1_notification_id_is_dropped_not_crashed(self):
+        fake_response = mock.Mock(status_code=200)
+        with mock.patch("requests.post", return_value=fake_response) as post:
+            result = ntfy.send_ntfy_notification("title", "message", notification_id="日本語")
+        self.assertEqual(result, ntfy.RESULT_SUCCESS)
+        headers = post.call_args.kwargs["headers"]
+        self.assertNotIn("X-ID", headers)
+
+    def test_unsafe_or_overlong_notification_id_is_dropped_not_sent(self):
+        fake_response = mock.Mock(status_code=200)
+        for bad in ("abc\r\nX-Evil: 1", "has space", "a" * 65, "semi;colon"):
+            with self.subTest(bad=bad):
+                with mock.patch("requests.post", return_value=fake_response) as post:
+                    result = ntfy.send_ntfy_notification("title", "message", notification_id=bad)
+                self.assertEqual(result, ntfy.RESULT_SUCCESS)
+                self.assertNotIn("X-ID", post.call_args.kwargs["headers"])
+
     def test_offline_failure_never_raises(self):
         import requests
         with mock.patch("requests.post", side_effect=requests.exceptions.ConnectionError("no network")):

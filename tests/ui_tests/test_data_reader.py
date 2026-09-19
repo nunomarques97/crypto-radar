@@ -4,10 +4,12 @@ import sys
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from radar_v08 import config, mock_alert
+from radar_v08.adapters.outbox_store import LifecycleState, OutboxError, OutboxFailure
 from radar_v08.events import create_event_if_new
 from radar_v08.store import SnapshotStore
 from ui.data_reader import DataReader
@@ -174,6 +176,46 @@ class TestEventLifecycle(DataReaderTestCase):
         row = self.store.get_event(event_id)
         lifecycle = self.reader.event_lifecycle(row)
         self.assertTrue(lifecycle["claude_analysed"])
+
+
+class TestLifecycleStateReading(DataReaderTestCase):
+    """T033b: the reader may only show QUEUED/LOADING/RUNNING/FINISHED (or one
+    of the T032 outcomes) when a real `lifecycle_items` row proves it."""
+
+    def test_unknown_item_reads_as_unknown_not_a_guessed_stage(self):
+        self.assertEqual(self.reader.lifecycle_state("no-such-item"), "UNKNOWN")
+
+    def test_a_real_row_is_reported_exactly(self):
+        self.store.record_lifecycle_transition("item-1", LifecycleState.QUEUED, now=T0)
+        self.assertEqual(self.reader.lifecycle_state("item-1"), "QUEUED")
+
+    def test_the_latest_of_several_real_transitions_is_reported(self):
+        self.store.record_lifecycle_transition("item-2", LifecycleState.QUEUED, now=T0)
+        self.store.record_lifecycle_transition("item-2", LifecycleState.RUNNING, now=T0)
+        self.store.record_lifecycle_transition("item-2", LifecycleState.FINISHED, now=T0)
+        self.assertEqual(self.reader.lifecycle_state("item-2"), "FINISHED")
+
+    def test_two_items_never_leak_into_each_other(self):
+        self.store.record_lifecycle_transition("item-a", LifecycleState.QUEUED, now=T0)
+        self.assertEqual(self.reader.lifecycle_state("item-a"), "QUEUED")
+        self.assertEqual(self.reader.lifecycle_state("item-b"), "UNKNOWN")
+
+    def test_each_stage_is_shown_only_once_its_row_exists(self):
+        self.assertEqual(self.reader.lifecycle_state("item-3"), "UNKNOWN")
+        for state in (LifecycleState.QUEUED, LifecycleState.LOADING, LifecycleState.RUNNING, LifecycleState.FINISHED):
+            self.store.record_lifecycle_transition("item-3", state, now=T0)
+            self.assertEqual(self.reader.lifecycle_state("item-3"), state.value)
+
+    def test_a_malformed_item_id_reads_as_unknown_not_an_exception(self):
+        # The outbox refuses ids outside its safe charset (OutboxError); the
+        # reader turns that into UNKNOWN instead of throwing into the UI.
+        self.assertEqual(self.reader.lifecycle_state("bad id with spaces"), "UNKNOWN")
+        self.assertEqual(self.reader.lifecycle_state(""), "UNKNOWN")
+
+    def test_an_unreadable_store_reads_as_unknown(self):
+        failure = OutboxError(OutboxFailure.BUSY, "database is locked")
+        with mock.patch.object(self.store, "lifecycle_state", side_effect=failure):
+            self.assertEqual(self.reader.lifecycle_state("item-1"), "UNKNOWN")
 
 
 if __name__ == "__main__":

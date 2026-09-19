@@ -531,6 +531,49 @@ class TestLifecycleStates(TempCase):
         self.assertEqual({(row[5], row[6]) for row in self.outbox()}, {(None, None)})
 
 
+# --- first_for_subject: a stable read for a consumer that keeps no cursor (T033b) ----------------
+
+
+class TestFirstForSubject(TempCase):
+    def test_none_when_nothing_was_ever_recorded_for_the_subject(self):
+        opened = self.open_store()
+        self.assertIsNone(opened.first_outbox_entry(OutboxKind.EVENT, "no-such-event"))
+
+    def test_returns_the_first_row_even_after_later_writes_to_the_same_subject(self):
+        opened = self.open_store()
+        event_id, _created = create_event_if_new(opened, **event_kwargs())
+        opened.mark_event_processed(event_id, "2026-09-19T10:05:00+00:00")
+        opened.mark_event_notified(event_id, "2026-09-19T10:06:00+00:00")
+        first = opened.first_outbox_entry(OutboxKind.EVENT, event_id)
+        self.assertIsNotNone(first)
+        self.assertEqual(first.delivery_id, f"event:{event_id}:1")  # the insert row, not processed (2) or notified (3)
+        self.assertEqual(len(opened.outbox_entries(kind=OutboxKind.EVENT)), 3)
+
+    def test_the_first_row_survives_closing_and_reopening_the_store(self):
+        opened = self.open_store()
+        event_id, _created = create_event_if_new(opened, **event_kwargs())
+        before = opened.first_outbox_entry(OutboxKind.EVENT, event_id)
+        self.close_store(opened)
+        reopened = self.open_store()
+        reopened.mark_event_notified(event_id, "2026-09-19T10:06:00+00:00")
+        after = reopened.first_outbox_entry(OutboxKind.EVENT, event_id)
+        self.assertEqual(after.delivery_id, before.delivery_id)
+        self.assertEqual(after.seq, before.seq)
+
+    def test_kinds_are_never_mixed(self):
+        opened = self.open_store()
+        opened.record_lifecycle_transition("item-1", LifecycleState.QUEUED, now=T0)
+        self.assertIsNone(opened.first_outbox_entry(OutboxKind.EVENT, "item-1"))
+        self.assertIsNone(opened.first_outbox_entry(OutboxKind.HANDOFF, "item-1"))
+        self.assertIsNotNone(opened.first_outbox_entry(OutboxKind.LIFECYCLE, "item-1"))
+
+    def test_a_malformed_subject_id_is_refused_not_queried(self):
+        opened = self.open_store()
+        with self.assertRaises(OutboxError) as caught:
+            opened.first_outbox_entry(OutboxKind.EVENT, "bad id\n")
+        self.assertEqual(caught.exception.code, OutboxFailure.INVALID_FIELD)
+
+
 # --- handoffs need a real sender and a real receiver --------------------------------------------
 
 

@@ -27,11 +27,28 @@ independent, SQLite-backed dedup by event_id (`events.ntfy_status`) so a
 mobile push failure can be retried across cycles (see `retry_pending_ntfy`)
 without ever re-sending the Windows toast or touching the event's own
 analysis status.
+
+Notification ID (T033b): `notification_id_for_event` derives a stable ID from
+the FIRST EVENT outbox row recorded for the event
+(`SnapshotStore.first_outbox_entry`, T033a). Outbox rows are append-only and
+never deleted, so that row is fixed once written: later writes to the same
+event (`mark_event_notified` right after a send, a status change, ...) add
+new rows after it and never move it. A resend of the same event - a cross-
+cycle ntfy retry, in the same process or after a restart - therefore derives
+the same ID. The derivation never invents one: no store, no event_id, or no
+outbox row yet means `None`, and every send degrades to sending without an ID
+rather than fabricating one. Delivery from the outbox is at-least-once, never
+exactly-once (see `radar_v08/adapters/outbox_store.py`); this module's own
+dedup (`events.notified`, `events.ntfy_status`) is what stops an at-least-
+once outbox row from turning into more than one real toast or push, and the
+stable ID only lets a receiver recognise a resend - ntfy.sh is not relied on
+to deduplicate on it.
 """
 
 from __future__ import annotations
 
 import base64
+import hashlib
 import logging
 import os
 import subprocess
@@ -39,6 +56,7 @@ from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any
 
 from . import clipboard, config, ntfy, prompt_popup
+from .adapters.outbox_store import OutboxError, OutboxKind
 from .prompt_builder import build_prompt_text
 from .terminal import safe_print
 
@@ -57,7 +75,7 @@ _POWERSHELL_AUMID = r"{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v
 # parsing when launched through subprocess (no shell) and silently corrupts
 # embedded quotes - `-File` on a real .ps1 has none of that ambiguity.
 _TOAST_SCRIPT = r"""
-param([string]$TitleB64, [string]$MessageB64, [string]$AppId, [string]$Sound)
+param([string]$TitleB64, [string]$MessageB64, [string]$AppId, [string]$Sound, [string]$Tag)
 $ErrorActionPreference = 'Stop'
 [void][Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime]
 [void][Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime]
@@ -79,6 +97,12 @@ if ($Sound -eq '1') {
 }
 
 $toast = [Windows.UI.Notifications.ToastNotification]::new($template)
+if ($Tag) {
+    # T033b: a stable per-notification tag (from a real outbox delivery ID) so a
+    # resend of the same event replaces this toast instead of piling up a duplicate.
+    $toast.Tag = $Tag
+    $toast.Group = 'crypto-radar'
+}
 [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($AppId).Show($toast)
 """
 
@@ -96,10 +120,19 @@ def _b64(text: str) -> str:
     return base64.b64encode(text.encode("utf-8")).decode("ascii")
 
 
-def send_windows_notification(title: str, message: str, sound: bool = False, app_id: str | None = None) -> bool:
+def send_windows_notification(
+    title: str, message: str, sound: bool = False, app_id: str | None = None,
+    notification_id: str | None = None,
+) -> bool:
     """Best-effort: True if the notification command ran without error. Never
     raises - a notification failure must never take the radar down with it
     (task section 13/16: the radar keeps working regardless).
+
+    `notification_id` (T033b), when given, becomes the toast's Tag/Group so a
+    resend of the same event (same outbox delivery ID, see
+    `notification_id_for_event`) replaces the earlier toast instead of piling
+    up a duplicate. Never fabricated here - `None` (no ID) is the honest
+    default and simply skips setting a Tag.
     """
     if not config.NOTIFICATIONS_ENABLED:
         return False
@@ -110,6 +143,7 @@ def send_windows_notification(title: str, message: str, sound: bool = False, app
                 "powershell", "-NoProfile", "-NonInteractive", "-File", script_path,
                 "-TitleB64", _b64(title), "-MessageB64", _b64(message),
                 "-AppId", app_id or _POWERSHELL_AUMID, "-Sound", "1" if sound else "0",
+                "-Tag", notification_id or "",
             ],
             capture_output=True, text=True, timeout=15,
         )
@@ -174,7 +208,52 @@ def mobile_notifications_enabled() -> bool:
     return ntfy.is_configured()
 
 
-def send_mobile_notification(event: dict[str, Any], level: str, store: "SnapshotStore | None" = None) -> str:
+def stable_notification_id(delivery_id: str) -> str:
+    """Deterministic, transport-safe ID for one notification (T033b), derived
+    from a real outbox delivery ID (`OutboxEntry.delivery_id`). The same
+    delivery ID - the same outbox row read again on a cross-cycle retry or
+    after a restart - always yields the same notification ID: this is what
+    lets the Windows toast (Tag) and the ntfy push (`X-ID` header) recognize
+    a resend as the same notification rather than a brand new alert. Hashed
+    and truncated to 16 hex characters so it always fits the tightest of the
+    two transports' safe-length limits, whatever the delivery ID looks like.
+    """
+    return hashlib.sha256(delivery_id.encode("utf-8")).hexdigest()[:16]
+
+
+def notification_id_for_event(event: dict[str, Any], store: "SnapshotStore | None") -> str | None:
+    """The stable notification ID for one event (T033b), or `None` when it
+    cannot be proven.
+
+    Looks up the first EVENT outbox row ever recorded for `event["event_id"]`
+    (`SnapshotStore.first_outbox_entry`, T033a) and derives the ID from its
+    `delivery_id`. The first row is used, not the latest, because every later
+    event write (including `mark_event_notified`, which the bridge calls right
+    after sending) appends a new row - pinning to the latest would change the
+    ID between the original send and its retry. Never invented: no store, no
+    event_id, or no outbox row recorded yet for this event all mean `None`, and
+    every caller degrades to sending without a stable ID rather than making
+    one up. A store that cannot answer (malformed event_id, busy or broken
+    outbox: `OutboxError`) also means `None`, never an exception - a missing ID
+    must never stop the notification itself.
+    """
+    event_id = event.get("event_id")
+    if store is None or not event_id:
+        return None
+    try:
+        entry = store.first_outbox_entry(OutboxKind.EVENT, event_id)
+    except OutboxError as exc:
+        logger.warning("notification id unavailable for event %s (%s); sending without one", event_id, exc.code.value)
+        return None
+    if entry is None:
+        return None
+    return stable_notification_id(entry.delivery_id)
+
+
+def send_mobile_notification(
+    event: dict[str, Any], level: str, store: "SnapshotStore | None" = None,
+    notification_id: str | None = None,
+) -> str:
     """Sends (or skips) the ntfy push for one event.
 
     Dedup (task section 5): if `store` is given and this event_id already has
@@ -183,6 +262,13 @@ def send_mobile_notification(event: dict[str, Any], level: str, store: "Snapshot
     A FAILED send never touches the event's analysis status; it only ever
     updates `ntfy_status`/`ntfy_last_error` so `retry_pending_ntfy` can pick
     it up later (task section 7).
+
+    `notification_id` (T033b): the caller may pass a precomputed stable ID
+    (e.g. `notify_for_event` reuses the one it already looked up); when
+    omitted, it is derived here via `notification_id_for_event` so a direct
+    call (e.g. `retry_pending_ntfy`'s cross-cycle resend) still gets the same
+    ID as the original send, because the first outbox row it comes from never
+    moves.
     """
     if level == "LOW":
         return ntfy.RESULT_DISABLED  # never sent to the phone, task section 4
@@ -193,6 +279,9 @@ def send_mobile_notification(event: dict[str, Any], level: str, store: "Snapshot
         if existing is not None and existing["ntfy_status"] == "SENT":
             return "SENT"
 
+    if notification_id is None:
+        notification_id = notification_id_for_event(event, store)
+
     title, message = build_mobile_notification_text(event)
     priority = ntfy.priority_for_level(level)
     now_iso = datetime.now(timezone.utc).isoformat()
@@ -200,7 +289,7 @@ def send_mobile_notification(event: dict[str, Any], level: str, store: "Snapshot
     if store is not None and event_id:
         store.set_ntfy_status(event_id, "PENDING", now_iso)
 
-    result = ntfy.send_ntfy_notification(title, message, priority=priority)
+    result = ntfy.send_ntfy_notification(title, message, priority=priority, notification_id=notification_id)
 
     if store is not None and event_id:
         completed_iso = datetime.now(timezone.utc).isoformat()
@@ -271,14 +360,21 @@ def notify_for_event(event: dict[str, Any], store: "SnapshotStore | None" = None
     level = notification_level_for_model(event.get("model"))
     result: dict[str, Any] = {
         "level": level, "windows_sent": False, "ntfy_result": ntfy.RESULT_DISABLED,
-        "prompt_copied": False, "popup_opened": False,
+        "prompt_copied": False, "popup_opened": False, "notification_id": None,
     }
     if level == "LOW":
         return result  # terminal only, task section 4/13
 
+    # T033b: derived once and reused for both channels, so a single call sends
+    # the Windows toast and the ntfy push under the same stable ID.
+    notification_id = notification_id_for_event(event, store)
+    result["notification_id"] = notification_id
+
     title, message = build_notification_text(event)
-    result["windows_sent"] = send_windows_notification(title, message, sound=(level == "HIGH"))
-    result["ntfy_result"] = send_mobile_notification(event, level, store=store)
+    result["windows_sent"] = send_windows_notification(
+        title, message, sound=(level == "HIGH"), notification_id=notification_id
+    )
+    result["ntfy_result"] = send_mobile_notification(event, level, store=store, notification_id=notification_id)
     prompt_result = copy_prompt_for_event(event, store=store)
     result["prompt_copied"] = prompt_result["copied"]
     result["popup_opened"] = prompt_result["popup_opened"]

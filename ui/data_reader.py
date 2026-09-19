@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from radar_v08 import alerts, budgets, config
+from radar_v08.adapters.outbox_store import OutboxError
 from radar_v08.claude_bridge import bridge_health_label
 from radar_v08.store import SnapshotStore
 
@@ -123,6 +124,22 @@ class DataReader:
 
     def agents(self):
         return build_agents(self.store, self.read_output_snapshot())
+
+    def lifecycle_state(self, item_id: str) -> str:
+        """The real T033a lifecycle state for one work item - one of QUEUED,
+        LOADING, RUNNING, FINISHED, FAILED, ABORT_STALE, SUPERSEDED or
+        DROPPED_BACKPRESSURE - or "UNKNOWN" when no `lifecycle_items` row
+        proves one yet. Never inferred from event/bridge status: only a real
+        row recorded via `SnapshotStore.record_lifecycle_transition` can move
+        this away from "UNKNOWN" (T033b). An id the outbox refuses (malformed)
+        or a store that cannot answer (`OutboxError`) is also "UNKNOWN" - the
+        reader never throws into the UI and never guesses.
+        """
+        try:
+            state = self.store.lifecycle_state(item_id)
+        except OutboxError:
+            return "UNKNOWN"
+        return state.value if state is not None else "UNKNOWN"
 
     # -- events / alerts -----------------------------------------------------
 

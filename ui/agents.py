@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from radar_v08 import budgets, config
+from radar_v08.adapters.outbox_store import MAX_READ_LIMIT, OutboxError, OutboxKind
 from radar_v08.claude_bridge import HEALTH_STATES, bridge_health_label
 from radar_v08.store import SnapshotStore
 
@@ -254,24 +255,45 @@ def validate_agent_communications(
     return out
 
 
-def collect_real_agent_communications(store: SnapshotStore) -> list[dict[str, Any]]:
+def collect_real_agent_communications(
+    store: SnapshotStore, registry: list[AgentDefinition] | None = None
+) -> list[dict[str, Any]]:
     """The Phase 4 backend hook point for `get_state()["agent_communications"]`.
 
-    Per the Phase 4 audit: no table or event type in radar_v08 records a real
-    from_agent/to_agent handoff today. Qwen -> Router -> Claude Bridge ->
-    notification is a single-row status-transition pipeline (events.status,
-    model_analyses rows) with no agent-pair identity, and `qwen-red-team` has
-    no backend implementation at all (kind="not_configured" - see
-    TestRedTeamHonesty). `store` is accepted (and unused for now) because a
-    real emitter's most likely home is a query over `store` state; wiring one
-    in later means adding the query here and passing its output through
-    validate_agent_communications() - never touching bridge.py or the
-    frontend, which already consume this contract correctly.
+    T033b: reads every persisted HANDOFF row from the T033a delivery outbox
+    (`SnapshotStore.outbox_entries`, `radar_v08/adapters/outbox_store.py`) and
+    runs it through `validate_agent_communications()` exactly like any other
+    candidate event - same id/from/to/ts requirement, same topology-edge
+    check, same dedup by id. This is a real query now, not a hardcoded [].
 
-    Returns [] until such a real source exists. Never fabricate an entry here.
+    It still returns [] today: nothing in the current pipeline calls
+    `SnapshotStore.record_handoff` (the T032b worker/controller wiring that
+    would is later work - see docs/tasks/results/T033a.md "Not wired yet").
+    A handoff's `sender`/`receiver` are also validated by the outbox as
+    lowercase `[a-z][a-z0-9_]*` role identifiers, which the current
+    hyphenated `AgentDefinition.id`s (e.g. `qwen-14b`) do not match - that
+    projection is explicitly deferred to T033b/T070 in the same note, and is
+    still open (see docs/tasks/results/T033.md). Nothing here fabricates a
+    handoff to paper over either gap: a real, valid row still passes through
+    once one is ever recorded, and only that.
+
+    Every HANDOFF row is read, page by page (`MAX_READ_LIMIT` rows per page),
+    so the newest handoffs are never cut off behind a first page. An outbox
+    that cannot be read (busy, broken, or a corrupt payload: `OutboxError`)
+    yields [] - "nothing proven" - rather than an exception into the UI.
     """
-    del store  # not yet used - see docstring; kept as the future query's home
-    return validate_agent_communications([])
+    raw_events: list[dict[str, Any]] = []
+    after = 0
+    try:
+        while True:
+            entries = store.outbox_entries(after=after, kind=OutboxKind.HANDOFF, limit=MAX_READ_LIMIT)
+            raw_events.extend(dict(entry.payload()) for entry in entries)
+            if len(entries) < MAX_READ_LIMIT:
+                break
+            after = entries[-1].seq
+    except OutboxError:
+        return []
+    return validate_agent_communications(raw_events, registry)
 
 
 def build_connections(registry: list[AgentDefinition] | None = None) -> list[dict[str, str]]:

@@ -3,10 +3,18 @@ import sys
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from radar_v08 import config
+from radar_v08.adapters.outbox_store import (
+    Handoff,
+    HandoffType,
+    LifecycleState,
+    OutboxError,
+    OutboxFailure,
+)
 from radar_v08.claude_bridge import HEALTH_STATES
 from radar_v08.events import create_event_if_new
 from radar_v08.store import SnapshotStore
@@ -252,6 +260,91 @@ class TestAgentCommunications(AgentsTestCase):
             {"id": "c4", "from": "qwen-14b", "to": "qwen-red-team"},  # no ts
         ]
         self.assertEqual(validate_agent_communications(raw), [])
+
+    def test_a_real_persisted_handoff_is_returned(self):
+        """T033b: collect_real_agent_communications now runs a real query over
+        the T033a outbox. The outbox's role charset (lowercase, underscores
+        only - see docs/tasks/results/T033a.md) does not accept the current
+        hyphenated AGENT_REGISTRY ids, so this proves the wiring with a
+        custom registry (the same extensibility seam TestConnections and
+        TestExtensibility already use), not by inventing a handoff on the
+        real registry.
+        """
+        registry = [
+            AgentDefinition(id="agent_a", name="A", role="r", kind="not_configured", connects_to=("agent_b",)),
+            AgentDefinition(id="agent_b", name="B", role="r", kind="not_configured"),
+        ]
+        self.store.record_handoff(
+            Handoff(
+                communication_id="comm-1", run_id="run-1", opportunity_id="opp-1",
+                sender="agent_a", receiver="agent_b", handoff_type=HandoffType.DISPATCH,
+                reason="deadline_fits", at=T0,
+            ),
+            now=T0,
+        )
+        comms = collect_real_agent_communications(self.store, registry=registry)
+        self.assertEqual(len(comms), 1)
+        self.assertEqual(comms[0]["id"], "comm-1")
+        self.assertEqual(comms[0]["from"], "agent_a")
+        self.assertEqual(comms[0]["to"], "agent_b")
+        self.assertEqual(comms[0]["ts"], T0.isoformat())
+        self.assertEqual(comms[0]["type"], "DISPATCH")
+        self.assertEqual(comms[0]["reason"], "deadline_fits")
+
+    def test_a_persisted_handoff_off_the_real_topology_is_still_dropped(self):
+        """Even a real, persisted row is filtered by the topology-edge and
+        dedup rules exactly like a live event would be - a real source is not
+        a license to skip validate_agent_communications()."""
+        registry = [
+            AgentDefinition(id="agent_a", name="A", role="r", kind="not_configured"),
+            AgentDefinition(id="agent_b", name="B", role="r", kind="not_configured"),
+        ]
+        self.store.record_handoff(
+            Handoff(
+                communication_id="comm-1", run_id="run-1", opportunity_id="opp-1",
+                sender="agent_a", receiver="agent_b", handoff_type=HandoffType.DISPATCH,
+                reason="deadline_fits", at=T0,
+            ),
+            now=T0,
+        )
+        self.assertEqual(collect_real_agent_communications(self.store, registry=registry), [])
+
+    def test_a_full_pipeline_with_lifecycle_rows_but_no_handoff_is_zero_communications(self):
+        """Events, a claim, PROCESSED and a full lifecycle walk all write real
+        outbox rows (EVENT/LIFECYCLE) - none of them is a handoff, so none of
+        them may surface as a communication."""
+        event_id, _created = create_event_if_new(self.store, **make_event_kwargs())
+        self.store.claim_event_for_processing(event_id, T0.isoformat())
+        self.store.mark_event_processed(event_id, T0.isoformat())
+        for state in (LifecycleState.QUEUED, LifecycleState.LOADING, LifecycleState.RUNNING, LifecycleState.FINISHED):
+            self.store.record_lifecycle_transition("item-1", state, now=T0)
+        self.assertGreater(len(self.store.outbox_entries()), 0)
+        self.assertEqual(collect_real_agent_communications(self.store), [])
+
+    def test_handoffs_beyond_one_read_page_are_all_returned(self):
+        """Every page is read, so the newest handoffs are never cut off behind
+        the first page (the page size is shrunk to 2 to prove it with 5 rows)."""
+        registry = [
+            AgentDefinition(id="agent_a", name="A", role="r", kind="not_configured", connects_to=("agent_b",)),
+            AgentDefinition(id="agent_b", name="B", role="r", kind="not_configured"),
+        ]
+        for n in range(5):
+            self.store.record_handoff(
+                Handoff(
+                    communication_id=f"comm-{n}", run_id="run-1", opportunity_id="opp-1",
+                    sender="agent_a", receiver="agent_b", handoff_type=HandoffType.DISPATCH,
+                    reason="deadline_fits", at=T0,
+                ),
+                now=T0,
+            )
+        with mock.patch("ui.agents.MAX_READ_LIMIT", 2):
+            comms = collect_real_agent_communications(self.store, registry=registry)
+        self.assertEqual([c["id"] for c in comms], [f"comm-{n}" for n in range(5)])
+
+    def test_an_unreadable_outbox_yields_zero_communications_not_an_exception(self):
+        failure = OutboxError(OutboxFailure.STORAGE_ERROR, "disk I/O error")
+        with mock.patch.object(self.store, "outbox_entries", side_effect=failure):
+            self.assertEqual(collect_real_agent_communications(self.store), [])
 
 
 if __name__ == "__main__":

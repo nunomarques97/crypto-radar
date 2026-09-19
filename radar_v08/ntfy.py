@@ -15,6 +15,13 @@ ntfy.sh being unreachable, slow, or erroring must never take the radar down
 (offline/failure handling requirement). Dedup by event_id and cross-cycle
 retry live in notifications.py, backed by SQLite (`events.ntfy_status`).
 
+`notification_id` (T033b), when given, rides the `X-ID` header ntfy's publish
+API accepts for a caller-chosen message ID (see https://docs.ntfy.sh/publish/
+#message-id). It is derived in notifications.py from a real outbox delivery
+ID and is the same value on a cross-cycle retry of the same event - this
+module does not rely on ntfy.sh itself deduplicating on it; it only makes the
+resend identifiable as the same notification rather than a fresh one.
+
 Zero Kraken private endpoints, zero API keys, zero trading, zero Claude/
 Anthropic calls - the only network destination here is https://ntfy.sh/.
 No authentication is used at this phase (ntfy topics are unauthenticated).
@@ -23,6 +30,7 @@ No authentication is used at this phase (ntfy topics are unauthenticated).
 from __future__ import annotations
 
 import logging
+import re
 import time
 
 import requests
@@ -65,17 +73,41 @@ def _safe_title_header(title: str) -> str:
         return "CRYPTO RADAR"
 
 
-def send_ntfy_notification(title: str, message: str, priority: str = "default") -> str:
+_NOTIFICATION_ID = re.compile(r"[A-Za-z0-9_-]{1,64}")
+
+
+def _safe_notification_id(notification_id: str | None) -> str | None:
+    """`None` unless `notification_id` is 1..64 characters of `[A-Za-z0-9_-]` - a header-safe
+    value that can never smuggle a CR/LF or a separator into the request. Dropping it rather
+    than crashing the send is the same degrade-gracefully rule as `_safe_title_header`: a
+    bad/missing ID never blocks a real send; it just means this one resend isn't identifiable
+    as the same notification. (The ID from notifications.py is always 16 hex characters.)"""
+    if not isinstance(notification_id, str) or _NOTIFICATION_ID.fullmatch(notification_id) is None:
+        return None
+    return notification_id
+
+
+def send_ntfy_notification(
+    title: str, message: str, priority: str = "default", notification_id: str | None = None
+) -> str:
     """POSTs one push notification to ntfy.sh. Never raises: offline,
     timeout, and HTTP error responses all degrade to RESULT_FAILED after a
     limited number of retries. Returns one of RESULT_SUCCESS/RESULT_FAILED/
     RESULT_DISABLED.
+
+    `notification_id` (T033b) is a stable ID derived from a real outbox
+    delivery ID; see the module docstring. Never fabricated here - the caller
+    passes `None` when it has no real outbox row to derive one from, and this
+    function simply sends without the header in that case.
     """
     if not is_configured():
         return RESULT_DISABLED
 
     url = f"{config.NTFY_URL_BASE.rstrip('/')}/{config.NTFY_TOPIC}"
     headers = {"Title": _safe_title_header(title), "Priority": priority}
+    safe_id = _safe_notification_id(notification_id)
+    if safe_id is not None:
+        headers["X-ID"] = safe_id
 
     total_attempts = config.NTFY_MAX_RETRIES + 1
     last_error: str | None = None

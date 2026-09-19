@@ -762,6 +762,31 @@ def lifecycle_state(conn: sqlite3.Connection, item_id: str) -> LifecycleState | 
     return _read(conn, lambda: _lifecycle_state(conn, item))
 
 
+def first_for_subject(conn: sqlite3.Connection, kind: OutboxKind, subject_id: str) -> OutboxEntry | None:
+    """The first row ever recorded for one ``(kind, subject_id)`` pair, read only.
+
+    Outbox rows are append-only and never deleted, so the lowest ``seq`` for a subject is
+    fixed the moment it is written: later writes to the same subject (a status change,
+    ``mark_event_notified``, ...) add rows after it and never move it. That is what lets a
+    consumer that keeps no cursor of its own (T033b's notification id) derive the same
+    stable ID on a resend across cycles or after a restart. ``None`` when nothing has been
+    recorded for the subject yet - never guessed.
+    """
+    if not isinstance(kind, OutboxKind):
+        raise OutboxError(OutboxFailure.INVALID_FIELD, "kind must be an OutboxKind")
+    subject = _identifier(subject_id, "subject_id")
+
+    def work() -> OutboxEntry | None:
+        row = _one(
+            conn,
+            f"SELECT {_COLUMNS} FROM {OUTBOX_TABLE} WHERE kind = ? AND subject_id = ? ORDER BY seq ASC LIMIT 1",
+            (kind.value, subject),
+        )
+        return None if row is None else _entry(row)
+
+    return _read(conn, work)
+
+
 # --- JSONL export -----------------------------------------------------------------------------
 
 

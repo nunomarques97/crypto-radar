@@ -530,6 +530,13 @@ class SnapshotStore:
         with self._lock:
             return outbox_store.export_jsonl(self._conn, path, now=self._now(now))
 
+    def first_outbox_entry(self, kind: OutboxKind, subject_id: str) -> OutboxEntry | None:
+        """Read-only: the first outbox row ever recorded for ``(kind, subject_id)`` - fixed once
+        written, later writes never move it - or ``None`` if nothing was recorded yet
+        (T033b notification IDs; never invented)."""
+        with self._lock:
+            return outbox_store.first_for_subject(self._conn, kind, subject_id)
+
     @contextmanager
     def _event_write(self) -> Iterator[sqlite3.Cursor]:
         """One transaction for an `events` change plus its outbox row: both commit or neither.
