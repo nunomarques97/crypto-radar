@@ -21,7 +21,14 @@
 #   reserve_vram_gib      VRAM kept free for the rest of the system, >= 1.5
 #   reserve_ram_gib       RAM kept free for the rest of the system, >= 4
 #
-# Not wired yet: radar_v08/qwen.py still reads config.QWEN_* (follow-up T050c).
+# Wired (T050c): radar_v08/config.py resolves the default profile at import and
+# radar_v08/qwen.py sends its model, endpoint, hard_timeout_seconds, temperature
+# and think. RADAR_QWEN_MODEL, RADAR_QWEN_TIMEOUT_SECONDS, RADAR_QWEN_TEMPERATURE
+# and RADAR_OLLAMA_URL still override it, through these same rules; the endpoint
+# must also be in config.OLLAMA_ALLOWED_HOSTS. A missing or invalid file or
+# override leaves Qwen UNAVAILABLE (no call), never a built-in default.
+# Not sent yet: context_tokens, output_cap_tokens (no num_ctx / num_predict) and
+# the reserves are validated but unused until T051.
 
 schema_version = 1
 default_profile = "screener-qwen3-14b"

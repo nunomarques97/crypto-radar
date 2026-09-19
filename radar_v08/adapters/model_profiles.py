@@ -27,6 +27,11 @@ Rules:
   ``127.0.0.1`` with an explicit port). ``model`` must be a local Ollama name with an
   explicit tag, no registry host, and no cloud tag (``cloud`` or ``*-cloud``), because
   an Ollama cloud model is forwarded to a remote service by the local daemon.
+
+``apply_overrides`` (T050c) applies raw override text (read by the caller) to an enabled
+profile through the same rules (model name, role timeout limit, temperature 0, loopback
+endpoint) and fails closed the same way; ``radar_v08/config.py`` uses it for
+``RADAR_QWEN_*`` and ``RADAR_OLLAMA_URL``.
 """
 
 from __future__ import annotations
@@ -36,7 +41,7 @@ import os
 import re
 import tomllib
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 from pathlib import Path
 from types import MappingProxyType
@@ -381,3 +386,67 @@ def load_inference_profile(
 ) -> InferenceProfile:
     """Load ``path`` and return the ``InferenceProfile`` for ``profile_id`` (default when ``None``)."""
     return load_model_profiles(path).resolve(profile_id)
+
+
+def _override_number(text: str, where: str) -> float:
+    try:
+        number = float(text)
+    except ValueError:
+        raise ModelProfileError(ProfileErrorCode.WRONG_TYPE, where, "expected a number") from None
+    if not math.isfinite(number):
+        raise ModelProfileError(ProfileErrorCode.WRONG_TYPE, where, "expected a finite number")
+    return number
+
+
+def apply_overrides(
+    profile: ModelProfile,
+    *,
+    model: str | None = None,
+    hard_timeout_seconds: str | None = None,
+    temperature: str | None = None,
+    endpoint: str | None = None,
+) -> ModelProfile:
+    """Return ``profile`` with raw text overrides applied, each validated by the file's own rules.
+
+    The overrides are raw text read by the caller (``None`` = not set). They pass exactly the checks a
+    value in the file passes: explicit tag and no cloud tag for ``model``, whole seconds inside
+    the role's OC-1 limit for ``hard_timeout_seconds``, ``0`` for ``temperature``, loopback
+    ``http`` with an explicit port for ``endpoint``. Any failure raises ``ModelProfileError``;
+    nothing is clamped or defaulted. The profile must be enabled.
+    """
+    if profile.inference is None:
+        raise ModelProfileError(ProfileErrorCode.PROFILE_DISABLED, profile.profile_id)
+    new_model = profile.model if model is None else _model(model, "RADAR_QWEN_MODEL")
+    new_timeout = profile.hard_timeout_seconds
+    if hard_timeout_seconds is not None:
+        where = "RADAR_QWEN_TIMEOUT_SECONDS"
+        seconds = _override_number(hard_timeout_seconds, where)
+        if not seconds.is_integer():
+            raise ModelProfileError(ProfileErrorCode.WRONG_TYPE, where, "expected whole seconds")
+        new_timeout = int(seconds)
+        _check_limits(
+            profile.role,
+            OC1_ROLE_PROFILES[profile.role],
+            new_timeout,
+            profile.context_tokens,
+            profile.output_cap_tokens,
+            where,
+        )
+    new_temperature = profile.temperature
+    if temperature is not None:
+        new_temperature = _override_number(temperature, "RADAR_QWEN_TEMPERATURE")
+        if new_temperature != 0.0:
+            raise ModelProfileError(ProfileErrorCode.TEMPERATURE_NOT_ZERO, "RADAR_QWEN_TEMPERATURE")
+    new_endpoint = profile.endpoint if endpoint is None else _endpoint(endpoint, "RADAR_OLLAMA_URL")
+    try:
+        inference = replace(profile.inference, model=new_model, hard_timeout_seconds=new_timeout)
+    except WorkerConfigError as error:
+        raise ModelProfileError(ProfileErrorCode.WORKER_REJECTED, profile.profile_id, str(error)) from None
+    return replace(
+        profile,
+        model=new_model,
+        hard_timeout_seconds=new_timeout,
+        temperature=new_temperature,
+        endpoint=new_endpoint,
+        inference=inference,
+    )

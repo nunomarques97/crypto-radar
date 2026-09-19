@@ -9,7 +9,10 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping
+from dataclasses import dataclass
 from types import MappingProxyType
+
+from .adapters import model_profiles as _model_profiles
 
 # --------------------------------------------------------------------------
 # Endpoints (public only - see security.py for the enforcement of this)
@@ -281,14 +284,84 @@ TRADEABILITY_HARD_MAX_SPREAD_BPS = float(os.getenv("RADAR_TRADEABILITY_HARD_MAX_
 # --------------------------------------------------------------------------
 # Qwen 3:14b (Ollama, local, structured output) - review/veto only, never a
 # score calculator (architecture doc section 6).
+#
+# T050c: model, endpoint, timeout, temperature and think come from the default
+# profile of radar_v08/model_profiles.toml, read by the T050a loader. The
+# overrides RADAR_QWEN_MODEL, RADAR_QWEN_TIMEOUT_SECONDS, RADAR_QWEN_TEMPERATURE
+# and RADAR_OLLAMA_URL still win over the profile, but each passes the loader's
+# own rules (model_profiles.apply_overrides) and the endpoint must also be an
+# exact member of OLLAMA_ALLOWED_HOSTS (qwen._assert_local_ollama's rule; the
+# stricter rule wins). On any failure QWEN_RUNTIME is None, QWEN_PROFILE_ERROR
+# holds the typed ModelProfileError, QWEN_MODEL / QWEN_TIMEOUT_SECONDS /
+# QWEN_TEMPERATURE / QWEN_THINK are None (never a value written here) and
+# qwen.review_finalists answers UNAVAILABLE without calling Ollama. Importing
+# this module never raises because of the profile or these overrides.
+# Not sent to Ollama yet: context_tokens, output_cap_tokens (no num_ctx /
+# num_predict) and the resource reserves - pending T051.
 # --------------------------------------------------------------------------
-OLLAMA_URL = os.getenv("RADAR_OLLAMA_URL", "http://localhost:11434")
 OLLAMA_ALLOWED_HOSTS = {"http://localhost:11434", "http://127.0.0.1:11434"}
-QWEN_MODEL = os.getenv("RADAR_QWEN_MODEL", "qwen3:14b")
-QWEN_TIMEOUT_SECONDS = float(os.getenv("RADAR_QWEN_TIMEOUT_SECONDS", "30.0"))
+
+
+@dataclass(frozen=True, slots=True)
+class QwenRuntime:
+    """What qwen.py actually sends: one resolved, validated default profile plus overrides."""
+
+    profile_id: str
+    model: str
+    endpoint: str  # exact base URL called: the override text as given, else the profile's
+    timeout_seconds: float
+    temperature: float
+    think: bool
+
+
+def resolve_qwen_runtime(environ: Mapping[str, str], path: str | os.PathLike[str]) -> QwenRuntime:
+    """Default profile of ``path`` plus the ``RADAR_QWEN_*`` / ``RADAR_OLLAMA_URL`` overrides.
+
+    Raises ``ModelProfileError`` (typed code) on any problem; never falls back to a default.
+    """
+    profiles = _model_profiles.load_model_profiles(path)
+    url_override = environ.get("RADAR_OLLAMA_URL")
+    profile = _model_profiles.apply_overrides(
+        profiles.get(profiles.default_profile_id),
+        model=environ.get("RADAR_QWEN_MODEL"),
+        hard_timeout_seconds=environ.get("RADAR_QWEN_TIMEOUT_SECONDS"),
+        temperature=environ.get("RADAR_QWEN_TEMPERATURE"),
+        endpoint=url_override,
+    )
+    inference = profile.inference_profile()
+    endpoint = profile.endpoint if url_override is None else url_override
+    if endpoint not in OLLAMA_ALLOWED_HOSTS:
+        where = "RADAR_OLLAMA_URL" if url_override is not None else f"profile {profile.profile_id!r}.endpoint"
+        raise _model_profiles.ModelProfileError(
+            _model_profiles.ProfileErrorCode.ENDPOINT_REFUSED, where, "not in OLLAMA_ALLOWED_HOSTS"
+        )
+    return QwenRuntime(
+        profile_id=inference.profile_id,
+        model=inference.model,
+        endpoint=endpoint,
+        timeout_seconds=float(inference.hard_timeout_seconds),
+        temperature=profile.temperature,
+        think=inference.think,
+    )
+
+
+def _resolve_qwen_runtime_at_import() -> tuple[QwenRuntime | None, _model_profiles.ModelProfileError | None]:
+    try:
+        return resolve_qwen_runtime(os.environ, _model_profiles.DEFAULT_PROFILES_PATH), None
+    except _model_profiles.ModelProfileError as error:
+        return None, error
+
+
+QWEN_RUNTIME, QWEN_PROFILE_ERROR = _resolve_qwen_runtime_at_import()
+# The URL qwen.py would call. When the runtime failed, an override is kept verbatim so
+# qwen._assert_local_ollama refuses exactly the text given (today's behaviour); no URL
+# is invented when there is neither a valid profile nor an override.
+OLLAMA_URL: str | None = QWEN_RUNTIME.endpoint if QWEN_RUNTIME is not None else os.environ.get("RADAR_OLLAMA_URL")
+QWEN_MODEL: str | None = QWEN_RUNTIME.model if QWEN_RUNTIME is not None else None
+QWEN_TIMEOUT_SECONDS: float | None = QWEN_RUNTIME.timeout_seconds if QWEN_RUNTIME is not None else None
+QWEN_TEMPERATURE: float | None = QWEN_RUNTIME.temperature if QWEN_RUNTIME is not None else None
+QWEN_THINK: bool | None = QWEN_RUNTIME.think if QWEN_RUNTIME is not None else None  # profile: think=false
 QWEN_MAX_RETRIES_ON_INVALID = int(os.getenv("RADAR_QWEN_MAX_RETRIES", "1"))
-QWEN_THINK = False  # architecture doc section 6: think=false
-QWEN_TEMPERATURE = float(os.getenv("RADAR_QWEN_TEMPERATURE", "0.0"))
 
 # Deterministic pre-gate: which L3 finalists are even worth a Qwen call.
 QWEN_PREGATE_MIN_OPPORTUNITY = float(os.getenv("RADAR_QWEN_PREGATE_MIN_OPPORTUNITY", "50.0"))
