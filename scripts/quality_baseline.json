@@ -8,13 +8,6 @@
   "findings": [
     {
       "tool": "mypy",
-      "path": "radar.py",
-      "code": "arg-type",
-      "message": "Argument \"json\" to \"post\" has incompatible type \"dict[str, object]\"; expected \"JsonType\"",
-      "count": 1
-    },
-    {
-      "tool": "mypy",
       "path": "radar_v08/anomaly.py",
       "code": "arg-type",
       "message": "Argument 1 to \"append\" of \"list\" has incompatible type \"float | int | None\"; expected \"float\"",
@@ -240,13 +233,6 @@
     {
       "tool": "ruff",
       "path": "radar_v08/opportunity.py",
-      "code": "I001",
-      "message": "Import block is un-sorted or un-formatted",
-      "count": 1
-    },
-    {
-      "tool": "ruff",
-      "path": "scripts/run_tests.py",
       "code": "I001",
       "message": "Import block is un-sorted or un-formatted",
       "count": 1

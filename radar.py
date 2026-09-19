@@ -598,7 +598,7 @@ def qwen_review(candidates: list[Candidate]) -> tuple[dict[str, Any], int]:
         + json.dumps(items, separators=(",", ":"), ensure_ascii=False)
     )
 
-    body = {
+    body: dict[str, str | bool] = {
         "model": OLLAMA_MODEL,
         "system": system,
         "prompt": prompt,

@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import shutil
 import subprocess
 import sys
 import tempfile
-
+from pathlib import Path
 
 REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
 SENSITIVE_ENVIRONMENT_NAMES = {
