@@ -509,7 +509,7 @@ def run_heartbeat(
         for entry in assets_eligible:
             primary = entry.primary_market
             if primary is not None and _consumable(ticker_results.get(primary.pair_key), clock_result):
-                l1_entries.append(entry)
+                l1_entries.append((entry, primary))
             else:
                 l1_blocked.append(entry.asset)
         if l1_blocked:
@@ -531,8 +531,7 @@ def run_heartbeat(
 
         l1_by_asset: dict[str, tuple] = {}
         any_non_warmup = False
-        for entry in l1_entries:
-            m = entry.primary_market
+        for entry, m in l1_entries:
             fut = entry.futures
             features = compute_features(
                 store=store,
@@ -823,7 +822,7 @@ def run_heartbeat(
             entry, _features, result = l1_by_asset[asset]
             m = entry.primary_market
             fut = entry.futures
-            event_id, event_status = event_by_asset.get(asset, (None, None))
+            candidate_event_id, candidate_event_status = event_by_asset.get(asset, (None, None))
             candidate = build_candidate(
                 asset=asset,
                 spot_pair=m.display,
@@ -834,8 +833,8 @@ def run_heartbeat(
                 l3_result=l3_results.get(asset),
                 qwen_review=qwen_reviews.get(asset),
                 router_result=router_results.get(asset),
-                event_id=event_id,
-                event_status=event_status,
+                event_id=candidate_event_id,
+                event_status=candidate_event_status,
             )
             shortlist.append(candidate)
 

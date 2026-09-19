@@ -240,9 +240,9 @@ def compute_l2_features(
     f.high_4h, f.low_4h = high_4h, low_4h
     f.high_24h, f.low_24h = high_24h, low_24h
 
-    if high_4h is not None:
+    if high_4h is not None and low_4h is not None:
         f.breakout_dist_4h_atr = breakout_distance_atr(current_last, high_4h, low_4h, atr_1h)
-    if high_24h is not None:
+    if high_24h is not None and low_24h is not None:
         f.breakout_dist_24h_atr = breakout_distance_atr(current_last, high_24h, low_24h, atr_1h)
 
     trend_bars = contiguous_tail(closed_bars, config.STRUCTURE_TREND_BARS, config.OHLC_INTERVAL_MINUTES)
@@ -254,7 +254,7 @@ def compute_l2_features(
     f.range_expansion = range_expansion(closed_bars[-1], atr_5m)
     f.vwap_distance_pct = vwap_distance_pct(current_last, vwap_today)
 
-    if high_24h is not None:
+    if high_24h is not None and low_24h is not None:
         f.breakout_state = breakout_state(current_last, high_24h, low_24h, atr_1h)
         if atr_1h is None:
             f.flags.append("breakout_24h_atr_unavailable")

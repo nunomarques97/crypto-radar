@@ -15,65 +15,9 @@
     },
     {
       "tool": "mypy",
-      "path": "radar_v08/heartbeat.py",
-      "code": "assignment",
-      "message": "Incompatible types in assignment (expression has type \"None\", variable has type \"str\")",
-      "count": 1
-    },
-    {
-      "tool": "mypy",
-      "path": "radar_v08/heartbeat.py",
-      "code": "assignment",
-      "message": "Incompatible types in assignment (expression has type \"SpotMarket | None\", variable has type \"SpotMarket\")",
-      "count": 1
-    },
-    {
-      "tool": "mypy",
-      "path": "radar_v08/kraken_spot.py",
-      "code": "return-value",
-      "message": "Incompatible return value type (got \"tuple[dict[str, Any] | None, bool]\", expected \"tuple[dict[str, dict[str, Any]], bool]\")",
-      "count": 1
-    },
-    {
-      "tool": "mypy",
-      "path": "radar_v08/kraken_spot.py",
-      "code": "union-attr",
-      "message": "Item \"None\" of \"dict[str, Any] | None\" has no attribute \"keys\"",
-      "count": 1
-    },
-    {
-      "tool": "mypy",
-      "path": "radar_v08/l2_features.py",
-      "code": "arg-type",
-      "message": "Argument 3 to \"breakout_distance_atr\" has incompatible type \"float | None\"; expected \"float\"",
-      "count": 2
-    },
-    {
-      "tool": "mypy",
-      "path": "radar_v08/l2_features.py",
-      "code": "arg-type",
-      "message": "Argument 3 to \"breakout_state\" has incompatible type \"float | None\"; expected \"float\"",
-      "count": 1
-    },
-    {
-      "tool": "mypy",
-      "path": "radar_v08/notifications.py",
-      "code": "arg-type",
-      "message": "Argument 1 to \"notification_level_for_model\" has incompatible type \"Any | None\"; expected \"str\"",
-      "count": 1
-    },
-    {
-      "tool": "mypy",
       "path": "ui/app.py",
       "code": "import-not-found",
       "message": "Cannot find implementation or library stub for module named \"webview\"",
-      "count": 1
-    },
-    {
-      "tool": "ruff",
-      "path": "radar_v08/claude_bridge.py",
-      "code": "I001",
-      "message": "Import block is un-sorted or un-formatted",
       "count": 1
     }
   ]

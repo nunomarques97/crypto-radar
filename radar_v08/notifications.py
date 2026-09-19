@@ -156,7 +156,9 @@ def send_windows_notification(
         return False
 
 
-def notification_level_for_model(model_demand: str) -> str:
+def notification_level_for_model(model_demand: str | None) -> str:
+    if model_demand is None:
+        return "LOW"
     return config.NOTIFICATION_LEVEL_BY_MODEL.get(model_demand, "LOW")
 
 

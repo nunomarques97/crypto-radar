@@ -58,7 +58,11 @@ from .domain.invocation import (
     ReleaseReason,
     TransitionStatus,
 )
-from .prompts import BRIDGE_SYSTEM_PROMPT_V1, MODEL_TASK_INSTRUCTIONS, build_user_message
+from .prompts import (
+    BRIDGE_SYSTEM_PROMPT_V1,
+    MODEL_TASK_INSTRUCTIONS,
+    build_user_message,
+)
 from .store import SnapshotStore
 
 logger = logging.getLogger("radar_v08.claude_bridge")

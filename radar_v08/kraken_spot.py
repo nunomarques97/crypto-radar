@@ -115,20 +115,16 @@ def get_asset_pairs(
     """
     cached, fetched_at, known_missing = load_asset_pairs_cache(cache_path)
     age = time.time() - fetched_at
-    needs_refresh = cached is None or age > ttl_seconds
 
-    if not needs_refresh and ticker_keys:
-        known = set(cached.keys())
-        if ticker_keys - known - known_missing:
-            needs_refresh = True
+    if cached is not None and age <= ttl_seconds:
+        unseen = (ticker_keys - set(cached.keys()) - known_missing) if ticker_keys else set()
+        if not unseen:
+            return cached, False
 
-    if needs_refresh:
-        data = fetch_asset_pairs(session)
-        missing_keys = (ticker_keys - set(data.keys())) if ticker_keys else set()
-        save_asset_pairs_cache(data, cache_path, missing_keys=missing_keys)
-        return data, True
-
-    return cached, False
+    data = fetch_asset_pairs(session)
+    missing_keys = (ticker_keys - set(data.keys())) if ticker_keys else set()
+    save_asset_pairs_cache(data, cache_path, missing_keys=missing_keys)
+    return data, True
 
 
 def parse_ticker_row(key: str, row: dict[str, Any], meta: dict[str, Any], timestamp: str) -> SpotTickerRow:
