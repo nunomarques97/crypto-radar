@@ -827,3 +827,178 @@ def _cashflow(
         funding=money(funding, "funding"),
         net=money(net, "net"),
     )
+
+
+
+# ---------------------------------------------------------------------------
+# Lower bound when the book was not observed (T051a, D64)
+# ---------------------------------------------------------------------------
+#
+# Added after T040 without changing anything above: ``price_round_trip`` keeps its
+# behaviour, and a scenario whose spread and slippage are unknown stays COST_INCOMPLETE
+# there. ``round_trip_cost_lower_bound`` answers a narrower question for such a scenario:
+# the least the round trip can cost, from the fees alone. It never produces a total.
+
+
+class CostBoundKind(Enum):
+    """What a ``CostLowerBound`` is. There is deliberately no total or complete member."""
+
+    LOWER_BOUND = "COST_LOWER_BOUND"
+
+
+class CostBoundErrorCode(Enum):
+    NOT_A_SCENARIO = "not_a_scenario"
+    FEE_MISSING = "fee_missing"
+    FEE_NEGATIVE = "fee_negative"
+    COMPONENT_OBSERVED = "component_observed"
+    FUNDING_NOT_BOUNDED = "funding_not_bounded"
+
+
+class CostBoundError(ValueError):
+    """The scenario cannot yield a fee lower bound. Raised, never turned into zero."""
+
+    def __init__(self, code: CostBoundErrorCode, field: str, detail: str) -> None:
+        self.code = code
+        self.field = field
+        super().__init__(f"{code.value}: {field}: {detail}")
+
+
+@dataclass(frozen=True, slots=True)
+class CostLowerBound:
+    """Known minimum cost of one round trip whose spread and slippage were not observed.
+
+    A lower bound only: ``status`` is always COST_INCOMPLETE, the spread and slippage
+    lines are listed in ``missing`` (never set to zero) and there is no total field, no
+    money and no cashflow. ``fees`` keeps each leg's fee input, i.e. its basis and source
+    (for example ``UNCALIBRATED_ASSUMPTION`` and the configuration key it was copied from).
+    """
+
+    policy_version: str
+    kind: CostBoundKind
+    status: CostStatus
+    instrument: CostInstrument
+    side: Side
+    size: ScenarioSize
+    spread_convention: SpreadConvention
+    fee_lines: tuple[CostLine, ...]
+    fees: tuple[FeeInput, ...]
+    missing: tuple[MissingLine, ...]
+    not_applicable: tuple[NotApplicableLine, ...]
+    lower_bound_fraction: Decimal
+
+    @property
+    def lower_bound_bps(self) -> Decimal:
+        fraction = self.lower_bound_fraction
+        return _exact(lambda: fraction * _BPS, "CostLowerBound.lower_bound_bps")
+
+    @property
+    def is_lower_bound(self) -> bool:
+        """Always True: this value may only be read as "the round trip costs at least"."""
+        return self.kind is CostBoundKind.LOWER_BOUND
+
+
+def round_trip_cost_lower_bound(scenario: CostScenarioInput) -> CostLowerBound:
+    """Fee-only lower bound on the round-trip cost, as a fraction of the reference notional.
+
+    For a scenario with unknown spread and slippage (``Missing``), e.g. a candle history
+    with no order book. Each leg's fee rate ``phi`` (``FeeInput.bps / 10,000``, required,
+    ``>= 0``) is charged on the reference notional N (the mid at the decision instant), so
+    the bound is ``phi_entry + phi_exit`` (2 x 26.0 bps = 52 bps for two uncalibrated spot
+    taker legs).
+
+    Proof, per leg, for every spread ``0 <= h < 1`` and slippage ``0 <= s < 1`` that could
+    have been observed (``price_round_trip`` would then report, as a fraction of N, a leg
+    cost of |fill - 1| itemised as spread + slippage, plus the fee ``phi * fill``):
+
+    * BUY: the fill is ``f = (1+h)(1+s)`` (or ``1+s`` from the mid), so ``f >= 1`` and the
+      leg costs ``(f - 1) + phi * f >= phi``, since ``f - 1 >= 0`` and ``phi * f >= phi``.
+    * SELL: the fill is ``f = (1-h)(1-s)`` (or ``1-s``), so ``0 < f <= 1`` and the leg costs
+      ``(1 - f) + phi * f``; that minus ``phi`` is ``(1 - f)(1 - phi) >= 0``, because
+      ``f <= 1`` and ``phi < 1`` (a ``FeeInput`` is below 10,000 bps).
+
+    Summing both legs, the COMPLETE total of ``price_round_trip`` for the same fees is
+    never below this bound, in both spread conventions and for LONG and SHORT. Funding
+    would break the argument (a SHORT can receive it), so a futures scenario with funding
+    intervals is refused; spot and zero intervals have no funding line.
+
+    Refused with ``CostBoundError``: a missing fee (``FEE_MISSING``), a negative fee (a
+    rebate, ``FEE_NEGATIVE``), an observed spread or slippage (``COMPONENT_OBSERVED``:
+    price it with ``price_round_trip``) and funding (``FUNDING_NOT_BOUNDED``). Pure: no
+    environment, no configuration, no I/O.
+    """
+    if not isinstance(scenario, CostScenarioInput):
+        raise CostBoundError(CostBoundErrorCode.NOT_A_SCENARIO, "scenario", "expected CostScenarioInput")
+    convention = scenario.spread_convention
+    missing: list[MissingLine] = []
+    not_applicable: list[NotApplicableLine] = []
+
+    if convention is SpreadConvention.SLIPPAGE_FROM_MID:
+        if isinstance(scenario.spread, SpreadInput):
+            raise CostInputError(
+                CostErrorCode.DOUBLE_COUNTED_SPREAD,
+                "spread",
+                "slippage measured from the mid already contains the half spread",
+            )
+        for leg in Leg:
+            not_applicable.append(
+                NotApplicableLine(CostComponent.SPREAD, leg, NotApplicableReason.SPREAD_INCLUDED_IN_SLIPPAGE_FROM_MID)
+            )
+    elif isinstance(scenario.spread, SpreadInput):
+        raise CostBoundError(CostBoundErrorCode.COMPONENT_OBSERVED, "spread", "observed: use price_round_trip")
+    else:
+        reason = scenario.spread.reason if isinstance(scenario.spread, Missing) else MissingReason.NOT_OBSERVED
+        detail = scenario.spread.detail if isinstance(scenario.spread, Missing) else "spread not supplied"
+        for leg in Leg:
+            missing.append(MissingLine(CostComponent.SPREAD, leg, reason, detail))
+
+    for leg in Leg:
+        direction = leg_direction(scenario.side, leg)
+        slip = scenario.buy_slippage if direction is TradeDirection.BUY else scenario.sell_slippage
+        if not isinstance(slip, Missing):
+            raise CostBoundError(
+                CostBoundErrorCode.COMPONENT_OBSERVED, f"{direction.value}_slippage", "observed: use price_round_trip"
+            )
+        missing.append(MissingLine(CostComponent.SLIPPAGE, leg, slip.reason, slip.detail))
+
+    fee_lines: list[CostLine] = []
+    fees: list[FeeInput] = []
+    for leg, fee in ((Leg.ENTRY, scenario.entry_fee), (Leg.EXIT, scenario.exit_fee)):
+        if not isinstance(fee, FeeInput):
+            raise CostBoundError(CostBoundErrorCode.FEE_MISSING, f"{leg.value}_fee", "a fee rate is required")
+        if fee.bps < 0:
+            raise CostBoundError(CostBoundErrorCode.FEE_NEGATIVE, f"{leg.value}_fee", f"{fee.bps} bps is a rebate")
+        fee_bps = fee.bps
+        fraction = _exact(lambda: fee_bps / _BPS, "fee_lower_bound")
+        fee_lines.append(
+            CostLine(CostComponent.FEE, leg, leg_direction(scenario.side, leg), fraction, f"{fee.basis.value}: {fee.source}")
+        )
+        fees.append(fee)
+
+    if scenario.instrument.kind is InstrumentKind.SPOT:
+        if isinstance(scenario.funding, FundingInput):
+            raise CostInputError(CostErrorCode.FUNDING_NOT_APPLICABLE, "funding", "spot has no funding")
+        not_applicable.append(NotApplicableLine(CostComponent.FUNDING, None, NotApplicableReason.SPOT_HAS_NO_FUNDING))
+    elif scenario.funding_intervals == 0:
+        not_applicable.append(NotApplicableLine(CostComponent.FUNDING, None, NotApplicableReason.ZERO_FUNDING_INTERVALS))
+    else:
+        raise CostBoundError(
+            CostBoundErrorCode.FUNDING_NOT_BOUNDED, "funding", "funding can be received: no fee-only lower bound"
+        )
+    not_applicable.append(NotApplicableLine(CostComponent.FX, None, NotApplicableReason.NO_MONEY_PROJECTION))
+
+    known = [line.fraction for line in fee_lines]
+    bound = _exact(lambda: sum(known, Decimal(0)), "lower_bound")
+    return CostLowerBound(
+        policy_version=COST_POLICY_VERSION,
+        kind=CostBoundKind.LOWER_BOUND,
+        status=CostStatus.INCOMPLETE,
+        instrument=scenario.instrument,
+        side=scenario.side,
+        size=scenario.size,
+        spread_convention=convention,
+        fee_lines=tuple(fee_lines),
+        fees=tuple(fees),
+        missing=tuple(missing),
+        not_applicable=tuple(not_applicable),
+        lower_bound_fraction=bound,
+    )

@@ -136,6 +136,12 @@ class GoldSource(Enum):
     """Closed: deterministic fixture labels only. There is no LLM source."""
 
     DETERMINISTIC_FIXTURE = "deterministic_fixture"
+    # Corpus schema v2 (T051a, D64), members added only: gold computed from recorded data by
+    # a documented deterministic rule (never an LLM, a future return or an opportunity
+    # score), and the explicit absence of gold. A GOLD_UNAVAILABLE case carries
+    # ``abstain_expected`` None and is left out of every abstention denominator.
+    DETERMINISTIC_RULE = "deterministic_rule"
+    GOLD_UNAVAILABLE = "gold_unavailable"
 
 
 class CaseOutcome(Enum):
@@ -914,6 +920,7 @@ def _abstention_recall(results: Iterable[CaseResult]) -> tuple[int, int]:
 def _false_abstention(results: Iterable[CaseResult]) -> tuple[int, int]:
     """Abstentions over every case that expects an answer."""
     expected = [item for item in results if not item.abstain_expected]
+    expected = [item for item in expected if item.abstain_expected is not None]  # schema v2: no gold, no denominator
     return sum(1 for item in expected if item.abstained is True), len(expected)
 
 
@@ -1013,3 +1020,14 @@ def report_json(report: BenchmarkReport) -> str:
 
 def report_sha256(report: BenchmarkReport) -> str:
     return hashlib.sha256(report_json(report).encode("utf-8")).hexdigest()
+
+
+def gold_unavailable() -> DeterministicGold:
+    """The gold of a corpus schema v2 case that has none (T051a, D64): ``GOLD_UNAVAILABLE``.
+
+    ``abstain_expected`` is None: such a case is outside both abstention denominators
+    (``_abstention_recall`` counts only true labels, ``_false_abstention`` skips None) and
+    its result reports ``abstain_expected`` as null. The v1 annotation of
+    ``DeterministicGold`` is left as it is because this module only gains lines (D64).
+    """
+    return DeterministicGold(source=GoldSource.GOLD_UNAVAILABLE, abstain_expected=None)  # type: ignore[arg-type]

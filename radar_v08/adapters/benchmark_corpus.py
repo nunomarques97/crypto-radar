@@ -46,6 +46,7 @@ import os
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
 
@@ -58,6 +59,7 @@ from ..workflow.benchmark import (
     DeterministicGold,
     GoldSource,
     LockedPartition,
+    gold_unavailable,
     report_json,
     report_sha256,
 )
@@ -207,6 +209,8 @@ def _partition_named(name: str) -> CorpusPartition:
 
 
 def _parse_lock(document: object, where: str) -> _Lock:
+    if isinstance(document, dict) and document.get("schema_version") == CORPUS_SCHEMA_VERSION_V2:
+        return _parse_lock_v2(document, where)  # schema v2 (T051a, D64); v1 below unchanged
     invalid = CorpusErrorCode.LOCK_INVALID
     top = _table(document, _LOCK_KEYS, invalid, where)
     if type(top["schema_version"]) is not int or top["schema_version"] != CORPUS_SCHEMA_VERSION:
@@ -279,6 +283,8 @@ def _scan(directory: Path, partition: CorpusPartition) -> dict[str, Path]:
 
 
 def _case(document: object, path: Path, partition: CorpusPartition, lock: _Lock) -> tuple[BenchmarkCase, str]:
+    if isinstance(lock, _LockV2) or (isinstance(document, dict) and document.get("schema_version") == CORPUS_SCHEMA_VERSION_V2):
+        return _case_v2(document, path, partition, lock)  # schema v2 (T051a, D64); v1 below unchanged
     where = os.fspath(path)
     invalid = CorpusErrorCode.CASE_INVALID
     top = _table(document, _CASE_KEYS, invalid, where)
@@ -313,6 +319,8 @@ def _case(document: object, path: Path, partition: CorpusPartition, lock: _Lock)
     gold = _table(top["gold"], _GOLD_KEYS, invalid, f"{where}.gold")
     source = next((item for item in GoldSource if item.value == gold["source"]), None)
     if source is None:
+        raise CorpusError(invalid, f"{where}.gold.source", "only deterministic_fixture gold is accepted")
+    if source is not GoldSource.DETERMINISTIC_FIXTURE:  # the v2 members are refused in a v1 case
         raise CorpusError(invalid, f"{where}.gold.source", "only deterministic_fixture gold is accepted")
     if gold["human_review"] is not None:
         raise CorpusError(invalid, f"{where}.gold.human_review", "human gold has no format in schema v1")
@@ -437,3 +445,243 @@ def write_report(report: BenchmarkReport, output_dir: str | os.PathLike[str]) ->
     except OSError as error:
         raise CorpusError(CorpusErrorCode.OUTPUT_DIR_REFUSED, where, type(error).__name__) from None
     return path
+
+
+# -- corpus schema v2 (T051a, D59/D60/D64) ------------------------------------------------------
+#
+# Added after T050b without changing anything above: a v1 lock and its cases load exactly as
+# before. Schema v2 is the real OC-1 section 6 corpus built from recorded Kraken OHLCVT data by
+# ``adapters.oc1_corpus_builder``:
+#
+# * The lock adds ``separation`` (last development instant, first holdout instant, the gap
+#   between them, at least ``MIN_PARTITION_GAP_SECONDS``) and ``builder`` (rules version, seed,
+#   and every source zip with its sha256). The lock sha256 covers the whole v2 document.
+# * A case adds ``gold_status``, ``construction`` (the documented rule that built it) and
+#   ``provenance`` (venue, pair, UTC window and decision instant, source zip + sha256 + CSV
+#   member, and the fee value with its origin). Its gold is computed by a deterministic rule
+#   (``gold.source = "deterministic_rule"``) and is REQUIRED in the three categories that have
+#   one (invalid/stale, insufficient evidence, no edge), with the abstention fixed by the
+#   category. In admissible positive and conflicting evidence the gold is REQUIRED to be null,
+#   with ``gold_status = "gold_unavailable"``: those cases load with ``gold_unavailable()`` and
+#   stay outside every abstention denominator.
+# * Every case must lie on its side of the separation: a development case ends (decision
+#   instant) no later than the development end, a holdout case starts no earlier than the
+#   holdout start. v1 and v2 files never mix: a v2 lock accepts only v2 cases and vice versa.
+
+CORPUS_SCHEMA_VERSION_V2 = 2
+MIN_PARTITION_GAP_SECONDS = 7 * 24 * 3600
+GOLD_STATUS_DETERMINISTIC = "deterministic"
+GOLD_STATUS_UNAVAILABLE = "gold_unavailable"
+# Categories with deterministic gold in schema v2 (D60); the other two carry none.
+GOLD_CATEGORIES_V2: frozenset[CaseCategory] = frozenset(
+    {CaseCategory.INVALID_OR_STALE, CaseCategory.INSUFFICIENT_EVIDENCE, CaseCategory.ADMISSIBLE_NO_EDGE}
+)
+MAX_SOURCE_ZIPS = 64
+
+_UTC_TIMESTAMP = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z")
+_RULE_ID = re.compile(r"[a-z0-9][a-z0-9._:-]{0,63}")
+_ZIP_NAME = re.compile(r"Kraken_OHLCVT_Q[1-4]_20[0-9]{2}\.zip")
+_ASSET = re.compile(r"[A-Z0-9]{2,12}")
+_DECIMAL_TEXT = re.compile(r"[0-9]{1,5}(\.[0-9]{1,8})?")
+_SHORT_TEXT = re.compile(r"[\x20-\x7e]{1,160}")
+_LOCK_V2_KEYS = _LOCK_KEYS | {"separation", "builder"}
+_SEPARATION_KEYS = frozenset({"development_end_utc", "holdout_start_utc", "gap_seconds", "min_gap_seconds"})
+_BUILDER_KEYS = frozenset({"rules_version", "seed", "source_zips"})
+_SOURCE_ZIP_KEYS = frozenset({"zip", "sha256"})
+_CASE_V2_KEYS = _CASE_KEYS | {"gold_status", "construction", "provenance"}
+_GOLD_V2_KEYS = frozenset({"source", "rule", "abstain_expected", "human_review"})
+_CONSTRUCTION_KEYS = frozenset({"rule", "rules_version", "details"})
+_PROVENANCE_KEYS = frozenset(
+    {"venue", "pair", "base", "quote", "bar_seconds", "window_start_utc", "window_end_utc", "decision_at_utc", "source", "fee"}
+)
+_SOURCE_KEYS = frozenset({"zip", "zip_sha256", "member"})
+_FEE_KEYS = frozenset({"bps_per_leg", "legs", "basis", "origin_file", "origin_key"})
+
+
+@dataclass(frozen=True, slots=True)
+class _Separation:
+    development_end: datetime
+    holdout_start: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class _LockV2(_Lock):
+    separation: _Separation
+    rules_version: str
+    source_zips: Mapping[str, str]
+
+
+def _utc(value: object, code: CorpusErrorCode, where: str) -> datetime:
+    text = _text(value, _UTC_TIMESTAMP, code, where)
+    try:
+        return datetime.strptime(text, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
+    except ValueError:
+        raise CorpusError(code, where, "not a UTC timestamp") from None
+
+
+def _integer(value: object, code: CorpusErrorCode, where: str, minimum: int = 0) -> int:
+    if type(value) is not int or value < minimum:
+        raise CorpusError(code, where, f"expected an integer >= {minimum}")
+    return value
+
+
+def _parse_lock_v2(document: dict[str, object], where: str) -> _LockV2:
+    invalid = CorpusErrorCode.LOCK_INVALID
+    top = _table(document, _LOCK_V2_KEYS, invalid, where)
+    if type(top["schema_version"]) is not int or top["schema_version"] != CORPUS_SCHEMA_VERSION_V2:
+        raise CorpusError(invalid, f"{where}.schema_version", "unsupported")
+    separation = _table(top["separation"], _SEPARATION_KEYS, invalid, f"{where}.separation")
+    development_end = _utc(separation["development_end_utc"], invalid, f"{where}.separation.development_end_utc")
+    holdout_start = _utc(separation["holdout_start_utc"], invalid, f"{where}.separation.holdout_start_utc")
+    gap = _integer(separation["gap_seconds"], invalid, f"{where}.separation.gap_seconds")
+    minimum = _integer(separation["min_gap_seconds"], invalid, f"{where}.separation.min_gap_seconds")
+    if minimum != MIN_PARTITION_GAP_SECONDS:
+        raise CorpusError(invalid, f"{where}.separation.min_gap_seconds", f"must be {MIN_PARTITION_GAP_SECONDS}")
+    if gap != int((holdout_start - development_end).total_seconds()) or gap < minimum:
+        raise CorpusError(invalid, f"{where}.separation.gap_seconds", "must equal the gap and be at least the minimum")
+    builder = _table(top["builder"], _BUILDER_KEYS, invalid, f"{where}.builder")
+    rules_version = _text(builder["rules_version"], _RULE_ID, invalid, f"{where}.builder.rules_version")
+    _integer(builder["seed"], invalid, f"{where}.builder.seed")
+    zips = builder["source_zips"]
+    if not isinstance(zips, list) or not zips or len(zips) > MAX_SOURCE_ZIPS:
+        raise CorpusError(invalid, f"{where}.builder.source_zips", f"expected 1..{MAX_SOURCE_ZIPS} entries")
+    source_zips: dict[str, str] = {}
+    for index, item in enumerate(zips):
+        entry = _table(item, _SOURCE_ZIP_KEYS, invalid, f"{where}.builder.source_zips[{index}]")
+        name = _text(entry["zip"], _ZIP_NAME, invalid, f"{where}.builder.source_zips[{index}].zip")
+        if name in source_zips:
+            raise CorpusError(invalid, f"{where}.builder.source_zips[{index}]", "duplicate zip")
+        source_zips[name] = _text(entry["sha256"], _SHA256, invalid, f"{where}.builder.source_zips[{index}].sha256")
+    view = {key: top[key] for key in _LOCK_KEYS}
+    view["schema_version"] = CORPUS_SCHEMA_VERSION
+    base = _parse_lock(view, where)
+    return _LockV2(
+        corpus_id=base.corpus_id,
+        synthetic=base.synthetic,
+        lock_sha256=canonical_sha256(document),
+        entries=base.entries,
+        separation=_Separation(development_end=development_end, holdout_start=holdout_start),
+        rules_version=rules_version,
+        source_zips=source_zips,
+    )
+
+
+def _provenance(value: object, lock: _LockV2, partition: CorpusPartition, where: str) -> None:
+    invalid = CorpusErrorCode.CASE_INVALID
+    table = _table(value, _PROVENANCE_KEYS, invalid, where)
+    if table["venue"] != "kraken":
+        raise CorpusError(invalid, f"{where}.venue", "only kraken")
+    pair = _text(table["pair"], _ASSET, invalid, f"{where}.pair")
+    base = _text(table["base"], _ASSET, invalid, f"{where}.base")
+    quote = _text(table["quote"], _ASSET, invalid, f"{where}.quote")
+    if pair != base + quote:
+        raise CorpusError(invalid, f"{where}.pair", "must be base + quote")
+    if table["bar_seconds"] != 300 or type(table["bar_seconds"]) is not int:
+        raise CorpusError(invalid, f"{where}.bar_seconds", "only 5-minute bars")
+    start = _utc(table["window_start_utc"], invalid, f"{where}.window_start_utc")
+    end = _utc(table["window_end_utc"], invalid, f"{where}.window_end_utc")
+    decision = _utc(table["decision_at_utc"], invalid, f"{where}.decision_at_utc")
+    if not start < end <= decision:
+        raise CorpusError(invalid, f"{where}.window_start_utc", "window must end no later than the decision")
+    source = _table(table["source"], _SOURCE_KEYS, invalid, f"{where}.source")
+    zip_name = _text(source["zip"], _ZIP_NAME, invalid, f"{where}.source.zip")
+    zip_sha = _text(source["zip_sha256"], _SHA256, invalid, f"{where}.source.zip_sha256")
+    if lock.source_zips.get(zip_name) != zip_sha:
+        raise CorpusError(invalid, f"{where}.source", "zip and sha256 must be listed in the lock")
+    if source["member"] != f"{pair}_5.csv":
+        raise CorpusError(invalid, f"{where}.source.member", "must be the pair's 5-minute CSV")
+    fee = _table(table["fee"], _FEE_KEYS, invalid, f"{where}.fee")
+    _text(fee["bps_per_leg"], _DECIMAL_TEXT, invalid, f"{where}.fee.bps_per_leg")
+    if fee["legs"] != 2 or type(fee["legs"]) is not int:
+        raise CorpusError(invalid, f"{where}.fee.legs", "a round trip has two legs")
+    for key in ("basis", "origin_file", "origin_key"):
+        _text(fee[key], _SHORT_TEXT, invalid, f"{where}.fee.{key}")
+    separation = lock.separation
+    if partition is CorpusPartition.DEVELOPMENT and decision > separation.development_end:
+        raise CorpusError(invalid, f"{where}.decision_at_utc", "after the development end")
+    if partition is CorpusPartition.HOLDOUT and start < separation.holdout_start:
+        raise CorpusError(invalid, f"{where}.window_start_utc", "before the holdout start")
+
+
+def _gold_v2(top: Mapping[str, object], category: CaseCategory, where: str) -> DeterministicGold:
+    invalid = CorpusErrorCode.CASE_INVALID
+    status = top["gold_status"]
+    gold = top["gold"]
+    if category not in GOLD_CATEGORIES_V2:
+        if gold is not None or status != GOLD_STATUS_UNAVAILABLE:
+            raise CorpusError(invalid, f"{where}.gold", f"{category.value} has no gold: null with gold_unavailable")
+        return gold_unavailable()
+    if gold is None or status != GOLD_STATUS_DETERMINISTIC:
+        raise CorpusError(invalid, f"{where}.gold", f"{category.value} requires deterministic gold")
+    table = _table(gold, _GOLD_V2_KEYS, invalid, f"{where}.gold")
+    if table["source"] != GoldSource.DETERMINISTIC_RULE.value:
+        raise CorpusError(invalid, f"{where}.gold.source", "only deterministic_rule gold is accepted in schema v2")
+    _text(table["rule"], _RULE_ID, invalid, f"{where}.gold.rule")
+    if table["human_review"] is not None:
+        raise CorpusError(invalid, f"{where}.gold.human_review", "human gold has no format yet")
+    abstain = table["abstain_expected"]
+    if type(abstain) is not bool or ABSTAIN_BY_CATEGORY[category] is not abstain:
+        raise CorpusError(invalid, f"{where}.gold.abstain_expected", f"fixed by category {category.value}")
+    return DeterministicGold(source=GoldSource.DETERMINISTIC_RULE, abstain_expected=abstain)
+
+
+def _case_v2(document: object, path: Path, partition: CorpusPartition, lock: _Lock) -> tuple[BenchmarkCase, str]:
+    where = os.fspath(path)
+    invalid = CorpusErrorCode.CASE_INVALID
+    if not isinstance(lock, _LockV2):
+        raise CorpusError(invalid, f"{where}.schema_version", "a schema v2 case needs a schema v2 lock")
+    top = _table(document, _CASE_V2_KEYS, invalid, where)
+    if type(top["schema_version"]) is not int or top["schema_version"] != CORPUS_SCHEMA_VERSION_V2:
+        raise CorpusError(invalid, f"{where}.schema_version", "a schema v2 lock needs schema v2 cases")
+    case_id = _text(top["case_id"], _CASE_ID, invalid, f"{where}.case_id")
+    if path.name != f"{case_id}.json":
+        raise CorpusError(invalid, f"{where}.case_id", "must match the file name")
+    if top["partition"] != partition.value:
+        raise CorpusError(CorpusErrorCode.PARTITION_CHANGED, f"{where}.partition", f"file is in {partition.value}")
+    category = next((item for item in CaseCategory if item.value == top["category"]), None)
+    if category is None:
+        raise CorpusError(invalid, f"{where}.category", "unknown category")
+    role = next((item for item in Role if item.value == top["role"]), None)
+    if role is None:
+        raise CorpusError(invalid, f"{where}.role", "unknown role")
+    if type(top["synthetic"]) is not bool or top["synthetic"] is not lock.synthetic:
+        raise CorpusError(invalid, f"{where}.synthetic", "must match the lock")
+    prompt = _table(top["prompt"], _PROMPT_KEYS, invalid, f"{where}.prompt")
+    system, user = prompt["system"], prompt["user"]
+    if type(system) is not str or type(user) is not str or not system or not user:
+        raise CorpusError(invalid, f"{where}.prompt", "system and user must be non-empty strings")
+    if len(system) > MAX_PROMPT_CHARS or len(user) > MAX_PROMPT_CHARS:
+        raise CorpusError(invalid, f"{where}.prompt", f"over {MAX_PROMPT_CHARS} characters")
+    evidence = top["evidence_ids"]
+    if not isinstance(evidence, list) or len(evidence) > MAX_EVIDENCE_IDS:
+        raise CorpusError(invalid, f"{where}.evidence_ids", f"expected a list of at most {MAX_EVIDENCE_IDS}")
+    evidence_ids = [_text(item, _EVIDENCE_ID, invalid, f"{where}.evidence_ids") for item in evidence]
+    if len(set(evidence_ids)) != len(evidence_ids):
+        raise CorpusError(invalid, f"{where}.evidence_ids", "duplicate evidence id")
+    gold = _gold_v2(top, category, where)
+    construction = _table(top["construction"], _CONSTRUCTION_KEYS, invalid, f"{where}.construction")
+    _text(construction["rule"], _RULE_ID, invalid, f"{where}.construction.rule")
+    if construction["rules_version"] != lock.rules_version:
+        raise CorpusError(invalid, f"{where}.construction.rules_version", "must match the lock")
+    if not isinstance(construction["details"], dict):
+        raise CorpusError(invalid, f"{where}.construction.details", "expected an object")
+    _provenance(top["provenance"], lock, partition, f"{where}.provenance")
+    case_sha = canonical_sha256(document)
+    entry = lock.entries[partition][case_id]
+    if case_sha != entry.sha256:
+        code = CorpusErrorCode.HOLDOUT_EDITED if partition is CorpusPartition.HOLDOUT else CorpusErrorCode.CASE_HASH_MISMATCH
+        raise CorpusError(code, where, "content differs from the lock")
+    if prompt_fingerprint(system, user, evidence_ids) != entry.prompt_sha256:
+        raise CorpusError(CorpusErrorCode.LOCK_INVALID, where, "prompt_sha256 does not match the locked case")
+    case = BenchmarkCase(
+        case_id=case_id,
+        partition=partition,
+        category=category,
+        role=role,
+        system=system,
+        user=user,
+        evidence_ids=tuple(evidence_ids),
+        gold=gold,
+        case_sha256=case_sha,
+    )
+    return case, case_sha
