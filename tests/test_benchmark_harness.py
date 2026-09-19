@@ -29,8 +29,9 @@ import subprocess
 import sys
 import tempfile
 import time
+import unicodedata
 import unittest
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from unittest import mock
 
@@ -1119,6 +1120,230 @@ class TestAlnumRunIsLinearAndTokensUnchanged(unittest.TestCase):
                 elapsed = time.perf_counter() - started
                 self.assertLess(elapsed, seconds)
                 self.assertFalse(refused)
+
+
+class TestResponseScanBudget(unittest.TestCase):
+    """T050c1b (D54 b; docs/forja/reports/T2-a1-security.md nits 1 and 2): one character budget
+    for the whole reply, checked before the risk gate reads anything, fail closed.
+    """
+
+    # Distinct, 64 characters, no digit and no risk term: the risk gate reads them as plain text.
+    MAX_IDS = tuple(f"ev-{'z' * k}{'q' * (61 - k)}" for k in range(bm.MAX_CITED_IDS))
+    WORST_NFKC = "ﷺ"  # NFKC turns it into 18 Arabic letters, no digit
+    # Security Reviewer worst case: 16 strings of 4096 x U+2152 in one reply (6.79 s before).
+    SECURITY_WORST = ("⅒" * 4096,) * 16
+    # Existing ReDoS test (TestPerCaseGates.test_risk_wording_scan_stays_linear_on_hostile_text):
+    # 5.0 s within the per-string cap, 1.0 s for text refused unread.
+    REDOS_WITHIN_CAP_SECONDS = 5.0
+    REDOS_REFUSED_UNREAD_SECONDS = 1.0
+
+    def largest_valid(self, rationale: str | None = None) -> dict[str, object]:
+        return {
+            "abstain": False,
+            "classification": "insufficient_evidence",  # the longest category value (21)
+            "cited_evidence_ids": list(self.MAX_IDS),
+            "rationale": self.WORST_NFKC * bm.MAX_RATIONALE_CHARS if rationale is None else rationale,
+        }
+
+    def owning_case(self) -> BenchmarkCase:
+        template = by_id(holdout(), "hold-positive-001")
+        return dataclasses.replace(template, evidence_ids=self.MAX_IDS)
+
+    def run_one(self, case_id: str, result: object):
+        """Same as ``TestPerCaseGates.run_one``: one scripted reply in an otherwise valid run."""
+        partition = holdout()
+        script = valid_script(partition)
+        script[by_id(partition, case_id).user] = (result, OK_RESOURCES)
+        model = FakeModel(script)
+        report = run_benchmark(partition, default_profile(), model, model)
+        return report, next(item for item in report.cases if item.case_id == case_id)
+
+    def run_single(self, case: BenchmarkCase, payload: object):
+        partition = LockedPartition("synthetic-harness-v1", LOCK_SHA256, True, CorpusPartition.HOLDOUT, (case,))
+        model = FakeModel({case.user: (reply(payload), OK_RESOURCES)})
+        return run_benchmark(partition, default_profile(), model, model).cases[0]
+
+    def test_budget_value_is_the_largest_valid_answer_after_worst_nfkc(self) -> None:
+        self.assertEqual(bm.MAX_SCANNED_PAYLOAD_CHARS, 12_920)
+        self.assertEqual(bm.MAX_SCANNED_PAYLOAD_CHARS, 1 + 48 + 1 + 21 + 1 + 32 * 64 + 600 * 18)
+        self.assertEqual(sum(len(key) for key in bm._OUTPUT_KEYS), 48)
+        self.assertEqual(max(len(category.value) for category in CaseCategory), 21)
+        self.assertIsNotNone(bm._EVIDENCE_ID.fullmatch("a" * 64))
+        self.assertIsNone(bm._EVIDENCE_ID.fullmatch("a" * 65))
+        self.assertEqual(default_profile().inference.output_cap_tokens, 768)  # the OC-1 cap the value is argued from
+
+    def test_nfkc_expands_one_character_to_at_most_18(self) -> None:
+        # The budget multiplies the rationale by 18; prove no code point expands further here.
+        worst = max(
+            len(unicodedata.normalize("NFKC", chr(code)))
+            for code in range(sys.maxunicode + 1)
+            if not 0xD800 <= code <= 0xDFFF
+        )
+        self.assertEqual(worst, 18)
+        self.assertEqual(len(unicodedata.normalize("NFKC", self.WORST_NFKC)), 18)
+        for identifier in self.MAX_IDS:  # ids are ASCII: NFKC leaves them as they are
+            self.assertEqual(unicodedata.normalize("NFKC", identifier), identifier)
+
+    def test_largest_valid_answer_passes_and_limit_plus_one_is_refused(self) -> None:
+        largest = self.largest_valid()
+        self.assertEqual(len(set(self.MAX_IDS)), 32)
+        self.assertTrue(all(len(identifier) == 64 for identifier in self.MAX_IDS))
+        self.assertIsNotNone(parse_screener_answer(largest))  # schema-valid, every field at its maximum
+        self.assertFalse(bm.exceeds_scan_budget(largest))  # exactly MAX_SCANNED_PAYLOAD_CHARS units
+        with self.subTest("the case owns every cited id: ACCEPTED"):
+            item = self.run_single(self.owning_case(), largest)
+            self.assertIs(item.outcome, CaseOutcome.ACCEPTED)
+            self.assertEqual(item.cited_count, 32)
+            self.assertTrue(item.first_pass_schema_valid)
+        with self.subTest("the fixture case owns none of them: CITATION_OUT_OF_SCOPE"):
+            _, item = self.run_one("hold-positive-001", reply(largest))
+            self.assertIs(item.outcome, CaseOutcome.CITATION_OUT_OF_SCOPE)
+            self.assertTrue(item.first_pass_schema_valid)
+        with self.subTest("an ASCII rationale at its maximum passes too"):
+            item = self.run_single(self.owning_case(), self.largest_valid("Fresh and valid. " * 35 + "Calm."))
+            self.assertIs(item.outcome, CaseOutcome.ACCEPTED)
+        over = self.largest_valid(self.WORST_NFKC * bm.MAX_RATIONALE_CHARS + "a")  # 12,921 units
+        with self.subTest("limit + 1 after NFKC: the new typed code, before the schema gate"):
+            self.assertTrue(bm.exceeds_scan_budget(over))
+            item = self.run_single(self.owning_case(), over)
+            self.assertIs(item.outcome, CaseOutcome.RESPONSE_BUDGET_EXCEEDED)
+            self.assertEqual(item.outcome.value, "response_budget_exceeded")
+            self.assertFalse(item.first_pass_schema_valid)
+            self.assertIsNone(item.classification)  # never partly accepted
+            self.assertIsNone(item.cited_count)
+            self.assertFalse(item.rationale_unverified)
+        with self.subTest("limit and limit + 1 counted raw"):
+            self.assertFalse(bm.exceeds_scan_budget("a" * bm.MAX_SCANNED_PAYLOAD_CHARS))
+            self.assertTrue(bm.exceeds_scan_budget("a" * (bm.MAX_SCANNED_PAYLOAD_CHARS + 1)))
+            # NFKC shrinks "e" + U+0301 to one character: the raw count still applies.
+            self.assertTrue(bm.exceeds_scan_budget("é" * (bm.MAX_SCANNED_PAYLOAD_CHARS // 2 + 1)))
+
+    def test_gate_order_is_unchanged(self) -> None:
+        case = by_id(holdout(), "hold-positive-001")
+        with self.subTest("within budget, risk text is still RISK_AUTHORITY_REJECTED"):
+            risky = answer(case, rationale="Stop at 97. " + "a" * 4000)
+            self.assertFalse(bm.exceeds_scan_budget(risky))
+            _, item = self.run_one("hold-positive-001", reply(risky))
+            self.assertIs(item.outcome, CaseOutcome.RISK_AUTHORITY_REJECTED)
+        with self.subTest("the 14 risk payloads and the 94 end-to-end phrases stay within the budget"):
+            phrases = tuple(
+                dict.fromkeys(TestPerCaseGates.ATTEMPT1_PHRASES + TestPerCaseGates.ATTEMPT2_PHRASES + TestPerCaseGates.OWN_VARIANTS)
+            )
+            for text in phrases:
+                self.assertFalse(bm.exceeds_scan_budget(answer(case, rationale=text)))
+            self.assertFalse(bm.exceeds_scan_budget({**answer(case), "legs": [{"position_size": 0.1}]}))
+        with self.subTest("the output cap still decides before the budget"):
+            _, item = self.run_one(
+                "hold-positive-001", reply(answer(case, rationale="a" * 20_000), output_tokens=769)
+            )
+            self.assertIs(item.outcome, CaseOutcome.OUTPUT_CAP_EXCEEDED)
+        with self.subTest("the budget decides before the risk gate reads anything"):
+            over = answer(case, rationale=list(self.SECURITY_WORST))
+            real_gate = bm.invades_risk_domain
+            read: list[object] = []
+
+            def watched_gate(payload: object, allowed_ids: Sequence[str] = (), _depth: int = 0) -> bool:
+                read.append(payload)  # recursive calls also land here: the patch is module-wide
+                return real_gate(payload, allowed_ids, _depth)
+
+            with mock.patch.object(bm, "invades_risk_domain", side_effect=watched_gate):
+                _, item = self.run_one("hold-positive-001", reply(over))
+            self.assertIs(item.outcome, CaseOutcome.RESPONSE_BUDGET_EXCEEDED)
+            self.assertTrue(read)  # the five valid cases were still read by the risk gate
+            self.assertFalse(any(payload is over or payload is over["rationale"] for payload in read))
+        source = inspect.getsource(bm.evaluate_case)
+        self.assertLess(source.index("exceeds_scan_budget("), source.index("invades_risk_domain("))
+        self.assertLess(source.index("invades_risk_domain("), source.index("parse_screener_answer("))
+        self.assertLess(source.index("OUTPUT_CAP_EXCEEDED"), source.index("exceeds_scan_budget("))
+
+    def test_security_reviewer_worst_case_is_fast(self) -> None:
+        case = by_id(holdout(), "hold-positive-001")
+        shapes = {
+            "16 strings in one list": answer(case, rationale=list(self.SECURITY_WORST)),
+            "16 extra string values": {**answer(case), **{f"note{i}": text for i, text in enumerate(self.SECURITY_WORST)}},
+            "16 strings as keys": {**answer(case), **{text + chr(0x41 + i): 1 for i, text in enumerate(self.SECURITY_WORST)}},
+        }
+        for name, payload in shapes.items():
+            with self.subTest(name):
+                started = time.perf_counter()
+                refused = bm.exceeds_scan_budget(payload)
+                elapsed = time.perf_counter() - started
+                self.assertTrue(refused)
+                self.assertLess(elapsed, self.REDOS_REFUSED_UNREAD_SECONDS)
+                started = time.perf_counter()
+                report, item = self.run_one("hold-positive-001", reply(payload))
+                elapsed = time.perf_counter() - started
+                self.assertIs(item.outcome, CaseOutcome.RESPONSE_BUDGET_EXCEEDED)
+                self.assertLess(elapsed, self.REDOS_REFUSED_UNREAD_SECONDS)
+        with self.subTest("the linear scan alone (T050c1a) is also under the ReDoS limit"):
+            started = time.perf_counter()
+            bm.invades_risk_domain(shapes["16 strings in one list"], case.evidence_ids)
+            self.assertLess(time.perf_counter() - started, self.REDOS_WITHIN_CAP_SECONDS)
+
+    def test_hostile_shapes_are_refused_without_a_long_walk(self) -> None:
+        deep: list[object] = []
+        node = deep
+        for _ in range(200_000):  # far past the recursion limit
+            child: list[object] = []
+            node.append(child)
+            node = child
+        cyclic: list[object] = []
+        cyclic.append(cyclic)
+        hostile = {
+            "deep nesting": deep,
+            "cycle": cyclic,
+            "many empty strings": [""] * (bm.MAX_SCANNED_PAYLOAD_CHARS + 1),
+            "many numbers": list(range(1_000_000)),
+            "wide object": {f"k{i}": None for i in range(bm.MAX_SCANNED_PAYLOAD_CHARS // 2 + 1)},
+        }
+        for name, payload in hostile.items():
+            with self.subTest(name):
+                started = time.perf_counter()
+                self.assertTrue(bm.exceeds_scan_budget(payload))
+                self.assertLess(time.perf_counter() - started, self.REDOS_REFUSED_UNREAD_SECONDS)
+        self.assertFalse(bm.exceeds_scan_budget([""] * (bm.MAX_SCANNED_PAYLOAD_CHARS - 1)))  # 1 + (budget - 1)
+        self.assertFalse(bm.exceeds_scan_budget(None))
+        self.assertFalse(bm.exceeds_scan_budget({1: "non-string key"}))  # the risk gate refuses it, not the budget
+
+    def test_budget_rejection_counts_in_the_denominator_and_blocks_promotion(self) -> None:
+        case = by_id(holdout(), "hold-positive-001")
+        over = answer(case, rationale=list(self.SECURITY_WORST))
+        report, item = self.run_one("hold-positive-001", reply(over))
+        self.assertIs(item.outcome, CaseOutcome.RESPONSE_BUDGET_EXCEEDED)
+        self.assertEqual((report.denominator, report.accepted, report.first_pass_schema_valid), (6, 5, 5))
+        self.assertEqual(report.outcome_counts[CaseOutcome.RESPONSE_BUDGET_EXCEEDED], 1)
+        self.assertIn(BlockReason.HARD_LIMIT_FAILURES, report.block_reasons)
+        self.assertIn(BlockReason.FIRST_PASS_SCHEMA_BELOW_99, report.block_reasons)
+        self.assertIs(report.promotion, PromotionStatus.BLOCKED)
+        document = json.loads(report_json(report))
+        self.assertEqual(document["outcome_counts"]["response_budget_exceeded"], 1)
+        self.assertEqual(document["denominator"], 6)
+        self.assertNotIn(self.SECURITY_WORST[0][:64], report_json(report))  # no model text in the report
+
+    def test_report_is_byte_identical_for_the_same_input(self) -> None:
+        partition = holdout()
+
+        def script() -> dict[str, tuple[object, object]]:
+            table = valid_script(partition)
+            over_case = by_id(partition, "hold-no-edge-001")
+            table[over_case.user] = (reply(answer(over_case, rationale=list(self.SECURITY_WORST))), OK_RESOURCES)
+            return table
+
+        first_model = FakeModel(script())
+        first = run_benchmark(partition, default_profile(), first_model, first_model)
+        shuffled_cases = list(partition.cases)
+        random.Random(11).shuffle(shuffled_cases)
+        shuffled = LockedPartition(
+            partition.corpus_id, partition.lock_sha256, partition.synthetic, partition.partition, tuple(shuffled_cases)
+        )
+        second_model = FakeModel(script())
+        second = run_benchmark(shuffled, default_profile(), second_model, second_model)
+        self.assertEqual(report_json(first).encode("utf-8"), report_json(second).encode("utf-8"))
+        self.assertEqual(report_sha256(first), report_sha256(second))
+        self.assertEqual(
+            {outcome.value: count for outcome, count in first.outcome_counts.items() if count},
+            {"accepted": 5, "response_budget_exceeded": 1},
+        )
 
 
 class TestContextAndRoleGates(unittest.TestCase):

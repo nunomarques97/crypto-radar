@@ -20,8 +20,11 @@ Gates applied to every case, in this order (the first failing gate decides the o
 4. **Call result**: a timeout is ``TIMEOUT``; a malformed reply is ``SCHEMA_INVALID``;
    any other failure (or an adapter exception) is ``INFERENCE_FAILED``; a reply over the
    output cap is ``OUTPUT_CAP_EXCEEDED``.
-5. **Risk domain** (fail closed; RISK.md: model text never defines risk values): a hard
-   ``RISK_AUTHORITY_REJECTED`` for any key at any depth whose name is a risk term, and for
+5. **Risk domain** (fail closed; RISK.md: model text never defines risk values). First the
+   whole payload is measured against ``MAX_SCANNED_PAYLOAD_CHARS`` (every key and string
+   value, counted raw and again after NFKC; every other node counts one): over the budget
+   is a hard ``RESPONSE_BUDGET_EXCEEDED``, refused unread, never truncated and never partly
+   accepted. Within the budget, a hard ``RISK_AUTHORITY_REJECTED`` for any key at any depth whose name is a risk term, and for
    any string value (``rationale``, ``classification`` and cited ids included) that, after
    NFKC folding, removal of format characters and accents, casefolding, mapping of Cyrillic
    and Greek look-alike letters, joining of letters split by marks or single spaces
@@ -145,6 +148,7 @@ class CaseOutcome(Enum):
     TIMEOUT = "timeout"
     INFERENCE_FAILED = "inference_failed"
     OUTPUT_CAP_EXCEEDED = "output_cap_exceeded"
+    RESPONSE_BUDGET_EXCEEDED = "response_budget_exceeded"
     RISK_AUTHORITY_REJECTED = "risk_authority_rejected"
     SCHEMA_INVALID = "schema_invalid"
     CITATION_OUT_OF_SCOPE = "citation_out_of_scope"
@@ -300,6 +304,77 @@ _RISK_KEY_FRAGMENTS = (
 # Whatever survives is still never trusted: an accepted answer with a non-empty rationale
 # is flagged ``rationale_unverified`` and that blocks promotion (``_block_reasons``).
 MAX_SCANNED_TEXT_CHARS = 4096  # the rationale cap is 600; anything this long is refused unread
+
+# T050c (D54 b; docs/forja/reports/T2-a1-security.md nits 1 and 2): budget for the WHOLE reply,
+# checked before the risk gate reads a single string. MAX_SCANNED_TEXT_CHARS bounds one string,
+# not how many there are: 16 strings of 4096 x U+2152 took 6.79 s through invades_risk_domain.
+# Why this value. The OC-1 Screener may emit at most 768 output tokens (profile
+# output_cap_tokens), but that cap is only enforced when the adapter reports output_tokens, and
+# how many characters 768 tokens can decode to depends on the tokenizer, so the token cap
+# cannot be turned into a character count by itself. What 768 tokens can carry AND still be a
+# valid answer is bounded by the output schema, independently of the tokenizer: 4 fixed keys,
+# a classification of at most 21 characters, at most 32 ids of at most 64 ASCII characters and
+# a rationale of at most 600 characters (2,720 units raw; 32 x 64 id characters alone already
+# need roughly 800 tokens in a realistic BPE, so the schema, not the 768-token cap, is the
+# binding limit). NFKC can turn one character into at most 18 (U+FDFA; the test checks every
+# code point), and only the rationale can hold such characters (ids, keys and classification
+# are ASCII by the schema), so the largest valid answer measures 1 + 48 + 1 + 21 + 1 + 2,048 +
+# 600 x 18 = 12,920 units after NFKC. That is the budget: the smallest value that provably never
+# refuses a valid answer, whatever the tokenizer. A reply above it cannot be schema-valid, so
+# refusing it unread costs nothing measurable and bounds the risk scan (all linear) to it.
+# Units: each key and string value counts its length raw AND, separately, its length after
+# NFKC (both totals must stay within the budget: NFKC can shrink a string as well as grow it),
+# never less than one; every other node (object, array, number, boolean, null, any other
+# value) counts one, so a reply cannot make the walk long without carrying any text.
+_NFKC_MAX_EXPANSION = 18
+_MAX_EVIDENCE_ID_CHARS = 64  # _EVIDENCE_ID: one leading character plus at most 63
+MAX_SCANNED_PAYLOAD_CHARS = (
+    1  # the object
+    + sum(len(key) for key in _OUTPUT_KEYS)  # 48
+    + 1  # abstain (a boolean)
+    + max(len(category.value) for category in CaseCategory)  # 21
+    + 1  # the cited_evidence_ids array
+    + MAX_CITED_IDS * _MAX_EVIDENCE_ID_CHARS  # 2,048
+    + MAX_RATIONALE_CHARS * _NFKC_MAX_EXPANSION  # 10,800
+)  # = 12,920
+
+
+def exceeds_scan_budget(payload: object) -> bool:
+    """True when the whole reply is larger than ``MAX_SCANNED_PAYLOAD_CHARS`` (fail closed).
+
+    One iterative walk, stopped as soon as either total passes the budget: no recursion
+    limit to hit, a cyclic or absurdly deep payload is refused, nothing is truncated.
+    """
+    budget = MAX_SCANNED_PAYLOAD_CHARS
+    raw = folded = 0
+    pending: list[object] = [payload]
+    while pending:
+        node = pending.pop()
+        if isinstance(node, str):
+            # An empty string still counts one, so every node costs at least one unit and the
+            # walk visits at most budget + 1 nodes. (A valid reply's strings are all non-empty
+            # except, possibly, the rationale, which the budget already counts as 600.)
+            raw += max(len(node), 1)
+            if raw > budget:
+                return True
+            # raw <= budget here, so NFKC reads at most budget characters in total.
+            folded += max(len(unicodedata.normalize("NFKC", node)), 1)
+        else:
+            raw += 1
+            folded += 1
+            if isinstance(node, Mapping):
+                if raw + 2 * len(node) > budget:  # each key and each value costs at least one
+                    return True
+                for key, value in node.items():
+                    pending.append(key)
+                    pending.append(value)
+            elif isinstance(node, (list, tuple)):
+                if raw + len(node) > budget:  # each item costs at least one
+                    return True
+                pending.extend(node)
+        if raw > budget or folded > budget:
+            return True
+    return False
 
 # Look-alike letters from other scripts that NFKD does not fold (Cyrillic and Greek).
 _CONFUSABLES = str.maketrans(
@@ -766,6 +841,8 @@ def evaluate_case(
     output_tokens = reply.output_tokens
     if output_tokens is not None and (type(output_tokens) is not int or output_tokens > inference_profile.output_cap_tokens):
         return result(CaseOutcome.OUTPUT_CAP_EXCEEDED, vram=vram, ram=ram)
+    if exceeds_scan_budget(reply.payload):  # gate 5 opens here: nothing is read past the budget
+        return result(CaseOutcome.RESPONSE_BUDGET_EXCEEDED, vram=vram, ram=ram)
     if invades_risk_domain(reply.payload, case.evidence_ids):
         return result(CaseOutcome.RISK_AUTHORITY_REJECTED, vram=vram, ram=ram)
     answer = parse_screener_answer(reply.payload)
@@ -783,6 +860,7 @@ _HARD_LIMIT_OUTCOMES = frozenset(
         CaseOutcome.RESOURCE_RESERVE_BREACHED,
         CaseOutcome.TIMEOUT,
         CaseOutcome.OUTPUT_CAP_EXCEEDED,
+        CaseOutcome.RESPONSE_BUDGET_EXCEEDED,
     }
 )
 
