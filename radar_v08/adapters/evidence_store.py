@@ -24,6 +24,11 @@ Version 4 (T033a, ``OUTBOX_MIGRATION``) adds ``lifecycle_items``, ``outbox`` and
 uniqueness on the new ``outbox`` table only, one plain index and guard triggers. Again no
 legacy table (``events`` included) is altered, constrained or indexed.
 
+Version 5 (T041, ``OUTCOME_MIGRATION``) adds ``outcome_subjects``, ``outcome_subject_costs`` and
+``outcome_labels`` for ``radar_v08.adapters.outcome_store``: new tables whose primary keys are
+the only uniqueness, two plain indexes and immutability/no-delete triggers. The legacy
+``forward_returns`` table stays raw: no constraint, index, column or row change.
+
 Migrations (``apply_schema_migrations``):
 
 * A fast read-only check returns at once when the ledger is current, so a second run
@@ -267,11 +272,101 @@ BEGIN SELECT RAISE(ABORT, 'outbox cursors are never deleted'); END""",
     ),
 )
 
+# T041 (D19): new tables only, for ``radar_v08.adapters.outcome_store``. The legacy
+# ``forward_returns`` table (and ``events``) gets no constraint, index, column or row change.
+# Uniqueness is the primary key of the new tables. Subjects, their costs and their labels are
+# immutable and never deleted: a label is written once, when its horizon has matured.
+OUTCOME_MIGRATION = Migration(
+    version=5,
+    name="outcome_subjects_costs_and_labels",
+    statements=(
+        """CREATE TABLE outcome_subjects (
+    subject_id TEXT PRIMARY KEY CHECK (length(subject_id) > 0),
+    policy_version TEXT NOT NULL,
+    venue TEXT NOT NULL CHECK (length(venue) > 0),
+    symbol TEXT NOT NULL CHECK (length(symbol) > 0),
+    instrument_kind TEXT NOT NULL CHECK (instrument_kind IN ('spot', 'futures')),
+    base TEXT NOT NULL,
+    quote TEXT NOT NULL,
+    size_unit TEXT NOT NULL,
+    pair TEXT NOT NULL CHECK (length(pair) > 0),
+    direction TEXT NOT NULL CHECK (direction IN ('LONG', 'SHORT', 'NONE')),
+    decision_as_of TEXT NOT NULL,
+    entry_mid TEXT NOT NULL,
+    entry_observed_at TEXT NOT NULL CHECK (entry_observed_at <= decision_as_of),
+    evidence_id TEXT,
+    evidence_missing TEXT CHECK (evidence_missing IN ('not_recorded', 'legacy_unversioned')),
+    decision_kind TEXT CHECK (decision_kind IN ('invocation', 'decision')),
+    decision_ref TEXT,
+    decision_missing TEXT CHECK (decision_missing IN ('not_recorded')),
+    arm TEXT,
+    arm_missing TEXT CHECK (arm_missing IN ('not_recorded')),
+    registered_at TEXT NOT NULL,
+    CHECK ((evidence_id IS NULL) <> (evidence_missing IS NULL)),
+    CHECK ((decision_ref IS NULL) = (decision_kind IS NULL)),
+    CHECK ((decision_ref IS NULL) <> (decision_missing IS NULL)),
+    CHECK ((arm IS NULL) <> (arm_missing IS NULL))
+)""",
+        "CREATE INDEX idx_outcome_subjects_pair_asof ON outcome_subjects(venue, pair, decision_as_of)",
+        """CREATE TRIGGER outcome_subjects_immutable BEFORE UPDATE ON outcome_subjects
+BEGIN SELECT RAISE(ABORT, 'outcome subjects are immutable'); END""",
+        """CREATE TRIGGER outcome_subjects_no_delete BEFORE DELETE ON outcome_subjects
+BEGIN SELECT RAISE(ABORT, 'outcome subjects are never deleted'); END""",
+        """CREATE TABLE outcome_subject_costs (
+    subject_id TEXT NOT NULL REFERENCES outcome_subjects(subject_id),
+    horizon TEXT NOT NULL CHECK (horizon IN ('15m', '1h', '4h', '24h')),
+    policy_version TEXT NOT NULL,
+    side TEXT NOT NULL CHECK (side IN ('long', 'short')),
+    instrument_kind TEXT NOT NULL CHECK (instrument_kind IN ('spot', 'futures')),
+    status TEXT NOT NULL CHECK (status IN ('COST_COMPLETE', 'COST_INCOMPLETE')),
+    total_fraction TEXT,
+    CHECK ((status = 'COST_COMPLETE') = (total_fraction IS NOT NULL)),
+    PRIMARY KEY (subject_id, horizon)
+)""",
+        """CREATE TRIGGER outcome_subject_costs_immutable BEFORE UPDATE ON outcome_subject_costs
+BEGIN SELECT RAISE(ABORT, 'outcome costs are immutable'); END""",
+        """CREATE TRIGGER outcome_subject_costs_no_delete BEFORE DELETE ON outcome_subject_costs
+BEGIN SELECT RAISE(ABORT, 'outcome costs are never deleted'); END""",
+        """CREATE TABLE outcome_labels (
+    subject_id TEXT NOT NULL REFERENCES outcome_subjects(subject_id),
+    horizon TEXT NOT NULL CHECK (horizon IN ('15m', '1h', '4h', '24h')),
+    policy_version TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('AVAILABLE', 'UNAVAILABLE')),
+    price_basis TEXT NOT NULL CHECK (price_basis = 'mid'),
+    target_at TEXT NOT NULL,
+    label_available_at TEXT NOT NULL CHECK (label_available_at >= target_at),
+    exit_mid TEXT,
+    exit_observed_at TEXT,
+    exit_source TEXT,
+    market_return TEXT,
+    market_missing TEXT,
+    gross_markout TEXT,
+    gross_missing TEXT,
+    net_markout TEXT,
+    net_missing TEXT,
+    cost_policy_version TEXT,
+    labeled_at TEXT NOT NULL,
+    PRIMARY KEY (subject_id, horizon),
+    CHECK ((status = 'AVAILABLE') = (exit_mid IS NOT NULL)),
+    CHECK ((exit_mid IS NULL) = (exit_observed_at IS NULL) AND (exit_mid IS NULL) = (exit_source IS NULL)),
+    CHECK ((market_return IS NULL) <> (market_missing IS NULL)),
+    CHECK ((gross_markout IS NULL) <> (gross_missing IS NULL)),
+    CHECK ((net_markout IS NULL) <> (net_missing IS NULL))
+)""",
+        "CREATE INDEX idx_outcome_labels_available_at ON outcome_labels(label_available_at)",
+        """CREATE TRIGGER outcome_labels_immutable BEFORE UPDATE ON outcome_labels
+BEGIN SELECT RAISE(ABORT, 'outcome labels are immutable'); END""",
+        """CREATE TRIGGER outcome_labels_no_delete BEFORE DELETE ON outcome_labels
+BEGIN SELECT RAISE(ABORT, 'outcome labels are never deleted'); END""",
+    ),
+)
+
 SCHEMA_MIGRATIONS: tuple[Migration, ...] = (
     LEDGER_MIGRATION,
     EVIDENCE_MIGRATION,
     INVOCATION_MIGRATION,
     OUTBOX_MIGRATION,
+    OUTCOME_MIGRATION,
 )
 
 

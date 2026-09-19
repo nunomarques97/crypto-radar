@@ -51,8 +51,10 @@ MODEL = "qwen3:14b"
 ROOMY = ModelBudget(MODEL, 100, 1000)
 NEW_TABLES = {"invocations", "invocation_budget", "invocation_demand"}
 LEDGER_PLAN_TABLES = NEW_TABLES | {"schema_version_ledger", "evidence_versions", "event_evidence"}
-# T033a appends ledger version 4 (new tables only) after v3.
-LATER_PLAN_TABLES = {"lifecycle_items", "outbox", "outbox_cursors"}
+# T033a appends ledger version 4 and T041 version 5 (new tables only) after v3.
+LATER_PLAN_TABLES = {"lifecycle_items", "outbox", "outbox_cursors"} | {
+    "outcome_subjects", "outcome_subject_costs", "outcome_labels"
+}
 
 
 def ev_hash(n):
@@ -202,7 +204,7 @@ class TestMigrationV3(TempDbCase):
         legacy_dump, _ = snapshot(self.path)
         s = SnapshotStore(self.path)
         self._stores.append(s)
-        self.assertEqual([entry.version for entry in s.schema_ledger()], [1, 2, 3, 4])
+        self.assertEqual([entry.version for entry in s.schema_ledger()], [1, 2, 3, 4, 5])
         conn = self.connect()
         dupes = conn.execute(
             "SELECT event_id FROM events WHERE dedup_key = 'BTC|BREAKOUT|LONG|qwen' AND status = 'PENDING' ORDER BY 1"

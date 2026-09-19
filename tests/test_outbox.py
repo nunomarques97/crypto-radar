@@ -204,9 +204,10 @@ class TempCase(unittest.TestCase):
 
 
 class TestMigrationV4(TempCase):
-    def test_v4_is_the_last_version_of_the_ledger_plan(self):
-        self.assertIs(SCHEMA_MIGRATIONS[-1], OUTBOX_MIGRATION)
-        self.assertEqual((OUTBOX_MIGRATION.version, len(SCHEMA_MIGRATIONS)), (4, 4))
+    def test_v4_is_the_fourth_version_of_the_ledger_plan(self):
+        # T041 appended version 5 after it; v4 itself is unchanged.
+        self.assertIs(SCHEMA_MIGRATIONS[3], OUTBOX_MIGRATION)
+        self.assertEqual(OUTBOX_MIGRATION.version, 4)
         self.assertEqual(OUTBOX_MIGRATION.name, "lifecycle_outbox_and_cursors")
 
     def test_statements_are_create_only_on_new_tables(self):
@@ -230,7 +231,7 @@ class TestMigrationV4(TempCase):
         before_indexes = legacy_index_lists(self.path)
         legacy_dump, _ = snapshot(self.path)
         opened = self.open_store()
-        self.assertEqual([entry.version for entry in opened.schema_ledger()], [1, 2, 3, 4])
+        self.assertEqual([entry.version for entry in opened.schema_ledger()], [1, 2, 3, 4, 5])
         dupes = self.query(
             "SELECT event_id FROM events WHERE dedup_key = ? AND status = 'PENDING' ORDER BY 1", LEGACY_DEDUP
         )
@@ -262,8 +263,8 @@ class TestMigrationV4(TempCase):
     def test_version_4_is_recorded_with_its_checksum(self):
         build_legacy_db(self.path)
         conn = self.connect()
-        self.assertEqual(es.apply_schema_migrations(conn, now=T0), (1, 2, 3, 4))
-        entry = es.read_ledger(conn)[-1]
+        self.assertEqual(es.apply_schema_migrations(conn, now=T0), (1, 2, 3, 4, 5))
+        entry = es.read_ledger(conn)[3]
         self.assertEqual((entry.version, entry.name), (4, "lifecycle_outbox_and_cursors"))
         self.assertEqual(entry.checksum, OUTBOX_MIGRATION.checksum)
         self.assertEqual(entry.applied_at, "2026-09-19T10:00:00+00:00")
@@ -272,7 +273,9 @@ class TestMigrationV4(TempCase):
         build_legacy_db(self.path)
         conn = self.connect()
         self.assertEqual(es.apply_schema_migrations(conn, now=T0, migrations=SCHEMA_MIGRATIONS[:3]), (1, 2, 3))
-        self.assertEqual(es.apply_schema_migrations(conn, now=T0 + timedelta(days=1)), (4,))
+        self.assertEqual(
+            es.apply_schema_migrations(conn, now=T0 + timedelta(days=1), migrations=SCHEMA_MIGRATIONS[:4]), (4,)
+        )
         self.assertEqual([entry.version for entry in es.read_ledger(conn)], [1, 2, 3, 4])
 
     def test_second_open_writes_nothing(self):

@@ -90,6 +90,18 @@ NEW_OBJECTS = {
     ("table", "outbox_cursors"),
     ("trigger", "outbox_cursors_never_move_back"),
     ("trigger", "outbox_cursors_no_delete"),
+    # T041, ledger version 5
+    ("table", "outcome_subjects"),
+    ("index", "idx_outcome_subjects_pair_asof"),
+    ("trigger", "outcome_subjects_immutable"),
+    ("trigger", "outcome_subjects_no_delete"),
+    ("table", "outcome_subject_costs"),
+    ("trigger", "outcome_subject_costs_immutable"),
+    ("trigger", "outcome_subject_costs_no_delete"),
+    ("table", "outcome_labels"),
+    ("index", "idx_outcome_labels_available_at"),
+    ("trigger", "outcome_labels_immutable"),
+    ("trigger", "outcome_labels_no_delete"),
 }
 
 
@@ -204,7 +216,7 @@ class TestLegacyMigration(TempDbCase):
         before = objects(self.path)
         legacy_dump, _ = snapshot(self.path)
         conn = self.open_conn()
-        self.assertEqual(es.apply_schema_migrations(conn, now=NOW), (1, 2, 3, 4))
+        self.assertEqual(es.apply_schema_migrations(conn, now=NOW), (1, 2, 3, 4, 5))
         after = objects(self.path)
         # Every pre-existing object is still there with the identical SQL; only new ones were added.
         self.assertTrue(before <= after)
@@ -220,7 +232,7 @@ class TestLegacyMigration(TempDbCase):
         conn = self.open_conn()
         es.apply_schema_migrations(conn, now=NOW + timedelta(hours=2, minutes=3))
         ledger = es.read_ledger(conn)
-        self.assertEqual([entry.version for entry in ledger], [1, 2, 3, 4])
+        self.assertEqual([entry.version for entry in ledger], [1, 2, 3, 4, 5])
         self.assertEqual(
             [entry.name for entry in ledger],
             [
@@ -228,6 +240,7 @@ class TestLegacyMigration(TempDbCase):
                 "evidence_versions_and_event_links",
                 "invocations_budget_and_demand",
                 "lifecycle_outbox_and_cursors",
+                "outcome_subjects_costs_and_labels",
             ],
         )
         self.assertEqual(ledger[0].checksum, LEDGER_MIGRATION.checksum)
@@ -240,7 +253,7 @@ class TestLegacyMigration(TempDbCase):
         conn = self.open_conn()
         self.assertEqual(conn.execute("SELECT COUNT(*) FROM evidence_versions").fetchone()[0], 0)
         self.assertEqual(conn.execute("SELECT COUNT(*) FROM event_evidence").fetchone()[0], 0)
-        self.assertEqual([entry.version for entry in s.schema_ledger()], [1, 2, 3, 4])
+        self.assertEqual([entry.version for entry in s.schema_ledger()], [1, 2, 3, 4, 5])
 
     def test_old_event_reads_as_legacy_unversioned_with_only_real_fields(self):
         s = self.open_store()
@@ -262,7 +275,7 @@ class TestLegacyMigration(TempDbCase):
 
     def test_second_run_changes_nothing(self):
         conn = self.open_conn()
-        self.assertEqual(es.apply_schema_migrations(conn, now=NOW), (1, 2, 3, 4))
+        self.assertEqual(es.apply_schema_migrations(conn, now=NOW), (1, 2, 3, 4, 5))
         conn.close()
         self._conns.remove(conn)
         first = snapshot(self.path)
@@ -288,13 +301,13 @@ class TestLegacyMigration(TempDbCase):
     def test_second_connection_sees_current_ledger(self):
         a = self.open_conn()
         b = self.open_conn()
-        self.assertEqual(es.apply_schema_migrations(a, now=NOW), (1, 2, 3, 4))
+        self.assertEqual(es.apply_schema_migrations(a, now=NOW), (1, 2, 3, 4, 5))
         self.assertEqual(es.apply_schema_migrations(b, now=NOW), ())
 
 
 class TestInjectedFailure(TempDbCase):
     BAD = Migration(3, "injected_failure", ("CREATE TABLE injected_ok (x INTEGER)", "INSERT INTO no_such_table VALUES (1)"))
-    # T031a: the next version after the real plan (now 5, T033a), for failures on a migrated db.
+    # T031a: the next version after the real plan (now 6, T041), for failures on a migrated db.
     BAD_NEXT = Migration(len(SCHEMA_MIGRATIONS) + 1, "injected_failure", BAD.statements)
 
     def test_failure_in_the_middle_of_first_migration_leaves_old_db_untouched(self):
@@ -322,7 +335,7 @@ class TestInjectedFailure(TempDbCase):
         conn = self.open_conn()
         with self.assertRaises(SchemaMigrationError):
             es.apply_schema_migrations(conn, now=NOW, migrations=(*SCHEMA_MIGRATIONS, self.BAD_NEXT))
-        self.assertEqual([entry.version for entry in es.read_ledger(conn)], [1, 2, 3, 4])
+        self.assertEqual([entry.version for entry in es.read_ledger(conn)], [1, 2, 3, 4, 5])
         conn.close()
         self._conns.remove(conn)
         self.assertEqual(snapshot(self.path), before)
