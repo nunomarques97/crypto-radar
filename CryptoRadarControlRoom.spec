@@ -5,7 +5,7 @@ a = Analysis(
     ['ui/__main__.py'],
     pathex=[],
     binaries=[],
-    datas=[('ui/web', 'ui/web')],
+    datas=[('ui/web', 'ui/web'), ('radar_v08/model_profiles.toml', 'radar_v08')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
