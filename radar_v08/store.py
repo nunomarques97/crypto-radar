@@ -19,7 +19,15 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Iterator
 
-from .adapters import evidence_store, invocation_store
+from .adapters import evidence_store, invocation_store, outbox_store
+from .adapters.outbox_store import (
+    ExportResult,
+    Handoff,
+    LifecycleState,
+    OutboxEntry,
+    OutboxKind,
+    RecordResult,
+)
 from .domain.evidence import SealedEvidence
 from .domain.integrity import InstrumentId
 from .domain.invocation import (
@@ -470,6 +478,85 @@ class SnapshotStore:
         """Reserved units in the UTC hour/day windows of `now` (read only)."""
         with self._lock:
             return invocation_store.budget_usage(self._conn, budget, now=self._now(now))
+
+    # -- lifecycle transitions and delivery outbox (T033a) ---------------------
+    # Every change to an `events` row below writes its EVENT outbox row in the same
+    # transaction (`_event_write`). Lifecycle transitions and handoffs are one short
+    # BEGIN IMMEDIATE transaction each in the adapter. Delivery is at-least-once: a
+    # consumer (the JSONL export included) may see a row again after a crash, always
+    # with the same delivery_id. Nothing here is exactly-once.
+
+    def record_lifecycle_transition(
+        self,
+        item_id: str,
+        state: LifecycleState,
+        *,
+        related_id: str | None = None,
+        reason: str | None = None,
+        now: datetime | None = None,
+    ) -> RecordResult:
+        with self._lock:
+            return outbox_store.record_lifecycle_transition(
+                self._conn, item_id, state, now=self._now(now), related_id=related_id, reason=reason
+            )
+
+    def record_handoff(self, handoff: Handoff, *, now: datetime | None = None) -> RecordResult:
+        with self._lock:
+            return outbox_store.record_handoff(self._conn, handoff, now=self._now(now))
+
+    def lifecycle_state(self, item_id: str) -> LifecycleState | None:
+        with self._lock:
+            return outbox_store.lifecycle_state(self._conn, item_id)
+
+    def outbox_entries(
+        self, *, after: int = 0, limit: int = outbox_store.DEFAULT_READ_LIMIT, kind: OutboxKind | None = None
+    ) -> tuple[OutboxEntry, ...]:
+        with self._lock:
+            return outbox_store.load_entries(self._conn, after=after, limit=limit, kind=kind)
+
+    def read_outbox(self, consumer: str, *, limit: int = outbox_store.DEFAULT_READ_LIMIT) -> tuple[OutboxEntry, ...]:
+        with self._lock:
+            return outbox_store.read_pending(self._conn, consumer, limit=limit)
+
+    def acknowledge_outbox(self, consumer: str, seq: int, *, now: datetime | None = None) -> int:
+        with self._lock:
+            return outbox_store.acknowledge(self._conn, consumer, seq, now=self._now(now))
+
+    def outbox_cursor(self, consumer: str) -> int:
+        with self._lock:
+            return outbox_store.cursor_position(self._conn, consumer)
+
+    def export_outbox_jsonl(self, path: str, *, now: datetime | None = None) -> ExportResult:
+        with self._lock:
+            return outbox_store.export_jsonl(self._conn, path, now=self._now(now))
+
+    @contextmanager
+    def _event_write(self) -> Iterator[sqlite3.Cursor]:
+        """One transaction for an `events` change plus its outbox row: both commit or neither.
+
+        Unlike `_cursor`, any exception (an outbox refusal included) rolls back.
+        """
+        with self._lock:
+            cur = self._conn.cursor()
+            try:
+                yield cur
+                self._conn.commit()
+            except BaseException as exc:
+                if self._conn.in_transaction:
+                    self._conn.rollback()
+                if isinstance(exc, sqlite3.Error):
+                    raise StoreError(f"SQLite operation failed: {exc}") from exc
+                raise
+            finally:
+                cur.close()
+
+    def _record_event_outbox(self, event_id: str) -> None:
+        # A storage failure of an events change stays a StoreError for existing callers;
+        # the typed outbox code is kept in the message and as the cause.
+        try:
+            outbox_store.record_event_row(self._conn, event_id, now=datetime.now(timezone.utc))
+        except outbox_store.OutboxError as exc:
+            raise StoreError(f"outbox row not recorded ({exc.code.value}); the change was rolled back") from exc
 
     @contextmanager
     def _cursor(self) -> Iterator[sqlite3.Cursor]:
@@ -1002,7 +1089,8 @@ class SnapshotStore:
             return cur.fetchone()
 
     def insert_event(self, event: dict[str, Any]) -> None:
-        with self._cursor() as cur:
+        """Insert the event and its first outbox row in one transaction (T033a)."""
+        with self._event_write() as cur:
             cur.execute(
                 """
                 INSERT INTO events (
@@ -1022,6 +1110,7 @@ class SnapshotStore:
                     event.get("updated_ts", event["ts"]), int(event.get("notified", False)),
                 ),
             )
+            self._record_event_outbox(event["event_id"])
 
     def get_event(self, event_id: str) -> sqlite3.Row | None:
         with self._cursor() as cur:
@@ -1029,8 +1118,10 @@ class SnapshotStore:
             return cur.fetchone()
 
     def update_event_status(self, event_id: str, status: str) -> None:
-        with self._cursor() as cur:
+        with self._event_write() as cur:
             cur.execute("UPDATE events SET status = ? WHERE event_id = ?", (status, event_id))
+            if cur.rowcount == 1:
+                self._record_event_outbox(event_id)
 
     # -- event lifecycle (Phase 4: Claude Bridge) ----------------------------
 
@@ -1057,7 +1148,7 @@ class SnapshotStore:
         Returns False if it was already claimed (or settled) by someone else -
         the caller must never process it in that case (idempotency guard).
         """
-        with self._cursor() as cur:
+        with self._event_write() as cur:
             cur.execute(
                 """
                 UPDATE events SET status = 'PROCESSING', processing_started_at = ?, updated_ts = ?
@@ -1065,7 +1156,10 @@ class SnapshotStore:
                 """,
                 (now_iso, now_iso, event_id),
             )
-            return cur.rowcount == 1
+            claimed = cur.rowcount == 1
+            if claimed:
+                self._record_event_outbox(event_id)
+            return claimed
 
     def recover_stale_processing(self, cutoff_iso: str, now_iso: str) -> list[str]:
         """A PROCESSING row whose claim predates `cutoff_iso` means the
@@ -1073,7 +1167,7 @@ class SnapshotStore:
         Goes back to PENDING, not DEFERRED - it never actually failed a call.
         Returns the recovered event_ids so the caller can audit-log each one.
         """
-        with self._cursor() as cur:
+        with self._event_write() as cur:
             cur.execute(
                 "SELECT event_id FROM events WHERE status = 'PROCESSING' AND processing_started_at IS NOT NULL "
                 "AND processing_started_at < ?",
@@ -1091,10 +1185,12 @@ class SnapshotStore:
                     """,
                     [(now_iso, event_id) for event_id in event_ids],
                 )
+                for event_id in event_ids:
+                    self._record_event_outbox(event_id)
             return event_ids
 
     def mark_event_processed(self, event_id: str, now_iso: str) -> None:
-        with self._cursor() as cur:
+        with self._event_write() as cur:
             cur.execute(
                 """
                 UPDATE events SET status = 'PROCESSED', processing_started_at = NULL,
@@ -1103,9 +1199,11 @@ class SnapshotStore:
                 """,
                 (now_iso, event_id),
             )
+            if cur.rowcount == 1:
+                self._record_event_outbox(event_id)
 
     def mark_event_deferred(self, event_id: str, now_iso: str, reason: str, next_attempt_at: str) -> None:
-        with self._cursor() as cur:
+        with self._event_write() as cur:
             cur.execute(
                 """
                 UPDATE events SET status = 'DEFERRED', attempts = attempts + 1, last_error = ?,
@@ -1114,9 +1212,11 @@ class SnapshotStore:
                 """,
                 (reason, next_attempt_at, now_iso, event_id),
             )
+            if cur.rowcount == 1:
+                self._record_event_outbox(event_id)
 
     def mark_event_failed(self, event_id: str, now_iso: str, reason: str) -> None:
-        with self._cursor() as cur:
+        with self._event_write() as cur:
             cur.execute(
                 """
                 UPDATE events SET status = 'FAILED', attempts = attempts + 1, last_error = ?,
@@ -1125,13 +1225,17 @@ class SnapshotStore:
                 """,
                 (reason, now_iso, event_id),
             )
+            if cur.rowcount == 1:
+                self._record_event_outbox(event_id)
 
     def mark_event_notified(self, event_id: str, now_iso: str) -> None:
-        with self._cursor() as cur:
+        with self._event_write() as cur:
             cur.execute(
                 "UPDATE events SET notified = 1, updated_ts = ? WHERE event_id = ?",
                 (now_iso, event_id),
             )
+            if cur.rowcount == 1:
+                self._record_event_outbox(event_id)
 
     def set_ntfy_status(self, event_id: str, status: str, now_iso: str, error: str | None = None) -> None:
         """Mobile push delivery state for one event_id: PENDING while a send

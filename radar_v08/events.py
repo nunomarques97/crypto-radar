@@ -8,6 +8,15 @@ does not spawn a new event every heartbeat while an existing PENDING/
 PROCESSING/DEFERRED event for it is still open; a genuinely new situation
 (setup/direction/model_demand changed, or the prior event was resolved)
 does create a fresh one.
+
+T033a: events.jsonl is now an export of the SQLite outbox
+(`radar_v08.adapters.outbox_store`). Every change to an `events` row commits
+together with its outbox row, so a crash can never leave a durable change with
+no record of it. The export then appends the pending outbox rows to the log and
+advances that file's cursor. A crash between the change and the export leaves
+the row pending; the next export writes it with the same `delivery_id`.
+Delivery is at-least-once, never exactly-once: a reader dedups on
+`delivery_id`.
 """
 
 from __future__ import annotations
@@ -17,6 +26,7 @@ import uuid
 from typing import Any
 
 from . import config
+from .adapters.outbox_store import ExportResult
 from .store import SnapshotStore
 
 EVENT_STATUSES = config.EVENT_STATUSES
@@ -24,11 +34,6 @@ EVENT_STATUSES = config.EVENT_STATUSES
 
 def make_dedup_key(asset: str, setup_type: str, direction: str, model_demand: str) -> str:
     return f"{asset}:{setup_type}:{direction}:{model_demand}"
-
-
-def append_event_jsonl(event: dict[str, Any], path: str | None = None) -> None:
-    with open(path or config.EVENTS_LOG_PATH, "a", encoding="utf-8") as fh:
-        fh.write(json.dumps(event, ensure_ascii=False, default=str) + "\n")
 
 
 def create_event_if_new(
@@ -91,24 +96,32 @@ def create_event_if_new(
         "status": status,
         "context_json": json.dumps(context, ensure_ascii=False, default=str) if context is not None else None,
     }
-    store.insert_event(event)
-    append_event_jsonl(event)
+    store.insert_event(event)  # the row and its outbox entry, in one transaction
+    snapshot_to_jsonl(store, event_id)
     return event_id, True
 
 
-def transition_event(store: SnapshotStore, event_id: str, new_status: str) -> None:
+def transition_event(store: SnapshotStore, event_id: str, new_status: str, path: str | None = None) -> None:
+    """Change the status (row + outbox entry in one transaction), then export the outbox."""
     if new_status not in EVENT_STATUSES:
         raise ValueError(f"invalid event status: {new_status!r}")
     store.update_event_status(event_id, new_status)
-    snapshot_to_jsonl(store, event_id)
+    snapshot_to_jsonl(store, event_id, path)
 
 
-def snapshot_to_jsonl(store: SnapshotStore, event_id: str) -> None:
-    """Appends the event's CURRENT row to events.jsonl. Used after every
-    Phase 4 lifecycle transition (claim/processed/deferred/failed/recovered)
-    so the append-only log stays the full audit trail of every status change,
-    not just creation (architecture doc: "events.jsonl é o log/auditoria").
+def snapshot_to_jsonl(store: SnapshotStore, event_id: str | None = None, path: str | None = None) -> ExportResult:
+    """Export every pending outbox row to events.jsonl (or `path`) and advance its cursor.
+
+    Called after every Phase 4 lifecycle transition (claim/processed/deferred/
+    failed/recovered/notified) so the append-only log stays the full audit trail
+    of every change (architecture doc: "events.jsonl é o log/auditoria"). Each
+    line is the event row as it was *committed with the change*, plus
+    `delivery_id`, `outbox_seq`, `outbox_kind` and `outbox_schema`.
+
+    `event_id` is kept for the existing call sites: the export covers the whole
+    pending outbox, which includes that event's rows. The export is idempotent
+    and recoverable: calling it again writes nothing new, and after a crash it
+    writes only what the file is missing, with the same `delivery_id`.
+    At-least-once, not exactly-once (see `radar_v08.adapters.outbox_store`).
     """
-    row = store.get_event(event_id)
-    if row is not None:
-        append_event_jsonl(dict(row))
+    return store.export_outbox_jsonl(path or config.EVENTS_LOG_PATH)

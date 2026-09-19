@@ -19,6 +19,11 @@ Version 3 (T031a, ``INVOCATION_MIGRATION``) adds ``invocations``, ``invocation_b
 unique index on the new ``invocations`` table, and guard triggers. No legacy table gets a
 constraint, index, column or row change (DECISIONS.md D19).
 
+Version 4 (T033a, ``OUTBOX_MIGRATION``) adds ``lifecycle_items``, ``outbox`` and
+``outbox_cursors`` for ``radar_v08.adapters.outbox_store``: new tables, the delivery-ID
+uniqueness on the new ``outbox`` table only, one plain index and guard triggers. Again no
+legacy table (``events`` included) is altered, constrained or indexed.
+
 Migrations (``apply_schema_migrations``):
 
 * A fast read-only check returns at once when the ledger is current, so a second run
@@ -201,7 +206,73 @@ BEGIN SELECT RAISE(ABORT, 'demand counters never decrease'); END""",
     ),
 )
 
-SCHEMA_MIGRATIONS: tuple[Migration, ...] = (LEDGER_MIGRATION, EVIDENCE_MIGRATION, INVOCATION_MIGRATION)
+# T033a (D19): new tables only, for ``radar_v08.adapters.outbox_store``. Delivery-ID
+# uniqueness lives on the new ``outbox`` table; ``events`` and every other legacy table get
+# no constraint, index, column or row change. Outbox rows are immutable and never deleted;
+# consumer cursors only move forward; a finished lifecycle item never changes again.
+OUTBOX_MIGRATION = Migration(
+    version=4,
+    name="lifecycle_outbox_and_cursors",
+    statements=(
+        """CREATE TABLE lifecycle_items (
+    item_id TEXT PRIMARY KEY CHECK (length(item_id) > 0),
+    state TEXT NOT NULL CHECK (state IN (
+        'QUEUED', 'LOADING', 'RUNNING', 'FINISHED', 'FAILED', 'ABORT_STALE', 'SUPERSEDED', 'DROPPED_BACKPRESSURE'
+    )),
+    entered_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+)""",
+        """CREATE TRIGGER lifecycle_items_identity_immutable BEFORE UPDATE OF item_id, entered_at ON lifecycle_items
+BEGIN SELECT RAISE(ABORT, 'lifecycle item identity is immutable'); END""",
+        """CREATE TRIGGER lifecycle_items_terminal_is_final BEFORE UPDATE ON lifecycle_items
+WHEN OLD.state IN ('FINISHED', 'FAILED', 'ABORT_STALE', 'SUPERSEDED', 'DROPPED_BACKPRESSURE')
+BEGIN SELECT RAISE(ABORT, 'a finished lifecycle item is final'); END""",
+        """CREATE TRIGGER lifecycle_items_no_delete BEFORE DELETE ON lifecycle_items
+BEGIN SELECT RAISE(ABORT, 'lifecycle items are never deleted'); END""",
+        """CREATE TABLE outbox (
+    seq INTEGER PRIMARY KEY AUTOINCREMENT,
+    delivery_id TEXT NOT NULL UNIQUE CHECK (length(delivery_id) > 0),
+    kind TEXT NOT NULL CHECK (kind IN ('EVENT', 'LIFECYCLE', 'HANDOFF')),
+    subject_id TEXT NOT NULL CHECK (length(subject_id) > 0),
+    state TEXT,
+    sender TEXT,
+    receiver TEXT,
+    payload_json TEXT NOT NULL,
+    recorded_at TEXT NOT NULL,
+    CHECK (
+        (kind = 'HANDOFF' AND state IS NULL AND sender IS NOT NULL AND receiver IS NOT NULL
+            AND length(trim(sender)) > 0 AND length(trim(receiver)) > 0 AND sender <> receiver)
+        OR (kind <> 'HANDOFF' AND sender IS NULL AND receiver IS NULL AND state IS NOT NULL)
+    ),
+    CHECK (kind <> 'LIFECYCLE' OR state IN (
+        'QUEUED', 'LOADING', 'RUNNING', 'FINISHED', 'FAILED', 'ABORT_STALE', 'SUPERSEDED', 'DROPPED_BACKPRESSURE'
+    ))
+)""",
+        "CREATE INDEX idx_outbox_kind_subject ON outbox(kind, subject_id, seq)",
+        """CREATE TRIGGER outbox_rows_immutable BEFORE UPDATE ON outbox
+BEGIN SELECT RAISE(ABORT, 'outbox rows are immutable'); END""",
+        """CREATE TRIGGER outbox_rows_never_deleted BEFORE DELETE ON outbox
+BEGIN SELECT RAISE(ABORT, 'outbox rows are never deleted'); END""",
+        """CREATE TABLE outbox_cursors (
+    consumer TEXT PRIMARY KEY CHECK (length(consumer) > 0),
+    position INTEGER NOT NULL CHECK (position >= 0),
+    byte_offset INTEGER CHECK (byte_offset IS NULL OR byte_offset >= 0),
+    updated_at TEXT NOT NULL
+)""",
+        """CREATE TRIGGER outbox_cursors_never_move_back BEFORE UPDATE ON outbox_cursors
+WHEN NEW.position < OLD.position OR NEW.consumer <> OLD.consumer
+BEGIN SELECT RAISE(ABORT, 'an outbox cursor never moves back'); END""",
+        """CREATE TRIGGER outbox_cursors_no_delete BEFORE DELETE ON outbox_cursors
+BEGIN SELECT RAISE(ABORT, 'outbox cursors are never deleted'); END""",
+    ),
+)
+
+SCHEMA_MIGRATIONS: tuple[Migration, ...] = (
+    LEDGER_MIGRATION,
+    EVIDENCE_MIGRATION,
+    INVOCATION_MIGRATION,
+    OUTBOX_MIGRATION,
+)
 
 
 # --- typed failures -----------------------------------------------------------------------

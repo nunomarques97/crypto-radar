@@ -51,6 +51,8 @@ MODEL = "qwen3:14b"
 ROOMY = ModelBudget(MODEL, 100, 1000)
 NEW_TABLES = {"invocations", "invocation_budget", "invocation_demand"}
 LEDGER_PLAN_TABLES = NEW_TABLES | {"schema_version_ledger", "evidence_versions", "event_evidence"}
+# T033a appends ledger version 4 (new tables only) after v3.
+LATER_PLAN_TABLES = {"lifecycle_items", "outbox", "outbox_cursors"}
 
 
 def ev_hash(n):
@@ -119,7 +121,7 @@ def legacy_indexes(path):
             for row in conn.execute(
                 "SELECT name, tbl_name, sql FROM sqlite_master WHERE type = 'index'"
             ).fetchall()
-            if row[1] not in LEDGER_PLAN_TABLES
+            if row[1] not in LEDGER_PLAN_TABLES | LATER_PLAN_TABLES
         }
     finally:
         conn.close()
@@ -176,9 +178,10 @@ class TempDbCase(unittest.TestCase):
 
 
 class TestMigrationV3(TempDbCase):
-    def test_v3_is_the_last_version_of_the_ledger_plan(self):
-        self.assertIs(SCHEMA_MIGRATIONS[-1], INVOCATION_MIGRATION)
-        self.assertEqual(INVOCATION_MIGRATION.version, len(SCHEMA_MIGRATIONS))
+    def test_v3_is_the_third_version_of_the_ledger_plan(self):
+        # T033a appended version 4 after it; v3 itself is unchanged.
+        self.assertIs(SCHEMA_MIGRATIONS[2], INVOCATION_MIGRATION)
+        self.assertEqual(INVOCATION_MIGRATION.version, 3)
 
     def test_statements_are_create_only(self):
         for statement in INVOCATION_MIGRATION.statements:
@@ -199,7 +202,7 @@ class TestMigrationV3(TempDbCase):
         legacy_dump, _ = snapshot(self.path)
         s = SnapshotStore(self.path)
         self._stores.append(s)
-        self.assertEqual([entry.version for entry in s.schema_ledger()], [1, 2, 3])
+        self.assertEqual([entry.version for entry in s.schema_ledger()], [1, 2, 3, 4])
         conn = self.connect()
         dupes = conn.execute(
             "SELECT event_id FROM events WHERE dedup_key = 'BTC|BREAKOUT|LONG|qwen' AND status = 'PENDING' ORDER BY 1"
@@ -220,7 +223,7 @@ class TestMigrationV3(TempDbCase):
 
     def test_version_3_is_recorded_with_its_checksum(self):
         conn = self.migrated()
-        entry = es.read_ledger(conn)[-1]
+        entry = es.read_ledger(conn)[2]
         self.assertEqual((entry.version, entry.name), (3, "invocations_budget_and_demand"))
         self.assertEqual(entry.checksum, INVOCATION_MIGRATION.checksum)
         self.assertEqual(entry.applied_at, "2026-09-18T12:10:00+00:00")
@@ -243,7 +246,7 @@ class TestMigrationV3(TempDbCase):
         build_legacy_db(self.path)
         conn = self.connect()
         es.apply_schema_migrations(conn, now=T0, migrations=SCHEMA_MIGRATIONS[:2])
-        self.assertEqual(es.apply_schema_migrations(conn, now=T0), (3,))
+        self.assertEqual(es.apply_schema_migrations(conn, now=T0, migrations=SCHEMA_MIGRATIONS[:3]), (3,))
         self.assertEqual([entry.version for entry in es.read_ledger(conn)], [1, 2, 3])
 
     def test_injected_failure_in_v3_rolls_back_everything(self):
