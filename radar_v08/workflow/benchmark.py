@@ -318,7 +318,14 @@ _LEET_VARIANTS = (
 )
 _INTRA_WORD_MARKS = re.compile(r"(?<=[a-z0-9])[^\sa-z0-9]+(?=[a-z0-9])")
 _LETTERS = re.compile(r"[a-z]+")
-_ALNUM_RUN = re.compile(r"[a-z0-9$@]*[a-z][a-z0-9$@]*")
+_ALNUM_RUN = re.compile(r"[a-z0-9$@]+")
+# T050c (docs/forja/reports/T2-a1-security.md): the old form wrapped the mandatory "[a-z]"
+# in two "*" over the SAME class, so a run with no letter at all (a folded fraction glyph,
+# a bare number) made findall back off one character at a time from every position that
+# could start a run, O(run^2) (Security Reviewer: 0.435 s / 4096 x U+2152, 0.046 s / 4096 x
+# "1"). One "+" with no inner choice cannot backtrack; the "contains a letter" condition
+# that used to sit inside the pattern now runs once per matched run, outside the regex,
+# alongside the digit/"$"/"@" check the loop already made (see the loop at _ALNUM_RUN.findall).
 # Number words. The pattern is ONE unit (a stem plus an optional suffix) and has no repeater:
 # the old form repeated the unit with "+", and because "four"+"th" and "fourth" (also
 # "ten"+"th" / "tenth", "six"+"th" / "sixth", ...) spell the same letters, a token such as
@@ -507,7 +514,7 @@ def risk_wording(text: str, allowed_ids: Iterable[str] = ()) -> bool:
             tokens.add("".join(run))
         run = []
     for word in _ALNUM_RUN.findall(joined):
-        if any(char.isdigit() or char in "$@" for char in word):
+        if any(char.isalpha() for char in word) and any(char.isdigit() or char in "$@" for char in word):
             tokens.update(word.translate(table) for table in _LEET_VARIANTS)
     spaced = " " + " ".join(letters) + " "
     compact = "".join(letters)

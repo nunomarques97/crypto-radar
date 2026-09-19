@@ -1029,6 +1029,98 @@ class TestRiskGateNumberWordsAreLinear(unittest.TestCase):
             self.assertIs(bm._is_number_word(token), repeated.fullmatch(token) is not None, token)
 
 
+class TestAlnumRunIsLinearAndTokensUnchanged(unittest.TestCase):
+    """T050c (docs/forja/reports/T2-a1-security.md): ``_ALNUM_RUN`` wrapped its mandatory
+    "[a-z]" in "*" on both sides over the SAME class, so a run with no letter at all made
+    ``findall`` back off one character at a time from every position a run could start,
+    O(run^2). Security Reviewer measured 0.435 s on 4096 x U+2152 (NFKC-folds to runs of
+    digits) and 0.046 s on 4096 x "1"; this repository's re-measurement before the fix,
+    same shapes, was 0.468 s and 0.052 s (see docs/tasks/results/T050.md, section T050c).
+    """
+
+    # The old pattern, kept here read-only as the equivalence reference. Never imported
+    # back into radar_v08/workflow/benchmark.py.
+    OLD_ALNUM_RUN = re.compile(r"[a-z0-9$@]*[a-z][a-z0-9$@]*")
+
+    CORPUS = (
+        TestPerCaseGates.ATTEMPT1_PHRASES
+        + TestPerCaseGates.ATTEMPT2_PHRASES
+        + TestPerCaseGates.OWN_VARIANTS
+        + TestPerCaseGates.ORDINARY_RATIONALES
+        + TestPerCaseGates.CONSERVATIVE_REFUSALS
+    )
+
+    def old_tokens(self, joined: str) -> set[str]:
+        tokens: set[str] = set()
+        for word in self.OLD_ALNUM_RUN.findall(joined):
+            if any(char.isdigit() or char in "$@" for char in word):
+                tokens.update(word.translate(table) for table in bm._LEET_VARIANTS)
+        return tokens
+
+    def new_tokens(self, joined: str) -> set[str]:
+        tokens: set[str] = set()
+        for word in bm._ALNUM_RUN.findall(joined):
+            if any(char.isalpha() for char in word) and any(char.isdigit() or char in "$@" for char in word):
+                tokens.update(word.translate(table) for table in bm._LEET_VARIANTS)
+        return tokens
+
+    def test_no_repeater_wraps_the_mandatory_letter(self) -> None:
+        """Structural proof, no clock: one "+" over one class, nothing to backtrack."""
+        sre_parse = re._parser  # type: ignore[attr-defined]  # stdlib parser behind re.compile (3.11+)
+        self.assertEqual(bm._ALNUM_RUN.pattern, "[a-z0-9$@]+")
+        parsed = sre_parse.parse(bm._ALNUM_RUN.pattern)
+        repeats = [(op, arg[1]) for op, arg in parsed if op is sre_parse.MAX_REPEAT]  # type: ignore[attr-defined]
+        self.assertEqual(repeats, [(sre_parse.MAX_REPEAT, sre_parse.MAXREPEAT)])  # exactly one "+", unbounded
+        self.assertNotIn(sre_parse.MIN_REPEAT, [op for op, _ in parsed])  # type: ignore[attr-defined]
+
+    def test_phrase_tuples_did_not_shrink(self) -> None:
+        # Pinned to the counts named in the task: 102 refused (9 + 32 + 61), 14 accepted
+        # rationales (D42), 12 refused on purpose. A shrink here would silently narrow the
+        # equivalence corpus below.
+        self.assertEqual(len(TestPerCaseGates.ATTEMPT1_PHRASES), 9)
+        self.assertEqual(len(TestPerCaseGates.ATTEMPT2_PHRASES), 32)
+        self.assertEqual(len(TestPerCaseGates.OWN_VARIANTS), 61)
+        self.assertEqual(len(TestPerCaseGates.ORDINARY_RATIONALES), 14)
+        self.assertEqual(len(TestPerCaseGates.CONSERVATIVE_REFUSALS), 12)
+
+    def test_tokens_and_verdicts_match_the_old_pattern_on_the_whole_corpus(self) -> None:
+        case = by_id(holdout(), "hold-positive-001")
+        for text in self.CORPUS:
+            with self.subTest(ascii(text)):
+                folded = bm._fold_text(text)
+                joined = bm._INTRA_WORD_MARKS.sub("", folded)
+                self.assertEqual(self.new_tokens(joined), self.old_tokens(joined))
+                new_verdict = bm.risk_wording(text, case.evidence_ids)
+                new_invades = bm.invades_risk_domain(answer(case, rationale=text), case.evidence_ids)
+                with mock.patch.object(bm, "_ALNUM_RUN", self.OLD_ALNUM_RUN):
+                    old_verdict = bm.risk_wording(text, case.evidence_ids)
+                    old_invades = bm.invades_risk_domain(answer(case, rationale=text), case.evidence_ids)
+                self.assertIs(new_verdict, old_verdict)
+                self.assertIs(new_invades, old_invades)
+
+    def test_hostile_runs_with_no_letter_finish_fast_through_the_public_gate(self) -> None:
+        # Below MAX_SCANNED_TEXT_CHARS (4096): must be scanned, not refused unread. NFKC
+        # turns U+2152 into "1/10"-shaped runs of digits with no letter (the OLD pattern's
+        # worst case); "1" x 4096 is one long digit run with no letter either.
+        cap = bm.MAX_SCANNED_TEXT_CHARS
+        self.assertEqual(cap, 4096)
+        case = by_id(holdout(), "hold-positive-001")
+        seconds = 1.0  # below the existing ReDoS test's 5.0 s within-cap bound (line ~806)
+        for label, text in (("4096 x U+2152", "⅒" * cap), ("4096 x '1'", "1" * cap)):
+            with self.subTest(f"{label}: risk_wording"):
+                started = time.perf_counter()
+                verdict = bm.risk_wording(text)
+                elapsed = time.perf_counter() - started
+                self.assertLess(elapsed, seconds)
+                self.assertFalse(verdict)  # no risk term in either shape: same verdict as before the fix
+            with self.subTest(f"{label}: invades_risk_domain"):
+                started = time.perf_counter()
+                refused = bm.invades_risk_domain(answer(case, rationale=text), case.evidence_ids)
+                elapsed = time.perf_counter() - started
+                self.assertLess(elapsed, seconds)
+                self.assertFalse(refused)
+
+
 class TestContextAndRoleGates(unittest.TestCase):
     def synthetic_case(self, user: str, role: Role = Role.SCREENER) -> BenchmarkCase:
         template = by_id(holdout(), "hold-positive-001")
