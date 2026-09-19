@@ -422,7 +422,10 @@ class TestGuardNotWidened(unittest.TestCase):
                         modules = [node.module]
                     if any(m.split(".")[0] in {"requests", "urllib3", "httpx", "aiohttp", "socket"} or m in {"urllib.request", "http.client"} for m in modules):
                         importers.add(os.path.relpath(path, REPO_ROOT).replace(os.sep, "/"))
-        self.assertEqual(importers, {"radar_v08/http_client.py", "radar_v08/ntfy.py", "radar_v08/qwen.py"})
+        # T032b adds the loopback-only Ollama adapter (refuses every non-loopback host,
+        # never follows redirects; see tests/test_local_inference_adapter.py).
+        self.assertEqual(importers, {"radar_v08/http_client.py", "radar_v08/ntfy.py", "radar_v08/qwen.py",
+                                     "radar_v08/adapters/local_inference.py"})
 
 
 if __name__ == "__main__":
