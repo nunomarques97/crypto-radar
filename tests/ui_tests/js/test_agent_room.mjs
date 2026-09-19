@@ -384,7 +384,21 @@ test("(4) the pulse and the receiver reaction are synchronized - waking never st
   assert.equal(receiver.classList.contains("waking"), true);
 });
 
-test("(5) the same communication id cannot trigger the wake-up twice", async () => {
+test("(5) the same communication id cannot trigger the wake-up twice", (t) => {
+  // T026: deterministic virtual clock (node:test's built-in timer mock,
+  // node: core only) instead of a real-timer `await wait(720)`.
+  // agent_room.js looks up the global setTimeout/clearTimeout by name on
+  // every call - it never caches a reference at module load - so enabling
+  // the mock here, after the module was already required at the top of
+  // this file, still intercepts every timer it schedules from this point
+  // on. tick() runs the same callback chain synchronously with zero
+  // wall-clock wait and zero host-load jitter, so it still proves exactly
+  // what the real-timer version proved (the pulse, then the full default
+  // WAKE_MS wake-up, run to completion and settle before the dedup is
+  // checked) - it just no longer needs a slack margin to tolerate
+  // scheduler delay under load, which is what made this assertion flaky
+  // (see docs/tasks/results/T026.md).
+  t.mock.timers.enable({ apis: ["setTimeout"] });
   const conn = new FakeConnection("qwen-14b", "qwen-red-team");
   const receiver = new FakeWorkstation("qwen-red-team", "sleeping");
   const room = new FakeRoomFull([conn], [receiver]);
@@ -392,13 +406,19 @@ test("(5) the same communication id cannot trigger the wake-up twice", async () 
   const seen = new Set();
 
   processCommunications(room, [{ id: "c1", from: "qwen-14b", to: "qwen-red-team" }], seen, 5, resolveAgent);
-  await wait(720); // pulse (5ms) + the default WAKE_MS wake-up runs to completion, settles back
+  // Two separate tick() calls, not one tick(705): node:test's mock timers
+  // only fire callbacks already due at the moment tick() is invoked, so the
+  // WAKE_MS setTimeout that reactToArrival schedules *inside* the pulse's
+  // own callback needs its own tick to be seen (verified empirically - a
+  // single tick(705) leaves the nested timer unfired).
+  t.mock.timers.tick(5); // pulse elapses, reactToArrival schedules the WAKE_MS timer
+  t.mock.timers.tick(700); // default WAKE_MS wake-up runs to completion, settles back
   const settledOnce = receiver.renderedHTML;
   assert.ok(settledOnce);
 
   const second = processCommunications(room, [{ id: "c1", from: "qwen-14b", to: "qwen-red-team" }], seen, 5, resolveAgent);
   assert.deepEqual(second, []); // deduped - never re-enters triggerCommunication/reactToArrival
-  await wait(15);
+  t.mock.timers.tick(15);
   assert.equal(receiver.renderedHTML, settledOnce); // untouched by the replay
 });
 
@@ -423,7 +443,16 @@ test("(7) waking settles on whatever the backend says at the moment it finishes 
   assert.match(receiver.renderedHTML, /pose-working/);
 });
 
-test("(8) backend state remains authoritative even for TEST MODE's forced demo", async () => {
+test("(8) backend state remains authoritative even for TEST MODE's forced demo", (t) => {
+  // T026: deterministic virtual clock instead of a real-timer `await
+  // wait(25)`. reactToArrival's two nested setTimeouts (wakeMs then
+  // holdMs) total exactly 10ms here; tick(10) runs both to completion
+  // synchronously, proving the same thing the original assertion proved
+  // (the forced demo still reconciles to the real NOT_CONFIGURED backend
+  // state, never freezes on the synthetic "working" beat) without the
+  // wall-clock margin that made it flaky under load - see
+  // docs/tasks/results/T026.md.
+  t.mock.timers.enable({ apis: ["setTimeout"] });
   const receiver = new FakeWorkstation("qwen-red-team", "not-configured");
   const room = new FakeRoomFull([], [receiver]);
   // Real backend status stays NOT_CONFIGURED throughout - the demo must
@@ -431,7 +460,12 @@ test("(8) backend state remains authoritative even for TEST MODE's forced demo",
   const resolveAgent = () => agent({ id: "qwen-red-team", status: "NOT_CONFIGURED" });
 
   reactToArrival(room, "qwen-red-team", resolveAgent, { force: true, wakeMs: 5, holdMs: 5 });
-  await wait(25);
+  // Two ticks, not one tick(10): the holdMs timer is scheduled inside the
+  // wakeMs timer's own callback, so it only becomes "due" from tick()'s
+  // point of view once a first tick has run that callback (see the (5)
+  // test above for the same node:test mock-timer behaviour).
+  t.mock.timers.tick(5); // wakeMs elapses - synthetic "working" beat, schedules holdMs
+  t.mock.timers.tick(5); // holdMs elapses - reconciled back to the real backend state
   assert.match(receiver.renderedHTML, /pose-not-configured/);
 });
 
