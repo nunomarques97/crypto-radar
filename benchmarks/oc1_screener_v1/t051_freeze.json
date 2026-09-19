@@ -1,0 +1,1138 @@
+{
+  "corpus_id": "oc1-sec6-kraken-ohlcvt-v1",
+  "corpus_lock_sha256": "25589250ad9dbe0c12e5982de1ed2df3d98c44f27ebf803e124e0f83d386b15a",
+  "counts": {
+    "cold": 10,
+    "holdout_labelled": 120,
+    "holdout_sealed": 80,
+    "probe": 20,
+    "stability": 20,
+    "stability_repeats": 3,
+    "warm": 20
+  },
+  "freeze_salt": "t051-freeze-1",
+  "freeze_schema_version": 1,
+  "hashes": {
+    "candidate_profiles_toml": "f9734715b8515a06565e28ee83ddc210b17bcb592791eea66cf8ce3daa4af533",
+    "chat_request_and_reply_parser_local_inference_py": "27225481d3d7c93a850114b9a9f60512fdae0a94577b256eb76608f2696dc0ce",
+    "corpus_loader_benchmark_corpus_py": "3ae00753aa8ff963881500170cbea2daf4cd338ee316664e86c82f837c7df69e",
+    "harness_and_parser_benchmark_py": "e546fc8e65568655ce63eebf2ffb054cd9e8c008951d45da2b0d4634ed02c449",
+    "model_profiles_loader_py": "53d307ecea2ecae422585484893723f4cb2ca9a4e8754b8be04a1a8a8b10a924",
+    "model_profiles_toml": "49ba59ae5fb62a5b429bc1a2716101543edb980d670954f77ef79cfa06c3cc59",
+    "runner_adapter_t051_ollama_py": "3d0edbca324b1d4588ed60cb968fd61dd9749feb1fec34b9c6d719465ba17491",
+    "runner_cli_run_t051_block_py": "05555256e0668225029d7295c173bcd23e2ebca0d049e9f8de283fb55c6ddc90",
+    "runner_sequence_t051_sequence_py": "85e84dd63753c302eaaab9591e968590faa3d9b0b836a2918dc7797a946cd2c6",
+    "screener_output_schema": "a0818f405d37c7664c44cd28c3109a4659a18b4c7ee9424eb86ab22886417755",
+    "screener_system_prompt": "f084edd200fc2497beb5b8ce1ddd64af4e444d7df817d0ee9c2adb266dc669f6",
+    "screener_view_builder_oc1_corpus_builder_py": "ee707719a51fd2ce0ee7c28ea999f7ece561836dd4f4be2fe76d5e1060721f24"
+  },
+  "lists": {
+    "cold_development": [
+      {
+        "case_id": "dev-conflict-018",
+        "case_sha256": "2a761dfc144848613889c8ac9bb7bc12b7554c1c5ecdda203d4acef5bb9dfdc7"
+      },
+      {
+        "case_id": "dev-insufficient-018",
+        "case_sha256": "3faa9ba372ebe213da3dac84c6b4b8189c9ab54689688342ea0c47451792b21d"
+      },
+      {
+        "case_id": "dev-positive-004",
+        "case_sha256": "72fda0a1ef6047d45c1e0ea91f7cebfd12887f2c01f18747c2be5434ee593871"
+      },
+      {
+        "case_id": "dev-positive-011",
+        "case_sha256": "a7b102cb40c734cb7a86db3d77fd3ccd2066ad6123e890b0a8e31220ba67375f"
+      },
+      {
+        "case_id": "dev-insufficient-011",
+        "case_sha256": "e7c363a4fd0f8638af51cfe206c912371e50f004242ed59f547026512a57975f"
+      },
+      {
+        "case_id": "dev-positive-002",
+        "case_sha256": "84e233adc3f4376f98b5c57f1ad1bf4cb64d2f0aefedd9c3ecc8bd7577400242"
+      },
+      {
+        "case_id": "dev-conflict-019",
+        "case_sha256": "70e96fd2cf3f4645a0ad3d36304ef9137dfb5242ef3447e7e9b9e839d337160e"
+      },
+      {
+        "case_id": "dev-insufficient-017",
+        "case_sha256": "dfe494758bf4f876f191a541acefb39e74f12ccb43826a095488a0ce2fb7f886"
+      },
+      {
+        "case_id": "dev-invalid-stale-016",
+        "case_sha256": "19d2739db12e8e9207b13abdb1495ea15e22824c4d6cc55f694954ac364bca3c"
+      },
+      {
+        "case_id": "dev-invalid-stale-002",
+        "case_sha256": "505b3486cdd8192554eb2d92ae3008bf04a30c71fd6b109fdc7eace2310ca81f"
+      }
+    ],
+    "holdout_labelled": [
+      {
+        "case_id": "hold-insufficient-001",
+        "case_sha256": "f20bdc5c0a025dc58ef1b7442a16b72a59f3b0a9af8cc5d98b3b329a916aa1c6"
+      },
+      {
+        "case_id": "hold-insufficient-002",
+        "case_sha256": "5f290dbb838a523245b561162c70b94efec22d64511bf811938e0e022fa224e7"
+      },
+      {
+        "case_id": "hold-insufficient-003",
+        "case_sha256": "a7ffc307e68eb9f141b748424ca5524824a8761ba759008f2c4508c4a5084ad2"
+      },
+      {
+        "case_id": "hold-insufficient-004",
+        "case_sha256": "3f81b58c3844f58a543be0b2840a994cc58ce5ee7806c1d76f5dbad26041e6a3"
+      },
+      {
+        "case_id": "hold-insufficient-005",
+        "case_sha256": "38e59459607b0a4558323b702e98603ad197edc53d2d54332b04c5f753df5be6"
+      },
+      {
+        "case_id": "hold-insufficient-006",
+        "case_sha256": "e2124a7913403d2629a6ae3e29a9e748907441c73f420c039d35ebb375bffebe"
+      },
+      {
+        "case_id": "hold-insufficient-007",
+        "case_sha256": "246bef8961ff4121d12d47fca3cb976ee678e8b628d207ee26192f69777537db"
+      },
+      {
+        "case_id": "hold-insufficient-008",
+        "case_sha256": "a8e29c18c221179f28cad2b111174c92c25df84eb420b0ded1c5bad476734c1a"
+      },
+      {
+        "case_id": "hold-insufficient-009",
+        "case_sha256": "2b39bdf76d4cf346299d552b7b8605b117f775b5dff0fca257def57c15cfec69"
+      },
+      {
+        "case_id": "hold-insufficient-010",
+        "case_sha256": "7277da552d05e2b46f58158344d13d8d920e9accac89fd8e2efa8d0a784fb457"
+      },
+      {
+        "case_id": "hold-insufficient-011",
+        "case_sha256": "a4fce5b0506ccb7cdaf54d013c7888042cdae26fc0d6fdd8a3a3e2b273b9fc25"
+      },
+      {
+        "case_id": "hold-insufficient-012",
+        "case_sha256": "0809cc16cec2d8379e85cd97105d51ac59958818181f5246b1d599abc5a6d7ac"
+      },
+      {
+        "case_id": "hold-insufficient-013",
+        "case_sha256": "b8c5b51ba10d4ef11d14e05e76ae77138e7ac67ff1149fd4443d0c3728b04c2e"
+      },
+      {
+        "case_id": "hold-insufficient-014",
+        "case_sha256": "ae84d7a5e0567ead2c577a07f4d45b364810b5f74e3c733fbb0c2ff2a6b63e9a"
+      },
+      {
+        "case_id": "hold-insufficient-015",
+        "case_sha256": "d555e7cf0817789c89b6317030662d3f30ac8d3b94e557aab2a816c8e2866596"
+      },
+      {
+        "case_id": "hold-insufficient-016",
+        "case_sha256": "1e10bfa9ad921d7700dd6273da0009d69fcab137eb120ea75c7059222fdf32d0"
+      },
+      {
+        "case_id": "hold-insufficient-017",
+        "case_sha256": "e1baa9c1d1010b89e6bf191bd1673e9698e4be0026c3d176ca70b192540c71ee"
+      },
+      {
+        "case_id": "hold-insufficient-018",
+        "case_sha256": "0bf6cb8dc6aede2748f5a01096c78ae1681bc8cfd42db0455388200ce8ce7b20"
+      },
+      {
+        "case_id": "hold-insufficient-019",
+        "case_sha256": "1897f7edbaa23bed919bbaa6e8065b4bf3328de1cfbca4a874cf2927bb786273"
+      },
+      {
+        "case_id": "hold-insufficient-020",
+        "case_sha256": "6dc7e88dc8658b566879ab31a2129ac92119b73f6da1bc2ec5e45589fa2bb478"
+      },
+      {
+        "case_id": "hold-insufficient-021",
+        "case_sha256": "62a433c653c8edc7010375ce72bd03a6bb80f8961265f1572227a1f8c6076475"
+      },
+      {
+        "case_id": "hold-insufficient-022",
+        "case_sha256": "2a64be6b2f760e8f976180828c695dad8bf879d7482f01d439480e33c00ac252"
+      },
+      {
+        "case_id": "hold-insufficient-023",
+        "case_sha256": "fc49409976e2d3288a9185d1f582ed10d8cc113852fe212222fda50f6e5a05a3"
+      },
+      {
+        "case_id": "hold-insufficient-024",
+        "case_sha256": "e027121d17a76a9657bf582b098c41dc568f441064fef2a62e5a1b35bf5de5e5"
+      },
+      {
+        "case_id": "hold-insufficient-025",
+        "case_sha256": "3abef6a5c6fb41a8f6d97bb8d46cee6a040c2ce92e73eab5201786cfd214ceb1"
+      },
+      {
+        "case_id": "hold-insufficient-026",
+        "case_sha256": "80ffa2090dcef00b1977667aec8422d59959c2f4eae21f11afcc555be7fd9052"
+      },
+      {
+        "case_id": "hold-insufficient-027",
+        "case_sha256": "d894be348cda8dd11c28630965e2226181480122a820f0366d400a9118ebfccd"
+      },
+      {
+        "case_id": "hold-insufficient-028",
+        "case_sha256": "7e3a594d16104547f7eff6e807f3e21a9403b3521bc6c7c719ce732e07f490fc"
+      },
+      {
+        "case_id": "hold-insufficient-029",
+        "case_sha256": "63ff9c3bb0b1b75700b623765dea3812c7734a286458f88e5dace83357268196"
+      },
+      {
+        "case_id": "hold-insufficient-030",
+        "case_sha256": "0f8e50f3f9ce8c7b612f6c8eb9c75b517c1ef559a070d5b61d78ebffcfd26860"
+      },
+      {
+        "case_id": "hold-insufficient-031",
+        "case_sha256": "6cbfa3cec62db5f0fb8afc5ff50649bbe83f0a17bca6bd8c6f6d14f2c3220bca"
+      },
+      {
+        "case_id": "hold-insufficient-032",
+        "case_sha256": "9b3b3725aa6d9f1e1f5fdcea7708764a5f427424120d8ba4364bbaeaf575522f"
+      },
+      {
+        "case_id": "hold-insufficient-033",
+        "case_sha256": "b97baeb472ef60747f2facf6162d243ec0b0db314fbc085d0ed49bfcd5369ae6"
+      },
+      {
+        "case_id": "hold-insufficient-034",
+        "case_sha256": "14e172841c5607e1f585cb167772aa0d449752cefa6835b3d6cb37ef66fa6ead"
+      },
+      {
+        "case_id": "hold-insufficient-035",
+        "case_sha256": "314402477d3b635637c6830718d473a3557268fdac19f0dd0bcc9969367c7f4f"
+      },
+      {
+        "case_id": "hold-insufficient-036",
+        "case_sha256": "1d651c28b00252debeedf8ef646c5440d3e2f141ea10743bb9965d1347a4955c"
+      },
+      {
+        "case_id": "hold-insufficient-037",
+        "case_sha256": "da399b8d10553bdf2867a63ffbc001202e8c84e4929158f60ed6966f2c78fdcc"
+      },
+      {
+        "case_id": "hold-insufficient-038",
+        "case_sha256": "36c63d27bdf4058ab4618e27ea9c876b698a6d868598fa6d965d7520fd27a728"
+      },
+      {
+        "case_id": "hold-insufficient-039",
+        "case_sha256": "b243c8769846040037bb1c735c58c6944bab017e4c49fa8562a8e2b326112422"
+      },
+      {
+        "case_id": "hold-insufficient-040",
+        "case_sha256": "c897274758d548ee9d580cbbbc6b761814433735c2244288683382bc60adcd5b"
+      },
+      {
+        "case_id": "hold-invalid-stale-001",
+        "case_sha256": "09689f8c9ac88fc1f8e1a136d54905b0487aeb0da9fa23443d743cf0f3db7fc2"
+      },
+      {
+        "case_id": "hold-invalid-stale-002",
+        "case_sha256": "37ab29042fe0131caf7dacbd206cc14bb8f68486f78d7b3ecf9432c85c9e62d0"
+      },
+      {
+        "case_id": "hold-invalid-stale-003",
+        "case_sha256": "3491eb7820f0864e7940dc93cde6eea6a5ff4e3f3b287a09f980271ec57d075e"
+      },
+      {
+        "case_id": "hold-invalid-stale-004",
+        "case_sha256": "4f7b4f68dc0e5111302e2b6c14d26716b7fc0484d7ff5bd06e1637be0e2f74cd"
+      },
+      {
+        "case_id": "hold-invalid-stale-005",
+        "case_sha256": "ea2a5d7a6bce17b03aa347a688e0932d21720280b42dcf79b1bee9060a350f67"
+      },
+      {
+        "case_id": "hold-invalid-stale-006",
+        "case_sha256": "58ca93cea45077e5cf10b376d9b287210c846ad6e8ebd04e52857b0fbda718d4"
+      },
+      {
+        "case_id": "hold-invalid-stale-007",
+        "case_sha256": "57dab1b6fcefb83951d6588e2509fd65349a3eba23d456faff53aa48b9ace220"
+      },
+      {
+        "case_id": "hold-invalid-stale-008",
+        "case_sha256": "410558b25146539b9434d3dd3a6926ff1cac3778a9ce07688fba07271e98e0c7"
+      },
+      {
+        "case_id": "hold-invalid-stale-009",
+        "case_sha256": "76d48f356bf954bf9d40f11033386553852e3e10dfa3b9cc67f5560f11b751fa"
+      },
+      {
+        "case_id": "hold-invalid-stale-010",
+        "case_sha256": "7a3539a0fd70b3a0327517d3c35d745aaea8ea86c2f0f2da7493ee7d9a18a43f"
+      },
+      {
+        "case_id": "hold-invalid-stale-011",
+        "case_sha256": "37eccb058225094a062cf82c6a23bda9cca3f0cb8b67d9239d194f81ebea9143"
+      },
+      {
+        "case_id": "hold-invalid-stale-012",
+        "case_sha256": "9f86827cdbc9540ec6d717c4687a1762dfea62164705a25fed8876874a5a7478"
+      },
+      {
+        "case_id": "hold-invalid-stale-013",
+        "case_sha256": "da36c2c21acb49df68dfd3a58480b661a97476391cb5e81fc98f1095846a0222"
+      },
+      {
+        "case_id": "hold-invalid-stale-014",
+        "case_sha256": "089c7fcac7b4d751a53a107055f20eec4ac290333604acc7e8d558f42bb06619"
+      },
+      {
+        "case_id": "hold-invalid-stale-015",
+        "case_sha256": "b10a76ba569638763addaf518963efcacc5c276c568d2fae43a5d8d4c5cecf97"
+      },
+      {
+        "case_id": "hold-invalid-stale-016",
+        "case_sha256": "7e346319c3f6c62d9305cecda583d24da8e9bfd845673e806faff71c8c40c830"
+      },
+      {
+        "case_id": "hold-invalid-stale-017",
+        "case_sha256": "31f1a0df233d57504610f87a8e8eca4db3fd443870e042cb8b84ec811f6a74ab"
+      },
+      {
+        "case_id": "hold-invalid-stale-018",
+        "case_sha256": "5ac2acc7eba35267adc12d338334128692594f0e9a45b837e0ea4cbaec6b4315"
+      },
+      {
+        "case_id": "hold-invalid-stale-019",
+        "case_sha256": "ee1085b5a7ed19b3035e46c5f12223bc29f8686de11d2ca3a818d21b9a498350"
+      },
+      {
+        "case_id": "hold-invalid-stale-020",
+        "case_sha256": "836dab68a578ee7f8fc98fe22a854c56d1adc4724a4b9b3d087e970428bd62ae"
+      },
+      {
+        "case_id": "hold-invalid-stale-021",
+        "case_sha256": "ee43de0482e8d8282dc48aef0e63746abce49b444e82f38547aa7c33260a87cf"
+      },
+      {
+        "case_id": "hold-invalid-stale-022",
+        "case_sha256": "e93fbd87dfbad64935c56f34e0eb7e588584c4fcc84c1a5b3a0ab5de64a428ce"
+      },
+      {
+        "case_id": "hold-invalid-stale-023",
+        "case_sha256": "d483d0a414007d34d4af82b1a8ff413ffd05a0f6a854d2cd398d13011bdb89ff"
+      },
+      {
+        "case_id": "hold-invalid-stale-024",
+        "case_sha256": "05512eeb75276e64163976a29dfbe5c82ae1bd3fa96cf1193eb24c7d2ef42ce3"
+      },
+      {
+        "case_id": "hold-invalid-stale-025",
+        "case_sha256": "799bcaa7aef940ffa5f55e6deacca7ddac80986f50cfd8d1b9ed9dff779fd93e"
+      },
+      {
+        "case_id": "hold-invalid-stale-026",
+        "case_sha256": "ed53320d393b467919add7d2569ece8244e318e6e133a429f0bade1d5c2f3cf2"
+      },
+      {
+        "case_id": "hold-invalid-stale-027",
+        "case_sha256": "72be21579d430cb21c43b74ad830921ada6a71d3c5b8aebcee6262d244aaeb92"
+      },
+      {
+        "case_id": "hold-invalid-stale-028",
+        "case_sha256": "eec4deac93236eba3baa831c7a8c46838e9386ccf7b5a862af8778b84192e063"
+      },
+      {
+        "case_id": "hold-invalid-stale-029",
+        "case_sha256": "442e3c8e70078a99a10f57a5e9a75b500f265d3fdaca591da150243d36345a50"
+      },
+      {
+        "case_id": "hold-invalid-stale-030",
+        "case_sha256": "0f7d5aa83b0aaf09b2b8b5e9e4fa6ab7c38a5610a444010ad3dcdb90ec9a6f8a"
+      },
+      {
+        "case_id": "hold-invalid-stale-031",
+        "case_sha256": "ba3aed88a9fa82dbfa031991f810e7681d9a736ab6ee9fcbfa76c9125371bdd1"
+      },
+      {
+        "case_id": "hold-invalid-stale-032",
+        "case_sha256": "f41faefd7237ba99bbdcb04647b5fcfb602fb139a0c972e25a562599f1ee4df8"
+      },
+      {
+        "case_id": "hold-invalid-stale-033",
+        "case_sha256": "cb5bf1112e67775260b20957fcb3d048ed7fa9ecfd451923cedc5b6a9bfe39d9"
+      },
+      {
+        "case_id": "hold-invalid-stale-034",
+        "case_sha256": "5cd8ddde5a55a47f0428516fa0a76e9eeb5605ed7096158045d8a408063182b8"
+      },
+      {
+        "case_id": "hold-invalid-stale-035",
+        "case_sha256": "43a170ed2947f1ea11608ac227cf6e1102b77042da36f6e642ec2b15ff05f4d3"
+      },
+      {
+        "case_id": "hold-invalid-stale-036",
+        "case_sha256": "5c7e3d8809092104659f0c98de5099668a0727048a8965d8001bd90ae297ac39"
+      },
+      {
+        "case_id": "hold-invalid-stale-037",
+        "case_sha256": "38a1f8caaf955d54ca72076a833b574ea5ba94a4e867e409ad18ae9015bbe539"
+      },
+      {
+        "case_id": "hold-invalid-stale-038",
+        "case_sha256": "3ece38a48f39d061806e164fdd5b15b21996e23d51f8120cd6961edee5d815e8"
+      },
+      {
+        "case_id": "hold-invalid-stale-039",
+        "case_sha256": "f7bf4905bf39c536b08ccc3ae7cfcd4025353543df843eca2de0b28d570aef26"
+      },
+      {
+        "case_id": "hold-invalid-stale-040",
+        "case_sha256": "d1029fba960965a9d7e5917854b00af081e4dd6f6382c623a90691d1d6f6491d"
+      },
+      {
+        "case_id": "hold-no-edge-001",
+        "case_sha256": "45a93675167cc0fd7eddd77920c7146404631a2ce6c0ea55ee571d96a83303be"
+      },
+      {
+        "case_id": "hold-no-edge-002",
+        "case_sha256": "0b2ff134e4e40bb44b1fe2af50515620bcf95506c2b4779b93116c58516aa91f"
+      },
+      {
+        "case_id": "hold-no-edge-003",
+        "case_sha256": "6e27da4ea4cdf59f90fa1222319cb4a118206cf913b351c666f2aecd0a4ecaa4"
+      },
+      {
+        "case_id": "hold-no-edge-004",
+        "case_sha256": "a9fe1474a878446e6cac7625dc5d9f976bc34b3c78775a9f0b26fe74930d0b7c"
+      },
+      {
+        "case_id": "hold-no-edge-005",
+        "case_sha256": "b03dec7539df31697eaa520743a71a9db7b7e8893718a5a638cc09f73a149866"
+      },
+      {
+        "case_id": "hold-no-edge-006",
+        "case_sha256": "c8a00019ba81a855bd7b058ac36e280558591744a8ddbf62149005c01040eadf"
+      },
+      {
+        "case_id": "hold-no-edge-007",
+        "case_sha256": "968eb32506755904792771de4ec275baa14d52eb04fafa88297d4f490769a34d"
+      },
+      {
+        "case_id": "hold-no-edge-008",
+        "case_sha256": "8a2a2cfe94bf88f5d3bd4dd14d9aab07767d07375791cdee44c15932afdc0a27"
+      },
+      {
+        "case_id": "hold-no-edge-009",
+        "case_sha256": "82218e48e838eb3a13f3c775d6f5683b32d796cd55ec5166822e26490538d50a"
+      },
+      {
+        "case_id": "hold-no-edge-010",
+        "case_sha256": "0a99dbd95ed9e8efafe00c318cec5201f7f9baa3290ecb69273dded3913bd851"
+      },
+      {
+        "case_id": "hold-no-edge-011",
+        "case_sha256": "960789b8315c1cfe0e642f8a5c1347630c20e566124d939bec87ecdcf8e8bbf4"
+      },
+      {
+        "case_id": "hold-no-edge-012",
+        "case_sha256": "b48d8a9b295fc87b6ec0f28239c27876ed7bc7fe36b1997120d02510791d7544"
+      },
+      {
+        "case_id": "hold-no-edge-013",
+        "case_sha256": "be0633b27af8f2e65371cee8d1345bbdaf455b74518536b93bc2877a8393b828"
+      },
+      {
+        "case_id": "hold-no-edge-014",
+        "case_sha256": "a406b6bfa3bf8d28e3e1d90eac547f23a7810749bda6f66445261b664671676e"
+      },
+      {
+        "case_id": "hold-no-edge-015",
+        "case_sha256": "a912c383105eabd5cb44f67ae5e165bffaee4be65cc1196a9d8c46ed88c301f3"
+      },
+      {
+        "case_id": "hold-no-edge-016",
+        "case_sha256": "7a0d510dc7b3c10a9153e64f44e4ff6de22bf9fb66862fb2798b1430c17446b0"
+      },
+      {
+        "case_id": "hold-no-edge-017",
+        "case_sha256": "6dce41fb13130bbc7484a3cb0b83105c09157942aecda5bcf10906c4cfa78a15"
+      },
+      {
+        "case_id": "hold-no-edge-018",
+        "case_sha256": "fd2f435a41eaf8036a9b29a4850dba5dc0418c3da9a35f0c297440e71dfdbedd"
+      },
+      {
+        "case_id": "hold-no-edge-019",
+        "case_sha256": "3b7b27aba2fa244269edca0709c5a41f4032e9b51f61220d56b69f9b541ed73a"
+      },
+      {
+        "case_id": "hold-no-edge-020",
+        "case_sha256": "31bd897f6a2b72912bbf0584acdfc80f710b92a74a4b49e30f0cecb7e7f16204"
+      },
+      {
+        "case_id": "hold-no-edge-021",
+        "case_sha256": "9ff3e362bd5524993beeb1db85f6d12e65e3b535cb97bc98db26a9e08234b001"
+      },
+      {
+        "case_id": "hold-no-edge-022",
+        "case_sha256": "a7637eaced33b13645a0a275a84e4e22cd00eb85ad1d0a039252a804def75039"
+      },
+      {
+        "case_id": "hold-no-edge-023",
+        "case_sha256": "eef15fb50e06aa212be19eacc01e00ea18e86d12234fbecf334d1de78864a1ff"
+      },
+      {
+        "case_id": "hold-no-edge-024",
+        "case_sha256": "279407db073e2b12fa937ec54dd5b85947ca606b69dda1f4904b4b1a5c76cf16"
+      },
+      {
+        "case_id": "hold-no-edge-025",
+        "case_sha256": "4e028e23ed6202d47ee078fd5b50b24bd9f5cef5151b50488363b84a50b609b3"
+      },
+      {
+        "case_id": "hold-no-edge-026",
+        "case_sha256": "c32ab82095bb8f7bc18119a591b4651dd3ce69223f23ca8d722dd36801d87808"
+      },
+      {
+        "case_id": "hold-no-edge-027",
+        "case_sha256": "4cc331bd17fafd6fc9c313685707b9eca835a2efe64229863c906645d4ed4273"
+      },
+      {
+        "case_id": "hold-no-edge-028",
+        "case_sha256": "555a8d3f52d587b16f0ec2d92b5a26d58dfb5be3d8b1a3405f7881865cea69d8"
+      },
+      {
+        "case_id": "hold-no-edge-029",
+        "case_sha256": "77e3e72cb38dd91046febd6c32894ac8733ad6395d3ced2e1daf2a379ddd1e08"
+      },
+      {
+        "case_id": "hold-no-edge-030",
+        "case_sha256": "234d22bcdbe032fa9e2f49053752793e5fa5d1d67ab02f126aed7f6d3d43b7b3"
+      },
+      {
+        "case_id": "hold-no-edge-031",
+        "case_sha256": "610ed1d313abdd762ecd28818757b75794d16adaeb1e5e8193e4eab7c01994f9"
+      },
+      {
+        "case_id": "hold-no-edge-032",
+        "case_sha256": "99aed1d9b17f858a3a713ebb41cd61dd68779ee200d5e7efb35b39719e7e6251"
+      },
+      {
+        "case_id": "hold-no-edge-033",
+        "case_sha256": "6015e14c984772a4646151f675887d881bdb20d2203d7c8948c89513ddd85afc"
+      },
+      {
+        "case_id": "hold-no-edge-034",
+        "case_sha256": "f441b10f75f3f7bcf28bd89d8c7259f2ea8fbc4b5e9e48e108a63bf750c6f035"
+      },
+      {
+        "case_id": "hold-no-edge-035",
+        "case_sha256": "10629480d8f82068791fa216060d54d19b18e74fe87a9621d303cffe91cc7680"
+      },
+      {
+        "case_id": "hold-no-edge-036",
+        "case_sha256": "28b216847340ef7b2af7072bbc24e74b1add2657a28da50d952d6b33ca592cce"
+      },
+      {
+        "case_id": "hold-no-edge-037",
+        "case_sha256": "d23ef80ba61f3510bec3143e0a6d2dfc0c6f80cd79ee941b7adf1204f37d4f0c"
+      },
+      {
+        "case_id": "hold-no-edge-038",
+        "case_sha256": "5bcba4c56211f9f7227a60748a48b2de346943eaea3c91ff8bb52856d878bba1"
+      },
+      {
+        "case_id": "hold-no-edge-039",
+        "case_sha256": "ea171357b291faa6d8bc73ffb1acba6a464e437020d18b4d8cb83a58ddad4c34"
+      },
+      {
+        "case_id": "hold-no-edge-040",
+        "case_sha256": "285eca736b8ce1eb30188c28bdda5b17c208c3866e771e9181b25c44363dc36c"
+      }
+    ],
+    "holdout_sealed_never_sent": [
+      {
+        "case_id": "hold-conflict-001",
+        "case_sha256": "2adc755d180679e2f20acc6531ce2f9c2a1423257a3eb8946b33ebb5dc42c0ea"
+      },
+      {
+        "case_id": "hold-conflict-002",
+        "case_sha256": "14a479466fe2539e654e70988c7dd99ff9189d68ba129d7b3645d5f00d29289b"
+      },
+      {
+        "case_id": "hold-conflict-003",
+        "case_sha256": "001e644355939e87c01af021b72f3b79a09ad0bf2e2ae6151f8389abe5fe510b"
+      },
+      {
+        "case_id": "hold-conflict-004",
+        "case_sha256": "b204e30715ea1c9684bb004d07e4ca77e470baf60ea1259a9ff8f977cb00d959"
+      },
+      {
+        "case_id": "hold-conflict-005",
+        "case_sha256": "9890e40b061ebc7a3ac46ed13a1a3e7a594ad80be3ea4b5fd0bda34ea614e142"
+      },
+      {
+        "case_id": "hold-conflict-006",
+        "case_sha256": "91220f1fd8ec6a11d15811179ba12e8178873ce0fdb4daf237b3ca43b8013769"
+      },
+      {
+        "case_id": "hold-conflict-007",
+        "case_sha256": "8c5aa21e641fef581113459f9109e607b62a97a445c153c57d5fb139da5454c6"
+      },
+      {
+        "case_id": "hold-conflict-008",
+        "case_sha256": "172f0e7302f88a2cfd46a9461b74196a4354a11de0ebfd6d2a7504f713b468b7"
+      },
+      {
+        "case_id": "hold-conflict-009",
+        "case_sha256": "bf7f4d49b97d2e51c8e7464132b1b41d92c376f908c35b27268e2ba60ce68e92"
+      },
+      {
+        "case_id": "hold-conflict-010",
+        "case_sha256": "1d45021b2b2ec0fdc9d3f223faf633738f13aad49e120a5f3cf293804a8c2f28"
+      },
+      {
+        "case_id": "hold-conflict-011",
+        "case_sha256": "09e289e14e46c057ee8662cf7b77e7c5eef4121544d5bcc8e835ac0bc9f5a43d"
+      },
+      {
+        "case_id": "hold-conflict-012",
+        "case_sha256": "d089d89362026487c853663809cd24ea29a5e97b29c2b134cc661424537414e7"
+      },
+      {
+        "case_id": "hold-conflict-013",
+        "case_sha256": "a3e53f8074e46aaff8de8378f651a5fa458f1a3b2d0dac8f3ebdb28c79c879bd"
+      },
+      {
+        "case_id": "hold-conflict-014",
+        "case_sha256": "6ec228318ba98ca5ce8dc4d279921db386f4b182df8b2b4ed82040af960728ed"
+      },
+      {
+        "case_id": "hold-conflict-015",
+        "case_sha256": "b08888b1691c71cbf3a7019cac2e35e7c11ce9f330e9ef58f3d744bbd10815d3"
+      },
+      {
+        "case_id": "hold-conflict-016",
+        "case_sha256": "0f5beb97653c0e08d98980cdf2f85c71047a3a5a77c1f6847266e533a16de43f"
+      },
+      {
+        "case_id": "hold-conflict-017",
+        "case_sha256": "12917ce5403c534da9837f3bf772334793ee0a8752403966fa75c4d39e1433ca"
+      },
+      {
+        "case_id": "hold-conflict-018",
+        "case_sha256": "511ae624ab22b11b62162958dbcbfac2a042cd776260903b7e5ac4c646f2c064"
+      },
+      {
+        "case_id": "hold-conflict-019",
+        "case_sha256": "66301d0464e0ad3ea6be774c89e27b322cf49d8bb3df5184dd5029b9918d7ae7"
+      },
+      {
+        "case_id": "hold-conflict-020",
+        "case_sha256": "98ba253163a15bb215226db6f2d973493775d3b4263e816a9b89389d62f1a5a0"
+      },
+      {
+        "case_id": "hold-conflict-021",
+        "case_sha256": "2165ef0142d369070f6e3ffb78334f40a08ec46aae2db99afbbb0ca912d9d20a"
+      },
+      {
+        "case_id": "hold-conflict-022",
+        "case_sha256": "fd4536aa7bfea4470615422554d47907ba27014d592ce105da8a3c655197d18b"
+      },
+      {
+        "case_id": "hold-conflict-023",
+        "case_sha256": "85de99b47f843588682e7eb3e7862db3404cbb89416d198edb6ace44b5b86e7c"
+      },
+      {
+        "case_id": "hold-conflict-024",
+        "case_sha256": "54e94114bc6632c0ad972ce6efb50ae3fa5eed63caec0358c854fcb989a706f9"
+      },
+      {
+        "case_id": "hold-conflict-025",
+        "case_sha256": "44990839b364d8f54028654a32d23c2bc9b8feaea4023bb781431b3f714f9c32"
+      },
+      {
+        "case_id": "hold-conflict-026",
+        "case_sha256": "fc4e9827e0d932bf4ab27b98a3034f077cec4ace6a11cf2901cb1a99a8b4475a"
+      },
+      {
+        "case_id": "hold-conflict-027",
+        "case_sha256": "fc1c72c4a57acfe9038b28c9c21f927cb92d415f65d611406d426759fd1dee08"
+      },
+      {
+        "case_id": "hold-conflict-028",
+        "case_sha256": "4d88dbda1eb5ecb3ad71e52856f7e5d3101a9a3d895ac7653930b2905aeb0c29"
+      },
+      {
+        "case_id": "hold-conflict-029",
+        "case_sha256": "4d79bb30cba11469d5f5deede5196f1a695c9456e3bbd36a22e012cd6e5992d2"
+      },
+      {
+        "case_id": "hold-conflict-030",
+        "case_sha256": "3b4bb75f6670e06f76af262d303b170de0dbf6003fa160344837d358331c6961"
+      },
+      {
+        "case_id": "hold-conflict-031",
+        "case_sha256": "b7ac41e09655e3b77182a865954359db0f1d688fc2e426d49316d7133e34caa4"
+      },
+      {
+        "case_id": "hold-conflict-032",
+        "case_sha256": "08cb7f69b75c29537987e3a69e32e1f3f07805498e36099ed5cdd58ecd3416a0"
+      },
+      {
+        "case_id": "hold-conflict-033",
+        "case_sha256": "96abaf49804b3772084235c51be7efd6b7c63ad892c0c402e927a9b6d956c23e"
+      },
+      {
+        "case_id": "hold-conflict-034",
+        "case_sha256": "4496711b8661bc4e5910f1d7ecba5f258333746910df3bbbb4deb059b8ad8bec"
+      },
+      {
+        "case_id": "hold-conflict-035",
+        "case_sha256": "376a07bf75d66f488a385a38908ffa23740fc16e9695f6a509a1f19bd52c70e9"
+      },
+      {
+        "case_id": "hold-conflict-036",
+        "case_sha256": "1fc907ed554a46ec4b4442fd428ca42fdf4b54f6e15306a7319ea3548d8814f8"
+      },
+      {
+        "case_id": "hold-conflict-037",
+        "case_sha256": "0ed6d7f762f72c49d32286adc03dd5ce2437a5d7be420ff3709b429b99d9a21b"
+      },
+      {
+        "case_id": "hold-conflict-038",
+        "case_sha256": "3456556a3521f521eddee9393451fcf7bdf6d435842710ec3a3709853e53eeaa"
+      },
+      {
+        "case_id": "hold-conflict-039",
+        "case_sha256": "9679ef85274b841b6950a7562ed942603b7ee183eadf62d8ccd86b34ef61c2f2"
+      },
+      {
+        "case_id": "hold-conflict-040",
+        "case_sha256": "4a10ccb0b3b5aace4dbcec65e0899974eef38d03bfd377791b7e434746827a1c"
+      },
+      {
+        "case_id": "hold-positive-001",
+        "case_sha256": "ed8d8fdac1bb1125b9e2ca2e2d3eb75f76972e10072530f86a6d933a9326d417"
+      },
+      {
+        "case_id": "hold-positive-002",
+        "case_sha256": "ed96ffce9e4f4f8a9dc64efe337978f219f20970962bcc1d6200bb99dc8b5991"
+      },
+      {
+        "case_id": "hold-positive-003",
+        "case_sha256": "976b2e87d2934908c3fd2a9dfdd0ff63da1a20b53ad5ea9b242a73550eb6f726"
+      },
+      {
+        "case_id": "hold-positive-004",
+        "case_sha256": "5fdbf88de33ae6aabffe97a3dd49973a9efcd44fc7a072a48607cf7cab6f3390"
+      },
+      {
+        "case_id": "hold-positive-005",
+        "case_sha256": "cf338c8e8375c1d7d8dcf82c7101ea5bd5217f59a0aa24ba3e39e343ef4bee8f"
+      },
+      {
+        "case_id": "hold-positive-006",
+        "case_sha256": "c78f06580dc7c63a2cc0195ceb7826481fa74f8c9ac6e62d39b06631a85c3e2b"
+      },
+      {
+        "case_id": "hold-positive-007",
+        "case_sha256": "c6fb989f2d25852312877b7a0d88851b6192fc050f34ebc31c36df5b997e2e8f"
+      },
+      {
+        "case_id": "hold-positive-008",
+        "case_sha256": "6871f3a740cf3e392e7678b1b514ad886cc97e53044e4490adfbd67f21c4d590"
+      },
+      {
+        "case_id": "hold-positive-009",
+        "case_sha256": "03a0f5afe7868091046bd6bf09502039be7312d417e9e358bc8fa34503ff991c"
+      },
+      {
+        "case_id": "hold-positive-010",
+        "case_sha256": "36f4a77625c5238bc68b44a033e3ad800e9c372a2816a41b429aad0d5770d6b8"
+      },
+      {
+        "case_id": "hold-positive-011",
+        "case_sha256": "e95b12b0e58a89a071d4fcdca850272cc1da350dc6fbf13810848bb4e17137c9"
+      },
+      {
+        "case_id": "hold-positive-012",
+        "case_sha256": "b8a8db564f06d6947d3920925cdd52d91b390f03bd501efb209359d04c46a52b"
+      },
+      {
+        "case_id": "hold-positive-013",
+        "case_sha256": "97245e4359219fbf703c29258cb3377a56baa50f2a9aed689bebd8901c8a67b6"
+      },
+      {
+        "case_id": "hold-positive-014",
+        "case_sha256": "0b380b9bd051d70e21935193e2e7954e1a3beb5654c26a55e8121feb7772a37d"
+      },
+      {
+        "case_id": "hold-positive-015",
+        "case_sha256": "966aca8f96f05fdc7879c51f6a018cc2d8f20b7722df2795116451b11e607ed4"
+      },
+      {
+        "case_id": "hold-positive-016",
+        "case_sha256": "e6217705d1fd3d46cf8e446be521063d9c290242d5927f75014151eeabe7ccd9"
+      },
+      {
+        "case_id": "hold-positive-017",
+        "case_sha256": "9b0ac5a47d9943945ba10837d0bdcf895204cc8a4f988ed9012607452280b3f9"
+      },
+      {
+        "case_id": "hold-positive-018",
+        "case_sha256": "32ff831580078cc87aa49b3a1d428a542323d9daf743f7b4433c059a41dadba7"
+      },
+      {
+        "case_id": "hold-positive-019",
+        "case_sha256": "9d434839ab5ec66030210362a98fce9ed4e80ec80d986b6b9104bd5d7ce75a74"
+      },
+      {
+        "case_id": "hold-positive-020",
+        "case_sha256": "d4123a2221400c74a2a6c11eaea2fdd5c314df7a5e88cc3f05d6abb4981bf033"
+      },
+      {
+        "case_id": "hold-positive-021",
+        "case_sha256": "7ec0f2d3ad247739fb0924a013d4f65b38a9805fe89d9a18946636aecc34cddc"
+      },
+      {
+        "case_id": "hold-positive-022",
+        "case_sha256": "269290d193324abd23bcc756f4a17aeacc25eee391390b04f604d451076ec5a1"
+      },
+      {
+        "case_id": "hold-positive-023",
+        "case_sha256": "e25d4de46f8b976e07412994ee2d19a2b3dd2de5a61c68fc6e997bd275fcde6a"
+      },
+      {
+        "case_id": "hold-positive-024",
+        "case_sha256": "139e00f42e1b64591423d6e6151183a5439c6cc383ec0bce1c6b255bed94948c"
+      },
+      {
+        "case_id": "hold-positive-025",
+        "case_sha256": "c02ae6f7638365ac83dd504ab8a75e6715b169206898fa172ad2caac2a1c108a"
+      },
+      {
+        "case_id": "hold-positive-026",
+        "case_sha256": "b4f2d5c2619dd4d28973bb712cf027b4b839b2f130d37f1566cbad121dedbca2"
+      },
+      {
+        "case_id": "hold-positive-027",
+        "case_sha256": "99848304b794ca69468612e21413a87eb039d9e20d2dea16e6007307a567c863"
+      },
+      {
+        "case_id": "hold-positive-028",
+        "case_sha256": "b04accee250fc40e850f47d2a22e5a4b4cb6370d0e4d56a2f04cb104ad9c8235"
+      },
+      {
+        "case_id": "hold-positive-029",
+        "case_sha256": "57b91f9d9066907c529556393d6358f63be6ff05e018df9f10d3e1efac2d7d5b"
+      },
+      {
+        "case_id": "hold-positive-030",
+        "case_sha256": "97577c8365320c8a08585de3bbfe5cbd0f61d10bb67626016eec6088d55e6cd7"
+      },
+      {
+        "case_id": "hold-positive-031",
+        "case_sha256": "6a77ceab52cfc1e55a833ba10295e47aebfa4891a7636948010faffe41de7634"
+      },
+      {
+        "case_id": "hold-positive-032",
+        "case_sha256": "40543914b115b0eed15fa440cc766d5231e2f75b183c144f6611b9fa5a7d5329"
+      },
+      {
+        "case_id": "hold-positive-033",
+        "case_sha256": "6451de74bb105b9f9426cd902d18c6b873ee6a5e173284095f1ba39931f02c54"
+      },
+      {
+        "case_id": "hold-positive-034",
+        "case_sha256": "deec22b6e9180841df9b42bbe5ff324d12eb7b5065301ae5039c622595eb1047"
+      },
+      {
+        "case_id": "hold-positive-035",
+        "case_sha256": "1abc1a172f45dd956c891783ae9594df84929bf8f0cfaa25772c58c76ea3169e"
+      },
+      {
+        "case_id": "hold-positive-036",
+        "case_sha256": "9d21790fc478bc06facc712a425ed3b6c804735033fbccdaad0c7eb1b070c4c2"
+      },
+      {
+        "case_id": "hold-positive-037",
+        "case_sha256": "8bc8603027d8182f9a93af6787951e041ee45e6e90c769370f607f130f3a9679"
+      },
+      {
+        "case_id": "hold-positive-038",
+        "case_sha256": "4f7ac6d83d15e4e7463c5b0deeb890744f1b1222bec0f55bc4fa06758f6a93d3"
+      },
+      {
+        "case_id": "hold-positive-039",
+        "case_sha256": "862ab2a80f9dc0ee8e02e100497fcaa50d0b39e1741f062625b91cf014fd3c4c"
+      },
+      {
+        "case_id": "hold-positive-040",
+        "case_sha256": "ea937ece83a1ddea5b3b25f3f2897ea5072150d876aad5fb549e3fd0856d6aa7"
+      }
+    ],
+    "probe_development_labelled": [
+      {
+        "case_id": "dev-insufficient-004",
+        "case_sha256": "feaa1c6295a5a5fc0747bad17dc49dee44f82942f38ba3785d4860110692b0ba"
+      },
+      {
+        "case_id": "dev-insufficient-005",
+        "case_sha256": "9c026535c95f78f42f93994962b265c0e70aace0358200526f490bb8a9af0563"
+      },
+      {
+        "case_id": "dev-insufficient-006",
+        "case_sha256": "b04eb9cca2cdbd72e4f70c64f83e94e813c1b6adfe3902eb78e818947f2535cc"
+      },
+      {
+        "case_id": "dev-insufficient-007",
+        "case_sha256": "92e8d9c23f074c100a4b674eec2f9a1ac119d257827f507e021790eaea8d022c"
+      },
+      {
+        "case_id": "dev-insufficient-010",
+        "case_sha256": "203d3b976637fe6be8a72c8acfd01f8203dcc548ecf8dc45ed58d3ea20eb39b7"
+      },
+      {
+        "case_id": "dev-insufficient-016",
+        "case_sha256": "4b636c53fd64ac19f2a96948b5aed2d8d6741b4c240c44318a5011c5ab0b6ba1"
+      },
+      {
+        "case_id": "dev-insufficient-018",
+        "case_sha256": "3faa9ba372ebe213da3dac84c6b4b8189c9ab54689688342ea0c47451792b21d"
+      },
+      {
+        "case_id": "dev-invalid-stale-002",
+        "case_sha256": "505b3486cdd8192554eb2d92ae3008bf04a30c71fd6b109fdc7eace2310ca81f"
+      },
+      {
+        "case_id": "dev-invalid-stale-004",
+        "case_sha256": "96939ea338bfdb3073edcab30e938b26edeae71cb4b05f6c78b6af6e4d3c7ff1"
+      },
+      {
+        "case_id": "dev-invalid-stale-007",
+        "case_sha256": "dc943dc9128f1b7092d80b2c2275da6f37985c939bcb16d47104928a1c111827"
+      },
+      {
+        "case_id": "dev-invalid-stale-008",
+        "case_sha256": "ebe6e805b51f09fadfc9301bacdefb7dd508a29b3e308632ba5d4421af4a2062"
+      },
+      {
+        "case_id": "dev-invalid-stale-010",
+        "case_sha256": "b8da65a17442aed2780ecb54592b345e78bc95193876df67e18ae423f91c87a5"
+      },
+      {
+        "case_id": "dev-invalid-stale-020",
+        "case_sha256": "146632c81346440c4591776ffcc3a3cbdd0726a76db5c2cd6ce72e35df36bf91"
+      },
+      {
+        "case_id": "dev-no-edge-003",
+        "case_sha256": "0853438ea22501c0204a948ac18384d8698c6341c9c8322416dfa786efe73702"
+      },
+      {
+        "case_id": "dev-no-edge-008",
+        "case_sha256": "803d5426ef1c1271f1dffccbc54efde510b69fd6a538060689dafa071ee8323d"
+      },
+      {
+        "case_id": "dev-no-edge-010",
+        "case_sha256": "e485b42de5d7e6f83ac2f0b90f724498b874fd4ed434b3af6af5135b6d4b043a"
+      },
+      {
+        "case_id": "dev-no-edge-014",
+        "case_sha256": "e93db41a5f1646fb59a8f0bec0fae495e4dabf9ead0fc09117c18eb0ed75f929"
+      },
+      {
+        "case_id": "dev-no-edge-016",
+        "case_sha256": "a43d1b0e10dfa02ec9ab412cae2d14d7c07da83c6587e06b4af28ccaa9abedbd"
+      },
+      {
+        "case_id": "dev-no-edge-018",
+        "case_sha256": "f0de7f1fc0633c0e14f35a635d4e1fb1e61aaf63f969e480b2f7ee9cf852c89c"
+      },
+      {
+        "case_id": "dev-no-edge-020",
+        "case_sha256": "7180e648fc12a4f104d31ba5a42d79802dfe08b452b3be43e07a3c378e5640a7"
+      }
+    ],
+    "stability_holdout_labelled": [
+      {
+        "case_id": "hold-insufficient-003",
+        "case_sha256": "a7ffc307e68eb9f141b748424ca5524824a8761ba759008f2c4508c4a5084ad2"
+      },
+      {
+        "case_id": "hold-insufficient-008",
+        "case_sha256": "a8e29c18c221179f28cad2b111174c92c25df84eb420b0ded1c5bad476734c1a"
+      },
+      {
+        "case_id": "hold-insufficient-013",
+        "case_sha256": "b8c5b51ba10d4ef11d14e05e76ae77138e7ac67ff1149fd4443d0c3728b04c2e"
+      },
+      {
+        "case_id": "hold-insufficient-017",
+        "case_sha256": "e1baa9c1d1010b89e6bf191bd1673e9698e4be0026c3d176ca70b192540c71ee"
+      },
+      {
+        "case_id": "hold-insufficient-018",
+        "case_sha256": "0bf6cb8dc6aede2748f5a01096c78ae1681bc8cfd42db0455388200ce8ce7b20"
+      },
+      {
+        "case_id": "hold-insufficient-036",
+        "case_sha256": "1d651c28b00252debeedf8ef646c5440d3e2f141ea10743bb9965d1347a4955c"
+      },
+      {
+        "case_id": "hold-insufficient-039",
+        "case_sha256": "b243c8769846040037bb1c735c58c6944bab017e4c49fa8562a8e2b326112422"
+      },
+      {
+        "case_id": "hold-invalid-stale-008",
+        "case_sha256": "410558b25146539b9434d3dd3a6926ff1cac3778a9ce07688fba07271e98e0c7"
+      },
+      {
+        "case_id": "hold-invalid-stale-009",
+        "case_sha256": "76d48f356bf954bf9d40f11033386553852e3e10dfa3b9cc67f5560f11b751fa"
+      },
+      {
+        "case_id": "hold-invalid-stale-010",
+        "case_sha256": "7a3539a0fd70b3a0327517d3c35d745aaea8ea86c2f0f2da7493ee7d9a18a43f"
+      },
+      {
+        "case_id": "hold-invalid-stale-013",
+        "case_sha256": "da36c2c21acb49df68dfd3a58480b661a97476391cb5e81fc98f1095846a0222"
+      },
+      {
+        "case_id": "hold-invalid-stale-015",
+        "case_sha256": "b10a76ba569638763addaf518963efcacc5c276c568d2fae43a5d8d4c5cecf97"
+      },
+      {
+        "case_id": "hold-invalid-stale-020",
+        "case_sha256": "836dab68a578ee7f8fc98fe22a854c56d1adc4724a4b9b3d087e970428bd62ae"
+      },
+      {
+        "case_id": "hold-no-edge-001",
+        "case_sha256": "45a93675167cc0fd7eddd77920c7146404631a2ce6c0ea55ee571d96a83303be"
+      },
+      {
+        "case_id": "hold-no-edge-010",
+        "case_sha256": "0a99dbd95ed9e8efafe00c318cec5201f7f9baa3290ecb69273dded3913bd851"
+      },
+      {
+        "case_id": "hold-no-edge-015",
+        "case_sha256": "a912c383105eabd5cb44f67ae5e165bffaee4be65cc1196a9d8c46ed88c301f3"
+      },
+      {
+        "case_id": "hold-no-edge-018",
+        "case_sha256": "fd2f435a41eaf8036a9b29a4850dba5dc0418c3da9a35f0c297440e71dfdbedd"
+      },
+      {
+        "case_id": "hold-no-edge-021",
+        "case_sha256": "9ff3e362bd5524993beeb1db85f6d12e65e3b535cb97bc98db26a9e08234b001"
+      },
+      {
+        "case_id": "hold-no-edge-027",
+        "case_sha256": "4cc331bd17fafd6fc9c313685707b9eca835a2efe64229863c906645d4ed4273"
+      },
+      {
+        "case_id": "hold-no-edge-033",
+        "case_sha256": "6015e14c984772a4646151f675887d881bdb20d2203d7c8948c89513ddd85afc"
+      }
+    ],
+    "warm_development": [
+      {
+        "case_id": "dev-no-edge-001",
+        "case_sha256": "d6fbac15911c27f09d9f48cbe415da2fe7bdb9219a442d9c8a734386c0d4c3e9"
+      },
+      {
+        "case_id": "dev-invalid-stale-005",
+        "case_sha256": "ba1a3dc0679f998f0eab97e0544c38e75f063620e298403c7ec5db097a8fe68c"
+      },
+      {
+        "case_id": "dev-insufficient-016",
+        "case_sha256": "4b636c53fd64ac19f2a96948b5aed2d8d6741b4c240c44318a5011c5ab0b6ba1"
+      },
+      {
+        "case_id": "dev-insufficient-019",
+        "case_sha256": "ca90ab83b4a295ac53f3bf6e88623caac7dfeaf068ac1238abadae62ef221862"
+      },
+      {
+        "case_id": "dev-conflict-015",
+        "case_sha256": "98c65e2a2e3bed64a36171252ada472051db35aec740ae47dde16db6bf821666"
+      },
+      {
+        "case_id": "dev-conflict-013",
+        "case_sha256": "47520d2880204be886019b17b3e03a6e8e989c4af2b9d28c63f55138ba113d88"
+      },
+      {
+        "case_id": "dev-invalid-stale-011",
+        "case_sha256": "7abffb277c1c5fcb3d242a7179bc60c78ffae7b600fefa475c91bd777469e63f"
+      },
+      {
+        "case_id": "dev-insufficient-012",
+        "case_sha256": "a9ecd520fb2d410acca4070547af3b32730e92e3b42e67a1f779e4127629e60f"
+      },
+      {
+        "case_id": "dev-insufficient-004",
+        "case_sha256": "feaa1c6295a5a5fc0747bad17dc49dee44f82942f38ba3785d4860110692b0ba"
+      },
+      {
+        "case_id": "dev-no-edge-015",
+        "case_sha256": "3660180ee813aff67a38c6739f5f2b88ccd12fcd4bbe05c2cf0594a7904b8bd5"
+      },
+      {
+        "case_id": "dev-positive-015",
+        "case_sha256": "46358411de0cc4cd32af0d721b9d05f75300af2da867d979b42685ac2b7398ae"
+      },
+      {
+        "case_id": "dev-insufficient-013",
+        "case_sha256": "46f63e790d9570d687815a51eaa7fb23d395d725e1e8d9d06a44e60c3fa86101"
+      },
+      {
+        "case_id": "dev-conflict-007",
+        "case_sha256": "b3c08f5789167731826e15c1e847ef004a41e9ec7f9c501091b07263b0a29290"
+      },
+      {
+        "case_id": "dev-invalid-stale-019",
+        "case_sha256": "fce9dfbbe176dc16989d76e2eb47ffbc314feeb727dec2f6aeed1c115d583b61"
+      },
+      {
+        "case_id": "dev-insufficient-009",
+        "case_sha256": "34a16a62f07a141d05b954be2215f23b9b62e442a9111538cc86fb2c234a4f60"
+      },
+      {
+        "case_id": "dev-no-edge-012",
+        "case_sha256": "d730dee66cecd8e09f12d8738bf2c2a2fa3b12b734608dc17bbec30291641f9c"
+      },
+      {
+        "case_id": "dev-conflict-017",
+        "case_sha256": "5275622b8a263480ac6a56dfc4d08390c0ddc35f77f3b4a8738e7c3fb0c2576c"
+      },
+      {
+        "case_id": "dev-no-edge-010",
+        "case_sha256": "e485b42de5d7e6f83ac2f0b90f724498b874fd4ed434b3af6af5135b6d4b043a"
+      },
+      {
+        "case_id": "dev-invalid-stale-003",
+        "case_sha256": "a81eedb77dc4e5d3a3b64a907d358bb9e67791c7ade152ae5bd68d306401baf7"
+      },
+      {
+        "case_id": "dev-no-edge-005",
+        "case_sha256": "661628574cb9e4c9e389b16f70ae5d1d12b72649e872cd54b9b46c84d734e4f7"
+      }
+    ],
+    "warmup_development": [
+      {
+        "case_id": "dev-conflict-012",
+        "case_sha256": "4f72cd9266e48acdc6a8940c1eb2f85a4cd6a47358b69ddff1e0be7743146db2"
+      }
+    ]
+  },
+  "models": {
+    "baseline": "qwen3:14b",
+    "optional": "qwen3-coder:30b",
+    "probe": [
+      "qwen3:14b",
+      "gpt-oss:20b",
+      "llama3.2:latest"
+    ]
+  }
+}

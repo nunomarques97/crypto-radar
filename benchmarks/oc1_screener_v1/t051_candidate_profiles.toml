@@ -1,0 +1,60 @@
+# T051 benchmark candidate profiles (T051c, D61). Benchmark-only: the radar never reads this file.
+#
+# Same format and loader as radar_v08/model_profiles.toml (radar_v08/adapters/model_profiles.py,
+# fail closed), so every candidate gets exactly the OC-1 Screener limits of the runtime profile:
+# 30 s hard call limit, 4,096 context tokens (input <= 2,800), 768 output tokens, temperature 0,
+# think false, reserves 1.5 GiB VRAM / 4 GiB RAM. The baseline qwen3:14b is NOT here: the runner
+# takes it from radar_v08/model_profiles.toml (screener-qwen3-14b), which this benchmark never edits.
+#
+# The endpoint is validated by the loader but the runner always calls http://127.0.0.1:11434
+# (radar_v08/adapters/t051_ollama.py OLLAMA_BASE_URL). qwen3-coder:30b runs only with
+# --include-optional and only after every mandatory step is complete. default_profile is required
+# by the loader format and has no meaning here. The sha256 of this file is in t051_freeze.json.
+
+schema_version = 1
+default_profile = "t051-screener-gpt-oss-20b"
+
+[[profiles]]
+id = "t051-screener-gpt-oss-20b"
+role = "screener"
+enabled = true
+model = "gpt-oss:20b"
+endpoint = "http://127.0.0.1:11434"
+output_format = "json_schema"
+hard_timeout_seconds = 30
+context_tokens = 4096
+output_cap_tokens = 768
+temperature = 0.0
+think = false
+reserve_vram_gib = 1.5
+reserve_ram_gib = 4.0
+
+[[profiles]]
+id = "t051-screener-llama3-2-latest"
+role = "screener"
+enabled = true
+model = "llama3.2:latest"
+endpoint = "http://127.0.0.1:11434"
+output_format = "json_schema"
+hard_timeout_seconds = 30
+context_tokens = 4096
+output_cap_tokens = 768
+temperature = 0.0
+think = false
+reserve_vram_gib = 1.5
+reserve_ram_gib = 4.0
+
+[[profiles]]
+id = "t051-screener-qwen3-coder-30b"
+role = "screener"
+enabled = true
+model = "qwen3-coder:30b"
+endpoint = "http://127.0.0.1:11434"
+output_format = "json_schema"
+hard_timeout_seconds = 30
+context_tokens = 4096
+output_cap_tokens = 768
+temperature = 0.0
+think = false
+reserve_vram_gib = 1.5
+reserve_ram_gib = 4.0

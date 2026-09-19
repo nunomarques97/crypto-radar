@@ -1581,7 +1581,16 @@ class TestHarnessCannotReachAModel(unittest.TestCase):
         self.assertFalse((REPOSITORY_ROOT / "radar_v08" / "__main__.py").exists())
         self.assertNotIn("benchmark", (REPOSITORY_ROOT / "radar_v08" / "cli.py").read_text(encoding="utf-8"))
         self.assertNotIn("[project.scripts]", (REPOSITORY_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+        # T051c (D61): scripts/run_t051_block.py is the ONE authorised entry point to the harness
+        # (the T051 procedure itself). It reaches Ollama only through the loopback allowlist of
+        # radar_v08/adapters/t051_ollama.py and is tested only against a fake server
+        # (tests/test_t051_runner.py); it imports no HTTP or socket module of its own.
+        authorised = REPOSITORY_ROOT / "scripts" / "run_t051_block.py"
+        for name in ("requests", "socket", "urllib", "http", "subprocess", "radar_v08.qwen", "radar_v08.adapters.local_inference"):
+            self.assertFalse([m for m in imported_modules(authorised) if m == name or m.startswith(name + ".")], name)
         for script in sorted((REPOSITORY_ROOT / "scripts").glob("*.py")):
+            if script == authorised:
+                continue
             with self.subTest(script.name):
                 self.assertNotIn("benchmark", script.read_text(encoding="utf-8"))
 

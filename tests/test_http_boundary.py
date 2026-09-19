@@ -424,8 +424,11 @@ class TestGuardNotWidened(unittest.TestCase):
                         importers.add(os.path.relpath(path, REPO_ROOT).replace(os.sep, "/"))
         # T032b adds the loopback-only Ollama adapter (refuses every non-loopback host,
         # never follows redirects; see tests/test_local_inference_adapter.py).
+        # T051c (D61) adds the benchmark-only Ollama adapter: host 127.0.0.1 only (through
+        # loopback_base_url), five allowlisted routes, no redirects; the radar runtime never
+        # imports it (see tests/test_t051_runner.py).
         self.assertEqual(importers, {"radar_v08/http_client.py", "radar_v08/ntfy.py", "radar_v08/qwen.py",
-                                     "radar_v08/adapters/local_inference.py"})
+                                     "radar_v08/adapters/local_inference.py", "radar_v08/adapters/t051_ollama.py"})
 
 
 if __name__ == "__main__":
