@@ -4,7 +4,12 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from radar_v08.normalize import is_fiat, is_known_stable, is_stable_like, normalize_asset
+from radar_v08.normalize import (
+    is_fiat,
+    is_known_stable,
+    is_stable_like,
+    normalize_asset,
+)
 
 
 class TestLegacyCodeNormalization(unittest.TestCase):

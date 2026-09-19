@@ -4,7 +4,11 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from radar_v08.security import SecurityViolation, assert_no_private_credentials, assert_public_get
+from radar_v08.security import (
+    SecurityViolation,
+    assert_no_private_credentials,
+    assert_public_get,
+)
 
 
 class TestApiKeyGuard(unittest.TestCase):

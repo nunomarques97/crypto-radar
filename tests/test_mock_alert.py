@@ -9,7 +9,6 @@ from unittest import mock
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from radar_v08 import config, mock_alert, notifications, ntfy
-from radar_v08.context_builder import UNAVAILABLE
 from radar_v08.prompt_builder import build_prompt_text
 from radar_v08.store import SnapshotStore
 
@@ -61,7 +60,7 @@ class TestCreateMockEvent(_StoreTestCase):
         self.assertIn(mock_alert.MOCK_MARKER, prompt_context)
 
     def test_14_event_persists_and_does_not_collide_with_real_queue_lookups(self):
-        event_id = mock_alert.create_mock_event(self.store)
+        mock_alert.create_mock_event(self.store)
         # PROCESSED, not PENDING/DEFERRED - invisible to real-pipeline queries.
         self.assertEqual(self.store.event_status_counts()["PROCESSED"], 1)
         self.assertEqual(len(self.store.find_actionable_events(now_iso="2099-01-01T00:00:00+00:00", limit=10)), 0)

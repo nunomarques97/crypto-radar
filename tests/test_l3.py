@@ -6,7 +6,6 @@ from unittest.mock import patch
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from radar_v08 import config
-from radar_v08.anomaly import Features as L1Features
 from radar_v08.http_client import ApiError
 from radar_v08.kraken_spot import TradeRow
 from radar_v08.l2 import L2Result

@@ -45,8 +45,8 @@ def _ohlc_payload(rows, last):
     return {"error": [], "result": {"XBTUSD": rows, "last": last}}
 
 
-def _bar_row(epoch, o, h, l, c, vwap=None, vol=10.0, count=5):
-    return [epoch, str(o), str(h), str(l), str(c), str(vwap if vwap is not None else c), str(vol), count]
+def _bar_row(epoch, o, h, low, c, vwap=None, vol=10.0, count=5):
+    return [epoch, str(o), str(h), str(low), str(c), str(vwap if vwap is not None else c), str(vol), count]
 
 
 class TestOhlcIncrementalSince(unittest.TestCase):
