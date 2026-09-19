@@ -56,7 +56,12 @@ from .http_client import ApiError, GuardedSession
 from .kraken_futures import fetch_orderbook as fetch_futures_orderbook
 from .kraken_spot import TradeRow, fetch_depth, fetch_trades
 from .l2 import L2Result
-from .microstructure import DepthMetrics, TradesMetrics, compute_depth_metrics, compute_trades_metrics
+from .microstructure import (
+    DepthMetrics,
+    TradesMetrics,
+    compute_depth_metrics,
+    compute_trades_metrics,
+)
 from .router import valid_taker_buy_ratio
 from .tradeability import TradeabilityResult, build_cost_preview, compute_tradeability
 
@@ -343,13 +348,13 @@ def run_l3(
                 failures += 1
                 logger.warning("Depth fetch failed for %s: %s", asset, err)
 
-        for future, asset in trades_futures.items():
-            metrics, err = future.result()
+        for trades_future, asset in trades_futures.items():
+            trades_metrics, trades_fetch_err = trades_future.result()
             requests_made += 1
-            trades_by_asset[asset] = (metrics, err)
-            if err:
+            trades_by_asset[asset] = (trades_metrics, trades_fetch_err)
+            if trades_fetch_err:
                 failures += 1
-                logger.warning("Trades fetch failed for %s: %s", asset, err)
+                logger.warning("Trades fetch failed for %s: %s", asset, trades_fetch_err)
 
         for future, asset in fut_depth_futures.items():
             metrics, err = future.result()

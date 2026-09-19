@@ -91,6 +91,8 @@ def _continuation_confirmed(l1: L1Features, l2: L2Features) -> bool:
         return False
     if len(set(signs)) != 1:
         return False
+    if l2.return_15m_atr is None or l2.return_1h_atr is None:
+        return False
     if abs(l2.return_15m_atr) < config.SETUP_THRESHOLDS["momentum_min_atr_15m"]:
         return False
     if abs(l2.return_1h_atr) < config.SETUP_THRESHOLDS["momentum_min_atr_1h"]:

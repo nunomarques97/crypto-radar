@@ -19,7 +19,6 @@ from .l2_features import L2Features
 from .l2_features import sign as _sign
 from .setups import SetupResult
 
-
 DERIVATIVES_COHERENCE_LABELS = {
     (1, 1): "PRICE_UP_OI_UP",
     (1, -1): "PRICE_UP_OI_DOWN",

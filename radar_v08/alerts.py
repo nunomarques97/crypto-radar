@@ -95,7 +95,8 @@ def recover_prompt(store: SnapshotStore, event_id: str) -> bool:
         safe_print("Event not found")
         return False
 
-    from . import notifications  # local import: only pulls in the full notification stack when actually used
+    # local import: only pulls in the full notification stack when actually used
+    from . import notifications
 
     result = notifications.copy_prompt_for_event({"event_id": event_id}, store=store)
     return result["copied"]

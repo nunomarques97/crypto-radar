@@ -12,7 +12,7 @@ outcomes so the model is never forced to manufacture a trade idea.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 DIRECTIONS = ("LONG", "SHORT", "NONE")

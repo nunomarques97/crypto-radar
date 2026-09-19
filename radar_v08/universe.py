@@ -210,11 +210,12 @@ def group_assets(
     for asset, asset_markets in by_asset.items():
         entry = AssetEntry(asset=asset)
         entry.markets = asset_markets
-        entry.primary_market = _choose_primary(asset_markets)
+        primary = _choose_primary(asset_markets)
+        entry.primary_market = primary
         entry.aggregate_volume_24h_usd = sum(m.volume_24h_usd for m in asset_markets)
         entry.futures = futures_by_asset.get(asset)
 
-        _apply_gates(entry, eur_usd_rate or config.EUR_USD_FALLBACK_RATE)
+        _apply_gates(entry, primary, eur_usd_rate or config.EUR_USD_FALLBACK_RATE)
         entries[asset] = entry
 
     return entries
@@ -234,9 +235,8 @@ def _index_futures(rows: list[FuturesTickerRow]) -> dict[str, FuturesTickerRow]:
     return best
 
 
-def _apply_gates(entry: AssetEntry, eur_usd_rate: float) -> None:
+def _apply_gates(entry: AssetEntry, primary: SpotMarket, eur_usd_rate: float) -> None:
     asset = entry.asset
-    primary = entry.primary_market
 
     if is_fiat(asset):
         entry.excluded_reasons.append("fiat_base")

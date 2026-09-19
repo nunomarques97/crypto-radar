@@ -6,7 +6,8 @@ import json
 import logging
 import sys
 import time
-from datetime import datetime, timezone
+from collections.abc import Callable
+from typing import Any
 
 from . import alerts, claude_bridge, config, mock_alert, notifications, ntfy
 from .heartbeat import run_and_write
@@ -31,15 +32,24 @@ V08_SUPPORTED_MODES = (
 )
 
 
+def _event_notifier(store: SnapshotStore) -> Callable[[dict[str, Any]], None]:
+    """The bridge's `notify_fn`: dispatches one PROCESSED event through
+    `notifications.notify_for_event`. The bridge ignores the callback's return
+    value, so the delivery report is dropped here, as it always was.
+    """
+    def notify(event: dict[str, Any]) -> None:
+        notifications.notify_for_event(event, store=store)
+
+    return notify
+
+
 def _run_bridge_and_render(output: dict, store: SnapshotStore) -> None:
     """Shared by `--mode full` and `--mode loop`: drains actionable events,
     fires Windows + ntfy mobile notifications for anything that completes,
     retries any previously FAILED mobile push, then prints the terminal panel
     with real Claude Bridge health and queue counts.
     """
-    result = claude_bridge.run_bridge_cycle(
-        store, notify_fn=lambda event: notifications.notify_for_event(event, store=store)
-    )
+    result = claude_bridge.run_bridge_cycle(store, notify_fn=_event_notifier(store))
     # A contained bridge cycle must not turn a harmless queue drain into a
     # legacy delivery side effect.  Historical notification retry behavior is
     # otherwise untouched.
@@ -88,9 +98,7 @@ def run_mode(mode: str, argv: list[str] | None = None) -> int:
         # interleaved between full cycles in `--mode loop`.
         store = SnapshotStore(config.SQLITE_PATH)
         try:
-            result = claude_bridge.run_bridge_cycle(
-                store, notify_fn=lambda event: notifications.notify_for_event(event, store=store)
-            )
+            result = claude_bridge.run_bridge_cycle(store, notify_fn=_event_notifier(store))
             if result.skipped_reason != "LOCAL_ONLY_POLICY":
                 notifications.retry_pending_ntfy(store)
             print(json.dumps({"health": result.health, "processed": result.processed, "recovered_stale": result.recovered_stale}, indent=2, ensure_ascii=False, default=str))
@@ -99,8 +107,8 @@ def run_mode(mode: str, argv: list[str] | None = None) -> int:
         return 0
 
     if mode == "shadow":
-        result = run_shadow()
-        print(json.dumps(result["comparison"], indent=2, ensure_ascii=False))
+        shadow_result = run_shadow()
+        print(json.dumps(shadow_result["comparison"], indent=2, ensure_ascii=False))
         return 0
 
     if mode == "loop":

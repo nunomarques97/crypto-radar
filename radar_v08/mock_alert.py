@@ -120,7 +120,7 @@ class _MockQwenReview:
     call_fable = True
     confidence = "HIGH"
     reason = "Momentum and volume confirm the breakout; derivatives coherent with spot move. (mock)"
-    data_quality_notes = []
+    data_quality_notes: list[str] = []
 
 
 class _MockRouterResult:
@@ -244,7 +244,8 @@ def run_mock_alert(store: SnapshotStore) -> dict[str, Any]:
         "opportunity_score": MOCK_OPPORTUNITY_SCORE, "tradeability_score": MOCK_TRADEABILITY_SCORE,
         "recommendation": None, "test_event": True,
     }
-    from . import notifications  # local import: keeps this module import-order-independent
+    # local import: keeps this module import-order-independent
+    from . import notifications
 
     notify_result = notifications.notify_for_event(payload, store=store)
     store.mark_event_notified(event_id, datetime.now(timezone.utc).isoformat())

@@ -303,7 +303,7 @@ def historical_delta_series(rows: list[sqlite3.Row], field_name: str, horizon_mi
                 best_value = pv
         if best_value is not None:
             delta, reset = reset_aware_delta(value, best_value)
-            if not reset:
+            if not reset and delta is not None:
                 results.append(delta)
 
     return results
