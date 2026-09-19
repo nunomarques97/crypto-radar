@@ -7,6 +7,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from radar_v08 import config
 from radar_v08.l2_features import (
+    _contiguous_suffix,
     compute_exhaustion,
     compute_freshness,
     compute_l2_features,
@@ -204,6 +205,113 @@ class TestT021FeatureSemantics(unittest.TestCase):
         self.assertIsNotNone(f_gapped.high_4h)
         self.assertIsNone(f_gapped.high_24h)
         self.assertIn("coverage_24h_incomplete", f_gapped.flags)
+
+
+def _old_contiguous_suffix(bars, interval_minutes):
+    """T025: verbatim copy of the pre-refactor `_contiguous_suffix` from
+    radar_v08/l2_features.py (before it delegated to
+    structure.contiguous_tail/_bar_datetime), kept here only as the
+    equivalence oracle. Do not "clean up" or reuse this outside this test.
+    """
+    if not bars:
+        return []
+    interval = timedelta(minutes=interval_minutes)
+    start = len(bars) - 1
+    while start > 0:
+        current = datetime.fromisoformat(bars[start].bar_time.replace("Z", "+00:00"))
+        previous = datetime.fromisoformat(bars[start - 1].bar_time.replace("Z", "+00:00"))
+        if current - previous != interval:
+            break
+        start -= 1
+    return bars[start:]
+
+
+class TestContiguousSuffixEquivalence(unittest.TestCase):
+    """T025: radar_v08.l2_features._contiguous_suffix now delegates to
+    structure.contiguous_tail/_bar_datetime. Prove it returns the exact
+    same bars as the original hand-rolled backward walk, on fixtures with
+    gaps, out-of-order bars, duplicate timestamps, an exact interval
+    boundary and an empty list.
+    """
+
+    def _assert_same(self, bars, interval_minutes=5):
+        old = _old_contiguous_suffix(bars, interval_minutes)
+        new = _contiguous_suffix(bars, interval_minutes)
+        self.assertEqual(old, new)
+        return new
+
+    def test_empty_list(self):
+        self._assert_same([])
+
+    def test_fully_contiguous_returns_everything(self):
+        bars = flat_bars(10)
+        result = self._assert_same(bars)
+        self.assertEqual(len(result), 10)
+
+    def test_single_bar(self):
+        bars = flat_bars(1)
+        result = self._assert_same(bars)
+        self.assertEqual(len(result), 1)
+
+    def test_gap_in_the_middle_truncates_to_the_tail_run(self):
+        bars = flat_bars(10)
+        del bars[4]  # gap between what are now index 3 and 4
+        result = self._assert_same(bars)
+        # Only the run after the gap (5 of the original 10 bars) survives.
+        self.assertEqual(len(result), 5)
+
+    def test_gap_immediately_before_the_last_bar(self):
+        bars = flat_bars(10)
+        del bars[8]  # the newest bar is now isolated
+        result = self._assert_same(bars)
+        self.assertEqual(len(result), 1)
+
+    def test_duplicate_timestamp_breaks_contiguity(self):
+        bars = flat_bars(10)
+        bars[7] = make_bar(6, 100.0, 101.0, 99.0, 100.0)  # same bar_time as index 6
+        result = self._assert_same(bars)
+        self.assertEqual(len(result), 2)  # bars[8], bars[9] only
+
+    def test_out_of_order_bars_are_compared_by_list_position_not_time(self):
+        bars = flat_bars(5)
+        bars[1], bars[2] = bars[2], bars[1]  # swap: list order no longer matches time order
+        self._assert_same(bars)
+
+    def test_exact_interval_boundary_is_contiguous(self):
+        # Two bars exactly interval_minutes apart (the boundary itself) count as contiguous.
+        bars = [
+            make_bar(0, 100.0, 101.0, 99.0, 100.0),
+            make_bar(1, 100.0, 101.0, 99.0, 100.0),
+        ]
+        result = self._assert_same(bars)
+        self.assertEqual(len(result), 2)
+
+    def test_one_second_past_the_interval_boundary_is_a_gap(self):
+        bars = [
+            make_bar(0, 100.0, 101.0, 99.0, 100.0),
+            make_bar(1, 100.0, 101.0, 99.0, 100.0),
+        ]
+        # Nudge the newest bar 1 second past the exact 5-minute boundary.
+        off = datetime.fromisoformat(bars[1].bar_time) + timedelta(seconds=1)
+        bars[1] = Bar(
+            bar_time=off.isoformat(), open=100.0, high=101.0, low=99.0, close=100.0,
+            vwap=100.0, volume=100.0, trades=10,
+        )
+        result = self._assert_same(bars)
+        self.assertEqual(len(result), 1)
+
+    def test_full_l2_feature_computation_is_unaffected(self):
+        # Callers of compute_l2_features (which uses _contiguous_suffix
+        # internally for the volatility-percentile history) still get the
+        # same feature_semantics_version and non-crashing output.
+        bars = flat_bars(config.VOLATILITY_PERCENTILE_LOOKBACK_BARS + 20)
+        f = compute_l2_features(
+            bars=bars, current_last=100.0, vwap_today=100.0,
+            l1_return_5m_pct=1.0, l1_return_15m_pct=1.0, l1_return_1h_pct=1.0, l1_return_4h_pct=1.0,
+            as_of=as_of_after(bars),
+        )
+        self.assertEqual(f.feature_semantics_version, "l2-v2-closed-bars-horizon-specific-atr")
+        self.assertFalse(f.l2_warmup)
 
 
 if __name__ == "__main__":

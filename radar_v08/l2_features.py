@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import statistics
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from . import config
 from .structure import (
@@ -137,18 +137,23 @@ def compute_exhaustion(bars: list[Bar], return_1h_atr: float | None) -> bool:
 
 
 def _contiguous_suffix(bars: list[Bar], interval_minutes: int) -> list[Bar]:
-    """Return the newest uninterrupted run without crossing a missing bar."""
-    if not bars:
-        return []
-    interval = timedelta(minutes=interval_minutes)
-    start = len(bars) - 1
-    while start > 0:
-        current = datetime.fromisoformat(bars[start].bar_time.replace("Z", "+00:00"))
-        previous = datetime.fromisoformat(bars[start - 1].bar_time.replace("Z", "+00:00"))
-        if current - previous != interval:
-            break
-        start -= 1
-    return bars[start:]
+    """Return the newest uninterrupted run without crossing a missing bar.
+
+    Delegates to structure.contiguous_tail (built on structure._bar_datetime)
+    instead of re-parsing bar_time here: contiguous_tail's "exact window,
+    all-or-nothing" check is monotonic in `count` - if the last N bars are
+    pairwise spaced by `interval`, so is every shorter suffix of that same
+    run - so scanning `count` down from len(bars) and taking the first
+    non-empty window finds exactly the maximal contiguous suffix, same as
+    the original hand-rolled backward walk. See
+    tests/test_l2_features.py::TestContiguousSuffixEquivalence for the
+    proof against the original implementation (kept there only, verbatim).
+    """
+    for count in range(len(bars), 0, -1):
+        tail = contiguous_tail(bars, count, interval_minutes)
+        if tail:
+            return tail
+    return []
 
 
 def compute_l2_features(
