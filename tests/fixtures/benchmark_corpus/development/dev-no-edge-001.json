@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "case_id": "dev-no-edge-001",
+  "partition": "development",
+  "category": "admissible_no_edge",
+  "role": "screener",
+  "synthetic": true,
+  "prompt": {
+    "system": "You are the Screener role. This is a SYNTHETIC BENCHMARK FIXTURE, not market data. Classify the supplied evidence into exactly one category: invalid_or_stale, conflicting_evidence, admissible_positive, admissible_no_edge or insufficient_evidence. Set abstain to true when the evidence is invalid, stale or insufficient. Cite only the evidence ids supplied. Answer only with the JSON object of the response schema. Risk values are owned by deterministic code and are never part of the answer.",
+    "user": "SYNTHETIC FIXTURE. Evidence:\nev-d4a: SYNTH-D/USD range-bound 14 days, ATR14 flat\nev-d4b: net expected move after costs 0.02 percent, below the cost floor\nev-d4c: integrity: all venues fresh and valid"
+  },
+  "evidence_ids": [
+    "ev-d4a",
+    "ev-d4b",
+    "ev-d4c"
+  ],
+  "gold": {
+    "source": "deterministic_fixture",
+    "abstain_expected": false,
+    "human_review": null
+  }
+}

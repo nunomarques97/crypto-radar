@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "case_id": "hold-conflict-001",
+  "partition": "holdout",
+  "category": "conflicting_evidence",
+  "role": "screener",
+  "synthetic": true,
+  "prompt": {
+    "system": "You are the Screener role. This is a SYNTHETIC BENCHMARK FIXTURE, not market data. Classify the supplied evidence into exactly one category: invalid_or_stale, conflicting_evidence, admissible_positive, admissible_no_edge or insufficient_evidence. Set abstain to true when the evidence is invalid, stale or insufficient. Cite only the evidence ids supplied. Answer only with the JSON object of the response schema. Risk values are owned by deterministic code and are never part of the answer.",
+    "user": "SYNTHETIC FIXTURE. Evidence:\nev-h2a: SYNTH-G/USD 4h breakdown below the 20-bar low\nev-h2b: SYNTH-G/USD BTC reference aligned at the same cutoff rising 2 ATR14\nev-h2c: integrity: all venues fresh and valid"
+  },
+  "evidence_ids": [
+    "ev-h2a",
+    "ev-h2b",
+    "ev-h2c"
+  ],
+  "gold": {
+    "source": "deterministic_fixture",
+    "abstain_expected": false,
+    "human_review": null
+  }
+}

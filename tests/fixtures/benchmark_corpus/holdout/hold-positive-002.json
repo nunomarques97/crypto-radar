@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "case_id": "hold-positive-002",
+  "partition": "holdout",
+  "category": "admissible_positive",
+  "role": "screener",
+  "synthetic": true,
+  "prompt": {
+    "system": "You are the Screener role. This is a SYNTHETIC BENCHMARK FIXTURE, not market data. Classify the supplied evidence into exactly one category: invalid_or_stale, conflicting_evidence, admissible_positive, admissible_no_edge or insufficient_evidence. Set abstain to true when the evidence is invalid, stale or insufficient. Cite only the evidence ids supplied. Answer only with the JSON object of the response schema. Risk values are owned by deterministic code and are never part of the answer.",
+    "user": "SYNTHETIC FIXTURE. Evidence:\nev-h4a: SYNTH-J/USD continuation: higher high and higher low on 4h with 24h coverage 100 percent\nev-h4b: integrity: all venues fresh and valid"
+  },
+  "evidence_ids": [
+    "ev-h4a",
+    "ev-h4b"
+  ],
+  "gold": {
+    "source": "deterministic_fixture",
+    "abstain_expected": false,
+    "human_review": null
+  }
+}

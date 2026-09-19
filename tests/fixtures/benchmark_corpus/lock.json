@@ -1,0 +1,61 @@
+{
+  "corpus_id": "synthetic-harness-v1",
+  "partitions": {
+    "development": {
+      "cases": {
+        "dev-conflict-001": {
+          "prompt_sha256": "7b2668f5f9d719f65aef5c54cdc5a59094236843b301dfe95ba2cf5fc4ea656d",
+          "sha256": "129a642a8fc5105f889dabbaa81cbd18f233c63daecd8309fcc3c11fc8781a29"
+        },
+        "dev-insufficient-001": {
+          "prompt_sha256": "0668088dd7052a12dfd92afb1af7796337f6589f2b80325c17c27eb2830dc6fe",
+          "sha256": "08454c172af7eae3d1fc0d67703f132438d530e10768fa845ed2a4000735c0bb"
+        },
+        "dev-invalid-stale-001": {
+          "prompt_sha256": "c290a9072e3e395c7f8dfbe1b2b9935401f6b3843fe09635ce8477f3f423a1c6",
+          "sha256": "1879cba37ce52c8b6e5811ae03d1469415a6cab8a38be4ce9c015115fdff9edf"
+        },
+        "dev-no-edge-001": {
+          "prompt_sha256": "afdf147576e109899ffd4ac1cb08b83f3af8081002d9b9dd447858d46f6a4483",
+          "sha256": "470a018641db0e43e96c0e30f4e989e5b71dd24304974faea9b63566ab8f0233"
+        },
+        "dev-positive-001": {
+          "prompt_sha256": "375aeb5d4a8b26161f7ff418cbc70a2a3d660de50a790609d850c5b050f29271",
+          "sha256": "406c84ff4c8c473c08d19b7b47cebc5f2ca82532ff2899fe8695942b6e441ee4"
+        }
+      },
+      "partition_sha256": "1c1385c92d146906bd5e560fb98437534841a4bf571de369671bf7b1c7dc5967"
+    },
+    "holdout": {
+      "cases": {
+        "hold-conflict-001": {
+          "prompt_sha256": "fc83ddb44ba75f647708d1cd37a33a1def0236456c7e039731fff13936590eec",
+          "sha256": "d10877a7c1077d559127fdca6f78b15cb5339f9b03f92370c9cedc98adfc0979"
+        },
+        "hold-insufficient-001": {
+          "prompt_sha256": "608371f3c4ba0d531935c5e5a11b0c88b41c78a23c6fede9b1acfe12dd4478e9",
+          "sha256": "d611132cd788f91f7a2ebbd924daa5cdfdf10712214b9eab79ce85df939b5794"
+        },
+        "hold-invalid-stale-001": {
+          "prompt_sha256": "483fc220db653bd6a87d2a46ea79c0a0a4bedf3a2c049c686949a064739ab5f4",
+          "sha256": "bff30afd800c29658eb8abe08e3d7ba6920e8c4d57bd1b18b1c8389feea66d22"
+        },
+        "hold-no-edge-001": {
+          "prompt_sha256": "c459bc0cc452a4b43c14416844cd710efb80a2741e4b815eeab3f0e4ba549be7",
+          "sha256": "85384d0efa4c1938534841efeddc50f2c6b1ef3ba6a7e2b715d7f05e0a741234"
+        },
+        "hold-positive-001": {
+          "prompt_sha256": "09cd261cc6b3b7239c947dc206553b356b685ebc04d4b6338c3b7f3c3038d007",
+          "sha256": "95677ae78da0d717c4989e2e4ec551bca0fa7543326a2695e6646b7a31f06b72"
+        },
+        "hold-positive-002": {
+          "prompt_sha256": "3699e2550d540f18e2515a7d6ab5559f173d36117caa3e373bbb3bc83301aa24",
+          "sha256": "14ba4240b4290d4561020d6d5f2db315bb5e39146b4d8a663beca74af9b60372"
+        }
+      },
+      "partition_sha256": "668378c54950767b91b70426cd6d85515ec822d96758e406289c63098e61af2c"
+    }
+  },
+  "schema_version": 1,
+  "synthetic": true
+}

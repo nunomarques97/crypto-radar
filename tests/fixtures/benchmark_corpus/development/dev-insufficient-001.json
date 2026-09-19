@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "case_id": "dev-insufficient-001",
+  "partition": "development",
+  "category": "insufficient_evidence",
+  "role": "screener",
+  "synthetic": true,
+  "prompt": {
+    "system": "You are the Screener role. This is a SYNTHETIC BENCHMARK FIXTURE, not market data. Classify the supplied evidence into exactly one category: invalid_or_stale, conflicting_evidence, admissible_positive, admissible_no_edge or insufficient_evidence. Set abstain to true when the evidence is invalid, stale or insufficient. Cite only the evidence ids supplied. Answer only with the JSON object of the response schema. Risk values are owned by deterministic code and are never part of the answer.",
+    "user": "SYNTHETIC FIXTURE. Evidence:\nev-d5a: SYNTH-E/USD listed 3 days ago; 4h structure window needs 20 closed bars, 18 available"
+  },
+  "evidence_ids": [
+    "ev-d5a"
+  ],
+  "gold": {
+    "source": "deterministic_fixture",
+    "abstain_expected": true,
+    "human_review": null
+  }
+}
