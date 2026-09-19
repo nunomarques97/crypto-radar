@@ -56,6 +56,7 @@ Every phase is delivered through small briefs, not one prompt. A phase completes
 
 - **Goal / why now:** measure value before paying local inference latency for more agents.
 - **Dependencies:** R2 qualified inputs; R3 reproducible identities and lifecycle.
+- **Status:** R3 closed per D20/D23 («QA FAIL, 1 finding de dados, entregue ao Sponsor»). T040 (exact itemized cost scenarios: pure Decimal domain `radar_v08/domain/costs.py` with two legs, long/short, explicit spread convention, fee/funding/FX/size/coverage provenance, missing cost = COST_INCOMPLETE and never a total; `tradeability.build_cost_preview` adapted to it without changing scores or ranking) is «Aceite no run Forja R-20260918-f9fe (Reviewer APPROVE)» (effective once the Reviewer APPROVE and the Lead's on-disk verification are recorded), see `docs/tasks/results/T040.md`. T041 is next.
 - **Scope:** itemized deterministic cost contract adapted from Sextant; fee/FX/funding provenance; pair/venue/direction-aligned 15m/1h/4h/24h markouts; rejected/aborted cohort tracking; frozen evaluation manifest and experiment ledger.
 - **Out of scope:** portfolio trading simulation, performance promises, live account reading, copying Sextant's full backtester/statistical stack.
 - **Deliverables:** net/gross/unknown-cost labels; cost sensitivity report; baseline L3 vs current Screener report; versioned cohort/metric definition.
