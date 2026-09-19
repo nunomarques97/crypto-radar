@@ -1526,14 +1526,41 @@ class TestHarnessCannotReachAModel(unittest.TestCase):
             self.assertNotIn(token, used)
 
     def test_benchmark_import_loads_no_network_module(self) -> None:
+        # Text/AST scan of radar_v08/config.py (never imported here, only its source read):
+        # every os.getenv("RADAR_..._PATH", ...) call site. This is how the child process's
+        # environment below is built, so a future RADAR_*_PATH is covered automatically.
+        config_source = (REPOSITORY_ROOT / "radar_v08" / "config.py").read_text(encoding="utf-8")
+        config_tree = ast.parse(config_source, filename="radar_v08/config.py")
+        path_env_vars: set[str] = set()
+        for node in ast.walk(config_tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "getenv"
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == "os"
+                and node.args
+                and isinstance(node.args[0], ast.Constant)
+                and isinstance(node.args[0].value, str)
+                and re.fullmatch(r"RADAR_[A-Z0-9_]*_PATH", node.args[0].value)
+            ):
+                path_env_vars.add(node.args[0].value)
+        minimum_expected = {"RADAR_EVENTS_LOG_PATH", "RADAR_OUTPUT_V08_PATH", "RADAR_SQLITE_PATH"}
+        self.assertTrue(
+            minimum_expected <= path_env_vars,
+            f"scan of radar_v08/config.py missed some of {minimum_expected}: found {sorted(path_env_vars)}",
+        )
+
         code = (
             "import sys; import radar_v08.workflow.benchmark; "
             "print(sorted(m for m in ('requests', 'socket', 'urllib3', 'http.client', "
             "'radar_v08.adapters.local_inference', 'radar_v08.qwen') if m in sys.modules))"
         )
-        with tempfile.TemporaryDirectory(prefix="t050b-child-") as state:
+        with tempfile.TemporaryDirectory(prefix="t050c-child-") as state:
             environment = {k: v for k, v in os.environ.items() if not k.startswith("RADAR_")}
             environment.update(RADAR_STATE_DIR=state, PYTHONDONTWRITEBYTECODE="1")
+            for name in sorted(path_env_vars):  # every RADAR_*_PATH found above, not just the minimum
+                environment[name] = os.path.join(state, name)
             completed = subprocess.run(
                 [sys.executable, "-c", code], cwd=REPOSITORY_ROOT, env=environment, capture_output=True, text=True, timeout=60
             )
