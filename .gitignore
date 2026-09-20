@@ -37,3 +37,15 @@ google-services.json
 credentials.json
 *token*
 *secret*
+
+# Forja run state and AI tooling (private: reports, sponsor questions, transcripts)
+docs/forja/
+.claude/
+
+# Live state files (this is a local tool; state belongs to each machine)
+events.jsonl
+runs.jsonl
+radar.log
+radar_v08_output.json
+radar_v08_asset_pairs_cache.json
+exe_launch*.log
