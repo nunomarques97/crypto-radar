@@ -2,13 +2,15 @@
 
 # Crypto Radar
 
-**A local-first crypto market radar that watches, reasons and warns — and never places an order.**
+**A local-first crypto market radar that watches, reasons and warns.**
+
+It holds no credentials and places no orders today. Execution is on the roadmap — behind seven approval gates, and never driven by a model.
 
 [![tests](https://img.shields.io/badge/tests-1492_passing-2ea44f)](#tests)
 [![python](https://img.shields.io/badge/python-3.12-3776ab)](#requirements)
 [![platform](https://img.shields.io/badge/platform-Windows_11-0078d4)](#requirements)
 [![inference](https://img.shields.io/badge/inference-100%25_local-6f42c1)](#how-it-works)
-[![orders](https://img.shields.io/badge/places_orders-never-critical)](#what-it-will-not-do)
+[![mode](https://img.shields.io/badge/mode-ANALYSIS__ONLY-critical)](#boundaries)
 [![licence](https://img.shields.io/badge/licence-AGPL--3.0-f39c12)](#licence)
 
 </div>
@@ -17,7 +19,7 @@
 
 Crypto Radar watches public Kraken spot and perpetual markets, detects unusual activity with deterministic rules, asks a local model for a second opinion, and alerts a human.
 
-Everything runs on your own machine: public market data in, SQLite on disk, inference through a local Ollama model. **No paid APIs, no cloud inference, no exchange credentials, no outbound calls beyond public market endpoints.**
+Everything runs on your own machine: public market data in, SQLite on disk, inference through a local Ollama model. **No paid APIs and no cloud inference, ever.** Today it holds no exchange credentials at all, and reaches nothing beyond public market endpoints — see [Boundaries](#boundaries).
 
 ## How it works
 
@@ -35,13 +37,25 @@ The model is **advisory**. It can flag or abstain, but it cannot size a position
 
 Integrity comes first: prices, timestamps and order books are validated before they are consumed. What cannot be verified is marked `UNKNOWN`, never silently treated as good.
 
-## What it will not do
+## Boundaries
 
-- Place, cancel or modify an order
-- Hold exchange credentials, or ask for any
-- Send your data anywhere
-- Let a language model decide anything with money attached
-- Show a number the stored evidence cannot prove
+The system runs in an explicit, declared mode. Today that mode is the first rung of a ladder that only a human can climb, one approval at a time:
+
+| | Mode | What it allows |
+|---|---|---|
+| **▸** | **`ANALYSIS_ONLY`** | Public data in, alerts out. No orders, no credentials. **You are here.** |
+| | `RETROSPECTIVE` | Replaying recorded history to measure whether an edge is real |
+| | `PAPER` | Simulated orders against a synthetic ledger, no private side effect |
+| | `SHADOW_LIVE` | Authorised account *reads* only; the process has no submission port |
+| | `MICRO_LIVE` | First real money, deliberately tiny, as a canary |
+| | `CONSTRAINED_LIVE` | Real money inside a narrow, approved envelope |
+| | `APPROVED_ENVELOPE` | Steady state, still bounded by the approval it was given |
+
+**What it cannot do today.** There is no order code in the repository. It holds no exchange credentials and asks for none, sends nothing off the machine beyond requests to public market endpoints, and shows no number the stored evidence cannot prove. Having credentials present would enable nothing: the mode is a declared state, not an inference from what happens to be on the machine.
+
+**What stays true even when it can trade.** No language model may ever place, size or authorise an order — models advise, deterministic code decides. Execution lives in a separate local service that a model, the UI and the notification worker have no port to reach. Every rung of the ladder needs a fresh human approval bound to account, strategy, code and limits. The first live product is cash-funded spot LONG only: no margin, no borrowing, no leverage, no autonomous transfers, one position at a time. Derivatives and short selling are a separate programme after that, not an automatic unlock.
+
+See [docs/EXECUTION_ARCHITECTURE.md](docs/EXECUTION_ARCHITECTURE.md) for the design and [docs/FUTURE_TRADING_ROADMAP.md](docs/FUTURE_TRADING_ROADMAP.md) for the gates.
 
 ## Status
 
@@ -58,7 +72,7 @@ Early, but real and measured.
 
 The analysis pipeline, the integrity layer, versioned evidence, cost scenarios and forward labels are implemented and covered. The local-model benchmark is built and has been run once; no model passed the promotion gates, so the current profile stays pinned.
 
-Trading is designed but **not implemented**. That programme is gated phase by phase behind explicit human approval, with a paper stage before any real money. See [docs/EXECUTION_ARCHITECTURE.md](docs/EXECUTION_ARCHITECTURE.md) and [docs/FUTURE_TRADING_ROADMAP.md](docs/FUTURE_TRADING_ROADMAP.md).
+Trading is designed but **not implemented** — not a line of order code exists. See [Boundaries](#boundaries).
 
 ## Requirements
 
@@ -119,7 +133,7 @@ The suite runs against a throwaway state directory, with credential environment 
 1. **Deterministic first.** Rules decide; models advise.
 2. **Honest state.** The interface never shows what the data cannot prove.
 3. **Fail closed.** Missing or stale evidence blocks the path instead of being guessed.
-4. **Local only.** No cloud inference, no credentials, no outbound calls beyond public market endpoints.
+4. **Local only.** No cloud inference and no third-party services. Everything, including any future execution service, runs on your own machine.
 5. **Evidence over opinion.** Every claim is tied to a versioned, hash-bound record.
 
 ## Disclaimer
