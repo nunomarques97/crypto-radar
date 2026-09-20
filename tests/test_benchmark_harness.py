@@ -894,6 +894,10 @@ class TestRiskGateNumberWordsAreLinear(unittest.TestCase):
     SECONDS = 1.0  # loose bound (TECHNOLOGY.md S3); the fixed code takes a few milliseconds
 
     def original_test_source(self) -> str:
+        if not self.ORIGINAL_SNAPSHOT.is_file():
+            # The snapshot is Forja run state (docs/forja/ is not versioned), so it is absent
+            # from a clean checkout. Skip instead of failing; the ReDoS guards below still run.
+            self.skipTest(f"review snapshot absent: {self.ORIGINAL_SNAPSHOT.name}")
         lines = self.ORIGINAL_SNAPSHOT.read_text(encoding="utf-8").splitlines()
         start = lines.index("+++ b/tests/test_benchmark_harness.py") + 2  # skip the hunk header
         body: list[str] = []
