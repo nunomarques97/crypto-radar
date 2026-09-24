@@ -13,7 +13,7 @@ For the present product there is **no account model, position-sizing service, ex
 ## Hard boundaries
 
 - Public read-only Kraken endpoints only; no private API keys, transfers, order creation/cancellation, or leverage changes.
-- No new cloud LLM calls, paid API dependency, or silent fallback. Codex used to develop the software is separate from the software's runtime inference.
+- No new cloud LLM calls, paid API dependency, or silent fallback. Development tooling is separate from the software's runtime inference.
 - An unavailable quote, fee, depth, FX conversion, or account value remains unavailable. A partial cost total cannot be reported as a full net edge.
 - Exact Decimal parsing belongs at new monetary boundaries; currency, instrument, contract type, units, and rounding policy travel with values. Existing float indicators may remain for statistical/ranking calculations. Do not cosmetically convert already-rounded SQLite REAL history into claimed exact money.
 - Freshness gates run before expensive inference and before publication. A late result cannot be published as current because the model completed successfully.

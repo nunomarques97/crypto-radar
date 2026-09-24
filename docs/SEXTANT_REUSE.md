@@ -1,6 +1,6 @@
 # Sextant reuse audit
 
-Source: `<sextant-repo>`, HEAD `47cf962` on 2026-09-14. Existing modified `research/trial-registry.jsonl` and untracked `Claude outputs/` were left untouched. Crypto-radar remains primary.
+Source: [Sextant](https://github.com/nunomarques97/sextant), commit `47cf962`, reviewed on 2026-09-14. Crypto Radar remains the primary project.
 
 Sextant is a substantial research/backtesting system with domain/ports/engine/adapters/app boundaries, locked uv dependencies, pytest, typing/lint and import-layer checks. It has actual execution-cost and backtest accounting logic, public data acquisition and point-in-time research infrastructure. It has **no implemented general Risk Engine, real order execution, local agent runtime, or UI**. Risk and LLM ports do not establish working end-to-end integrations.
 

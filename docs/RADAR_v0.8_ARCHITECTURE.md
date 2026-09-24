@@ -1,8 +1,8 @@
 # LOCAL CRYPTO RADAR — Proposta arquitetural v0.8
 
-> HISTORICAL PROPOSAL: retained for provenance. Current implementation and accepted design are in ../ARCHITECTURE.md; decisions and delivery status are in ../DECISIONS.md and ../ROADMAP.md. The original implementation status, cloud direction and phase numbering below are not current authority.
+> HISTORICAL PROPOSAL: retained for provenance. Current implementation and accepted design are in ../ARCHITECTURE.md; delivery status is in ../ROADMAP.md. The original implementation status, cloud direction and phase numbering below are not current authority.
 
-Autor: PO (Claude). Base: leitura integral de `radar_v0.7.py` (705 linhas). Estado: proposta, sem código.
+Base: leitura integral de `radar_v0.7.py` (705 linhas). Estado: proposta, sem código.
 Documentação Kraken consultada a 13 set 2026 para confirmar semântica de campos (Ticker Spot, Tickers Futures, Historical Funding Rates).
 
 ---
@@ -140,7 +140,7 @@ OHLC 5m com `since` = último timestamp em cache (após warm-up, cada pedido tra
 
 ### FINALIST ONLY (≤ 8, 2 pedidos por ativo)
 
-- `Depth?pair=&count=25` Spot: USD disponível a ±0.5% e ±1% do mid, imbalance bid/ask, slippage estimado para o tamanho típico de ordem do Sponsor (parametrizável, ex. 150-300 €);
+- `Depth?pair=&count=25` Spot: USD disponível a ±0.5% e ±1% do mid, imbalance bid/ask, slippage estimado para um tamanho de ordem configurável;
 - `Trades?pair=` Spot (últimos 1000 fills): rácio taker buy/sell, tamanho médio, tempo coberto (agressão real, não só volume);
 - `orderbook?symbol=PF_…` Futures: mesma métrica de profundidade;
 - `historical-funding-rates?symbol=` Futures: **uma vez por dia para 2-3 símbolos de referência**, não por finalista, para a verificação de semântica (secção 9).
@@ -211,7 +211,7 @@ Faz quatro coisas, sobre ≤ 8 finalistas já com setup rule-based e features:
 
 Chama-se **só quando há finalistas acima do pré-gate determinístico** (opportunity ≥ 50 e tradeability ok). Muitos ciclos terão zero chamadas Qwen. `think=false`, temperatura 0, **structured output com JSON schema** no campo `format` do Ollama (não a string `"json"`), símbolos validados contra o input, uma repetição se o JSON falhar.
 
-Crítica honesta ao Sponsor: com features bem construídas, o valor marginal de um 14B é modesto. Mantém-se porque é barato e reduz chamadas ao Fable, mas **o log regista sempre a decisão determinística e a do Qwen lado a lado**. Se ao fim de duas semanas o Qwen concordar com as regras em > 95% dos casos, remove-se e poupa-se latência.
+Nota honesta: com features bem construídas, o valor marginal de um 14B é modesto. Mantém-se porque é barato e reduz chamadas ao Fable, mas **o log regista sempre a decisão determinística e a do Qwen lado a lado**. Se ao fim de duas semanas o Qwen concordar com as regras em > 95% dos casos, remove-se e poupa-se latência.
 
 ---
 
@@ -301,7 +301,7 @@ Meios: `requests.Session` com keep-alive, `ThreadPoolExecutor` com 3-4 workers n
 
 ## 12. Memória
 
-O radar tem estado técnico próprio (`radar_state.sqlite`: snapshots, cache OHLC, alertas emitidos, cooldowns, forward returns) e escreve `radar_latest.json` + `alerts.jsonl`. **Nunca escreve em `TRADING_STATE.md` nem `TRADING_HISTORY.md`.** O Project `crypto` continua a ser a memória operacional; o radar só produz eventos que o Fable (e o Sponsor) consomem.
+O radar tem estado técnico próprio (`radar_state.sqlite`: snapshots, cache OHLC, alertas emitidos, cooldowns, forward returns) e escreve `radar_latest.json` + `alerts.jsonl`. **Nunca escreve em ficheiros de estado ou histórico de trading.** O radar só produz eventos que o Fable (e um humano) consomem.
 
 ---
 
@@ -356,7 +356,6 @@ O radar tem estado técnico próprio (`radar_state.sqlite`: snapshots, cache OHL
 - Só `GET` em `/0/public/*` e `/derivatives/api/v3/*` (tickers, orderbook, historical funding). Nenhum endpoint privado, de conta ou de ordens.
 - Nenhuma variável de ambiente com chave lida; v0.8 acrescenta um **guard em arranque** que aborta se `KRAKEN_API_KEY`/`KRAKEN_SECRET` estiverem definidas no ambiente do processo, e um teste que falha se qualquer URL contiver `/private/` ou o método não for GET.
 - Ollama em localhost; o Qwen não tem tools.
-- O MCP Kraken com ferramentas privadas que existe nas sessões do PO **não** faz parte do radar e não foi usado nesta análise.
 
 ---
 
@@ -387,14 +386,14 @@ Schema (campo `format` do Ollama): `{"reviews":[{"asset":str, "setup_type": enum
 **I. Falhas:** Futures indisponível → continua sem derivativos, `data_quality.futures_ticker=UNAVAILABLE`, tradeability só Spot. OHLC falha num ativo → mantém-se com features L1 e flag `OHLC_MISSING`, nunca desaparece em silêncio. 429 → backoff e redução de workers. Qwen timeout/JSON inválido → um retry, depois gate determinístico com `qwen=UNAVAILABLE` e exigência de confirmação extra. Store corrompido → recria e marca warmup. Ciclo que exceda 45 s aborta o Qwen desse ciclo.
 
 **J. Migração v0.7 → v0.8:**
-1. `store.py` + L0/L1 + heartbeat em loop. Correr 3-5 dias em sombra ao lado da v0.7, gravando ambas as shortlists. Critério de passagem: a shortlist L1 contém os ativos que o Sponsor/PO identificam a olho como "a mexer" em pelo menos 9 de 10 verificações manuais, e a v0.7 falha em várias.
+1. `store.py` + L0/L1 + heartbeat em loop. Correr 3-5 dias em sombra ao lado da v0.7, gravando ambas as shortlists. Critério de passagem: a shortlist L1 contém os ativos que um humano identifica a olho como "a mexer" em pelo menos 9 de 10 verificações manuais, e a v0.7 falha em várias.
 2. L2 (OHLC incremental, features em ATR, setups, opportunity) + forward return labeling.
 3. L3 (depth, trades, tradeability) + correção dos bugs 1-6 herdados.
 4. Qwen com schema + log comparativo.
 5. Fable gate + cooldown + budget + output final.
 6. Reformar a v0.7. Primeira calibração de pesos com 7+ dias de `runs.jsonl`.
 
-Cada passo é uma task do Developer com o seu prompt; o PO entrega um de cada vez.
+Cada passo é uma alteração separada, entregue uma de cada vez.
 
 ---
 
@@ -408,4 +407,4 @@ Condições que ponho ao BUILD:
 - Fase 1 corre em sombra antes de substituir o que existe; não se desliga a v0.7 por promessa.
 - Os pesos iniciais são declarados `UNCALIBRATED` e só ganham valores "definitivos" com forward returns medidos. Sem `runs.jsonl` e labeling, a v0.8 é a v0.7 com mais constantes inventadas.
 - O Qwen fica em avaliação, com o log comparativo como juiz, e sai se não acrescentar nada.
-- O radar não é prova de edge. Detetar movimento não é prever movimento; o que ele compra é tempo do Fable gasto onde há algo a analisar. A questão "isto dá dinheiro?" continua a ser respondida pelo Project `crypto` e pelos registos de trades, não pelo radar.
+- O radar não é prova de edge. Detetar movimento não é prever movimento; o que ele compra é tempo do Fable gasto onde há algo a analisar. A questão "isto dá dinheiro?" é respondida por registos de trades medidos, não pelo radar.

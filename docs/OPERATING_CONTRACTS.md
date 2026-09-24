@@ -1,6 +1,6 @@
 # Operating contracts: evidence, scheduling, context and model evaluation
 
-Status: **ACCEPTED DESIGN**, not implemented. Version OC-1, 2026-09-14. These are concrete engineering defaults for future briefs, not claims of calibrated performance. A change requires a new version and evidence; failing a limit disables the optional path rather than weakening the limit silently. `ARCHITECTURE.md` describes current implementation. Future trading contracts are in `EXECUTION_ARCHITECTURE.md`.
+Status: **ACCEPTED DESIGN**, not implemented. Version OC-1, 2026-09-14. These are concrete engineering defaults for future work, not claims of calibrated performance. A change requires a new version and evidence; failing a limit disables the optional path rather than weakening the limit silently. `ARCHITECTURE.md` describes current implementation. Future trading contracts are in `EXECUTION_ARCHITECTURE.md`.
 
 ## 1. Collection, validation and deadlines
 
@@ -137,7 +137,7 @@ Candidate strategy setup/direction originates in the deterministic strategy prof
 
 The PSI drift vector has exactly 20 versioned canonical features: return1m/5m/15m/1h/4h; BTC-relative return15m/1h; volume intensity5m/1h; spread_bps; tight-band bid/ask depth; book imbalance; taker-buy ratio; trades/hour; observation age; ATR5m/price; ATR1h/price; 24h range/price; and BTC realized-volatility percentile. Compute PSI on reference-training decile boundaries with 0.5 pseudocount per bin and a separate missing bucket. Missing/invalid feature rates rising by 10 percentage points versus reference trigger an integrity investigation even if PSI is unavailable. A feature without a validated implementation is UNKNOWN and the relevant model/strategy profile cannot pretend to have its trained vector. No new feature is chosen because it makes drift disappear.
 
-All windows, sample counts and gates are engineering policy defaults recorded before measurement. They can be too strict and leave a role/strategy disabled; that is the intended safe outcome. A future PO may propose a versioned experiment to change them, but a developer may not loosen them to obtain a green result.
+All windows, sample counts and gates are engineering policy defaults recorded before measurement. They can be too strict and leave a role/strategy disabled; that is the intended safe outcome. A versioned experiment may propose changing them, but a developer may not loosen them to obtain a green result.
 
 
 ## 11. Ordering, visibility and optional routing resolution

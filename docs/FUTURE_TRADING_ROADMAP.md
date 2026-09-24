@@ -76,7 +76,7 @@ Default first live capability is **cash-funded spot LONG only**, with mandatory 
 
 - **Goal:** verify minimal real execution/protection behavior within an explicitly approved tiny envelope, not establish profitability from a handful of trades.
 - **Why now:** only after F0–F4 prove mechanics can limited venue-specific unknowns be tested safely enough for user review.
-- **Dependencies:** every prior gate; affirmative sponsor approval for this exact account, cash-funded spot-long capability, named strategies/instruments, monetary/risk limits, code/policy hashes, expiry and canary procedure. Approval is not inferred from this document.
+- **Dependencies:** every prior gate; affirmative owner approval for this exact account, cash-funded spot-long capability, named strategies/instruments, monetary/risk limits, code/policy hashes, expiry and canary procedure. Approval is not inferred from this document.
 - **Scope:** one simultaneous bot-owned position, native protective order for every filled quantity, minimum feasible order bounded by approved cash/loss limits, operator-visible incidents, deterministic service supervision. No autonomous envelope increase.
 - **Out of scope:** derivatives/shorts/leverage, retries of unknown submission, adding funds, changing limits, qualifying a strategy from canary returns.
 - **Deliverables:** exchange-grounded ledger, reconciled fills/costs/protection, latency/slippage report and incident register.
@@ -88,7 +88,7 @@ Default first live capability is **cash-funded spot LONG only**, with mandatory 
 
 - **Goal:** permit repeatable operation inside a fixed deterministic envelope after measured reliability.
 - **Why now:** expansion must be evidence-driven and separately approved, not a mode toggle after a successful demo.
-- **Dependencies:** F5, preserved positive strategy/calibration gates, explicit renewed sponsor approval for any new envelope.
+- **Dependencies:** F5, preserved positive strategy/calibration gates, explicit renewed owner approval for any new envelope.
 - **Scope:** CONSTRAINED_LIVE then APPROVED_ENVELOPE; same native protection, ownership, reconciliation and decision/risk chain. Adjust only one dimension per approved promotion (notional, instrument set, strategy or concurrent positions), never all simultaneously. Limits are minima of approved envelope and engine hard caps.
 - **Out of scope:** unrestricted trading, automatic leverage changes, model-updated risk limits, API/cloud fallback, silent activation of a newly installed strategy/model.
 - **Deliverables:** ≥60-day constrained report with ≥200 reconciled trade episodes, rolling edge/calibration/cost/drift and operational incident results, explicit proposed next envelope and rollback plan.
@@ -100,7 +100,7 @@ Default first live capability is **cash-funded spot LONG only**, with mandatory 
 
 - **Goal:** allow a separate, proven product capability only if net benefit and protection feasibility justify its complexity.
 - **Why now:** never needed for first spot-long operation; analysis of perpetual markets is not authority to execute them.
-- **Dependencies:** explicit sponsor scope; mature F6 record; verified account/jurisdiction/product eligibility and current venue rules. This is a separate capability program, not automatic F6 completion work.
+- **Dependencies:** explicit owner scope; mature F6 record; verified account/jurisdiction/product eligibility and current venue rules. This is a separate capability program, not automatic F6 completion work.
 - **Scope:** contract multiplier/settlement, inverse/linear distinctions, margin/liquidation/bankruptcy rules, funding settlements, reduce-only/native protection semantics, hedged/netted positions and outage stress; separate risk/cost/adapter profiles.
 - **Out of scope:** reusing spot quantity/PnL formulas blindly, automatic leverage manipulation, transfers, ignoring liquidation/funding because LLM analysis is strong.
 - **Deliverables:** typed derivative instruments and exact accounting, capability/permission dossier, separately approved risk envelope, repeated retrospective/paper/shadow/canary progression.

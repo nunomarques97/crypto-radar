@@ -65,7 +65,7 @@ The **agent pipeline rail**: a vertical list of agent nodes, each with a status 
 
 ## Agent Control Room — scoped exception
 
-Approved 2026-09-14 (Sponsor picked "match the reference screenshot closely" over keeping the room fully flat). This section overrides "no gradients/glassmorphism" **only** for `#agent-room`'s `.room-floor` background and desk panels — every other panel in the app, and every other rule on this page, is unchanged.
+Approved 2026-09-14 ("match the reference screenshot closely" was chosen over keeping the room fully flat). This section overrides "no gradients/glassmorphism" **only** for `#agent-room`'s `.room-floor` background and desk panels — every other panel in the app, and every other rule on this page, is unchanged.
 
 **Allowed only inside the room**: a dark radial/linear gradient background (`rgba(91,157,246,...)` glow at two corners over the base `--bg`/`--panel` navy — see `ui/web/style.css`'s `.room-floor`), a light `backdrop-filter: blur()` glass tint on the desk panels. **Still never allowed, even here**: a fabricated progress percentage, a fabricated "thinking..." chat bubble, or any number/label that doesn't come from `get_state().agents`.
 
@@ -79,7 +79,7 @@ Approved 2026-09-14 (Sponsor picked "match the reference screenshot closely" ove
 
 **Don't (room-specific)**: no character facial expressions beyond the restrained eye/eyebrow shapes already defined; no more than the one existing pulse animation per state (no separate "extra" glow on top of it); no fabricated per-agent progress bar or freeform status text.
 
-## Operational truth and takeover corrections
+## Operational truth and audit corrections
 
 This document governs visuals; ARCHITECTURE.md governs runtime roles. Current Sonnet/Orchestrator and Fable 5.1 labels are legacy registry entries, not the target architecture. Red Team remains NOT_CONFIGURED. Communication and receiving/waking reactions are scoped motion exceptions to the original single-pulse rule, triggered only by real events or explicit simulation.
 

@@ -1,22 +1,22 @@
-# Takeover audit — 2026-09-14
+# Code audit — 2026-09-14
 
-Primary: `<repo>`. Reference: `<sextant-repo>`. Current code, not the handover, established the findings below. Runtime source was not modified during architecture work.
+Primary: this repository. Reference: [Sextant](https://github.com/nunomarques97/sextant). The findings below come from the code itself, not from earlier documentation. Runtime source was not modified during the audit.
 
 ## Current primary implementation
 
 Substantial functioning pipeline: public Kraken spot/perpetual ingestion, universe normalization, SQLite snapshots, MAD-based anomalies, incremental OHLC/cache, L2 ATR/structure/setups/opportunity, L3 depth/trades/tradeability/cost preview, local Qwen, deterministic routing, event persistence, legacy Claude Bridge, Windows/ntfy/prompt notifications and PyWebView Control Room. There is no true multi-agent backend; Red Team is NOT_CONFIGURED and real communication collection returns an empty list.
 
-The primary directory had no Git repository, dependency manifest, README, general coding-agent instructions or authoritative current architecture/roadmap. `radar.py` is still a complete v0.7 implementation plus explicit-mode dispatch to v0.8. The original v0.8 document calls itself a proposal without code. Build/dist executables exist, but their correspondence to source and reproducibility were not proved.
+The project had no Git repository, dependency manifest, README or authoritative current architecture/roadmap at the time. `radar.py` is still a complete v0.7 implementation plus explicit-mode dispatch to v0.8. The original v0.8 document calls itself a proposal without code. Build/dist executables exist, but their correspondence to source and reproducibility were not proved.
 
-Inventory: 108 source/test/design files before changes, hashes in `audit/2026-09-14/source-inventory.json`. Actual SQLite schema read through a read-only connection: 14 application tables plus SQLite's sequence table. Schema recorded in `current-schema.json`. No production rows were used as fixtures or edited.
+Inventory: 108 source/test/design files before changes. Actual SQLite schema read through a read-only connection: 14 application tables plus SQLite's sequence table. No production rows were used as fixtures or edited.
 
-Baseline before changes: **411 unittest tests in 33.428s; 410 passed, 1 failed, no skips reported.** Failure is the known pre-existing environmental missing-SDK health assumption, not an instruction to configure a cloud key. Node tests are wrapped by two unittest cases. Frozen-launch safeguard passed in a fresh source subprocess; no frozen executable smoke test was run. Details and original log are in TESTING and `audit/2026-09-14/baseline.log`.
+Baseline before changes: **411 unittest tests in 33.428s; 410 passed, 1 failed, no skips reported.** Failure is the known pre-existing environmental missing-SDK health assumption, not an instruction to configure a cloud key. Node tests are wrapped by two unittest cases. Frozen-launch safeguard passed in a fresh source subprocess; no frozen executable smoke test was run.
 
-The original regression fixture still has unisolated desktop notification/clipboard helpers. The baseline was redirected to temporary state with ntfy topic/API key cleared, but is not claimed fully hermetic. T001 fixes the test boundary. No live radar/model cycle, UI launch, notification diagnostic or executable build was used as an audit step.
+The original regression fixture still has unisolated desktop notification/clipboard helpers. The baseline was redirected to temporary state with ntfy topic/API key cleared, but is not claimed fully hermetic. The isolated test runner (`scripts/run_tests.py`) later fixed the test boundary. No live radar/model cycle, UI launch, notification diagnostic or executable build was used as an audit step.
 
 ## Current Sextant implementation
 
-Git HEAD `47cf962`. Existing modified `research/trial-registry.jsonl` and untracked `Claude outputs/` preserved. Domain/ports/engine/adapters/app separation, uv lock, strict typing/lint, executable import constraints, public archive acquisition, cost/provenance models and walk-forward backtest accounting exist. `engine/risk/__init__.py` is a placeholder; a real general Risk Engine and local LLM runtime do not exist. Exchange book base method is unimplemented and private permission probe returns UNKNOWN. No trading adapter was inferred from type names.
+Commit `47cf962`. Domain/ports/engine/adapters/app separation, uv lock, strict typing/lint, executable import constraints, public archive acquisition, cost/provenance models and walk-forward backtest accounting exist. `engine/risk/__init__.py` is a placeholder; a real general Risk Engine and local LLM runtime do not exist. Exchange book base method is unimplemented and private permission probe returns UNKNOWN. No trading adapter was inferred from type names.
 
 **247 selected component tests passed in 19.34s** in Sextant's own environment. Money/time, capability, LLM authority, costs, backtest correctness, market/HTTP, trial registry, preflight, carry accounting and parameter perturbation were exercised. Full suite/coverage/static checks and research economic results were not rerun. [Reuse matrix](SEXTANT_REUSE.md) records dependencies and evidence per component; nothing was blindly migrated.
 
@@ -52,10 +52,10 @@ Historical “600+ assets / 250+ perpetuals” was not reproduced by a fresh sca
 
 ## Documentation and design outcome
 
-README/ARCHITECTURE/ROADMAP/DECISIONS/RISK/AGENTS/TESTING/DEVELOPMENT are the consolidated authority; DESIGN governs truthful UI mapping; CLAUDE delegates to the shared instructions; the old proposal is historical. OPERATING_CONTRACTS fixes evidence, context, queue, benchmark and drift procedures. EXECUTION_ARCHITECTURE designs future trading without enabling it. FUTURE_TRADING_ROADMAP and TASK_CATALOG turn design into gated small work. PO_HANDOVER is the continuation entry point.
+README/ARCHITECTURE/ROADMAP/RISK/TESTING/DEVELOPMENT are the consolidated authority; DESIGN governs truthful UI mapping; the old v0.8 proposal is historical. OPERATING_CONTRACTS fixes evidence, context, queue, benchmark and drift procedures. EXECUTION_ARCHITECTURE designs future trading without enabling it. FUTURE_TRADING_ROADMAP turns design into gated small work.
 
-Source-only recovery archive: `<recovery-dir>\2026-09-14-source-before-audit.zip`. It excludes production state and is not a DB backup. Direct dependency pins record the working global versions, not a validated fresh transitive lock. No repository remote/commit identity was invented.
+Direct dependency pins recorded the working global versions at the time, not a validated fresh transitive lock.
 
 ## Verification limits
 
-Source families, tests, schema, configuration, build spec, docs and relevant legacy components were inspected; this is not exhaustive branch-level verification. Secrets, private agent settings, binary internals and large production/research datasets were not used as instructions. Clean installation/build, native UI/frozen lifecycle, actual model benchmarks and all future trading capability proofs remain explicit gates. Accepted future design must never be described as implemented.
+Source families, tests, schema, configuration, build spec, docs and relevant legacy components were inspected; this is not exhaustive branch-level verification. Secrets, local tool settings, binary internals and large production/research datasets were not used as instructions. Clean installation/build, native UI/frozen lifecycle, actual model benchmarks and all future trading capability proofs remain explicit gates. Accepted future design must never be described as implemented.

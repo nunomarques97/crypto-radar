@@ -2,7 +2,7 @@
 
 Status: **ACCEPTED DESIGN ONLY. No private integration, live execution, account access or financial order is implemented or authorized by this document.** Current crypto-radar remains a public-data analysis application, with documented legacy cloud/runtime defects. F0–F7 is a separately gated future program. This document closes the design; capability evidence, empirical strategy qualification and explicit capital permissions cannot be manufactured by architecture.
 
-Authority: RISK.md defines the current prohibition; DECISIONS D14–D22 and this EX-1 define the future boundaries; OPERATING_CONTRACTS (OC-1) owns analysis/model/measurement policy; FUTURE_TRADING_ROADMAP owns promotion. FAILURE_AND_QUALITY owns engineering and failure standards. If an execution-specific freshness or protection requirement is stricter than an analysis requirement, the stricter execution requirement applies to orders. Changes require a versioned decision, compatibility plan and new validation, not an agent improvising an exception.
+Authority: RISK.md defines the current prohibition; this EX-1 defines the future boundaries; OPERATING_CONTRACTS (OC-1) owns analysis/model/measurement policy; FUTURE_TRADING_ROADMAP owns promotion. FAILURE_AND_QUALITY owns engineering and failure standards. If an execution-specific freshness or protection requirement is stricter than an analysis requirement, the stricter execution requirement applies to orders. Changes require a versioned decision, compatibility plan and new validation, not an ad-hoc exception.
 
 ## 1. Components, process boundaries and pipeline
 
@@ -45,7 +45,7 @@ Use strict immutable typed records, Decimal money/quantity with explicit currenc
 |---|---|
 | EvidenceManifest | Run/opportunity/version, instrument, source/receipt/as-of times, integrity verdict, immutable evidence IDs, feature versions, sealed hash; collector/controller owns |
 | AgentAssessment | Role/model/prompt/profile version, evidence version, advisory enum, factual claims with evidence IDs, inferences, objections and explicit unknowns; no executable numbers/actions |
-| StrategyProfile | Deterministic setup/direction/action rule, horizon, feature versions, registered outcome/cost cohort, calibration/edge evidence, stop/time-exit policy, approved instruments and mode; PO registry owns |
+| StrategyProfile | Deterministic setup/direction/action rule, horizon, feature versions, registered outcome/cost cohort, calibration/edge evidence, stop/time-exit policy, approved instruments and mode; owned by the versioned strategy registry |
 | TradeDecision | Decision ID, evidence/profile hashes, candidate direction, TRADE_LONG/TRADE_SHORT/NO_TRADE/WAIT/ABSTAIN, reason codes, disagreement record, expiry; deterministic decision engine owns |
 | AccountSnapshot | Account identity, received/as-of time, reconciliation generation, balances/available cash, liabilities, bot/unowned inventory, open orders, fills, fees, pending reservations and unknowns; reconciler owns |
 | RiskVerdict | Permission ID, proposed quantity ceiling, worst-case reserved cash/loss, account/evidence/profile versions, limits and reason codes, expiry; Risk Engine owns |
