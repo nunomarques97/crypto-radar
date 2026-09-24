@@ -49,3 +49,4 @@ radar.log
 radar_v08_output.json
 radar_v08_asset_pairs_cache.json
 exe_launch*.log
+.forja/
