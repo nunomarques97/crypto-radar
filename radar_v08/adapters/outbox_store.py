@@ -48,7 +48,8 @@ is to commit with the caller's change to ``events`` or not at all.
 Error details are codes plus short technical text for logs. Nothing here builds a
 notification, and no free text reaches a lifecycle or handoff row: reasons are codes.
 
-Rollback of the schema is documented in ``docs/tasks/results/T033a.md``.
+Rollback: drop the guard triggers, then the three outbox tables. No legacy table is
+touched by the migration.
 """
 
 from __future__ import annotations

@@ -1,12 +1,12 @@
-# T027 (D51): narrow line-ending rule for the locked benchmark corpus fixtures only.
+# Narrow line-ending rule for the locked benchmark corpus fixtures only.
 #
 # Scope is deliberately exactly this one directory, never the whole repository:
 # `radar_v08/adapters/benchmark_corpus.py` hashes every case and the lock over
 # *canonical JSON* (`json.dumps(..., sort_keys=True, separators=(",", ":"))`, see
 # `canonical_sha256`), which re-serializes the parsed content and therefore does not
 # see raw line endings at all — a CRLF checkout does not change any sha256 the loader
-# checks (proved in docs/tasks/results/T027.md, both before and after this file, inside
-# a disposable local clone). The rule below is defensive, not a fix for a reproduced
+# checks (verified before and after this file was added, inside a disposable local
+# clone). The rule below is defensive, not a fix for a reproduced
 # break: it keeps `git diff`/`git show` of these JSON fixtures free of line-ending noise
 # and keeps the checked-in bytes (`i/lf w/lf` today) stable across OSes regardless of a
 # clone's `core.autocrlf`, without touching end-of-line handling anywhere else in the repo.

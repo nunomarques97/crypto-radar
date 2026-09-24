@@ -17,7 +17,7 @@ new tables, indexes and triggers only. No existing table or row is altered.
 Version 3 (T031a, ``INVOCATION_MIGRATION``) adds ``invocations``, ``invocation_budget`` and
 ``invocation_demand`` for ``radar_v08.adapters.invocation_store``: new tables, one partial
 unique index on the new ``invocations`` table, and guard triggers. No legacy table gets a
-constraint, index, column or row change (DECISIONS.md D19).
+constraint, index, column or row change.
 
 Version 4 (T033a, ``OUTBOX_MIGRATION``) adds ``lifecycle_items``, ``outbox`` and
 ``outbox_cursors`` for ``radar_v08.adapters.outbox_store``: new tables, the delivery-ID
@@ -43,7 +43,7 @@ Migrations (``apply_schema_migrations``):
   already has the same name therefore fails the migration instead of being silently
   adopted.
 
-Rollback of the migration (documented in ``docs/tasks/results/T030.md``): drop the
+Rollback of the migration: drop the
 triggers, then the two evidence tables and the ledger. Legacy tables are untouched
 by the migration, so nothing else needs undoing.
 """

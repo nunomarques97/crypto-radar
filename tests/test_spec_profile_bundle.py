@@ -3,7 +3,7 @@
 Static proof only - PyInstaller is never imported and never run here, no executable is
 generated, `dist/` and `build/` are untouched.
 
-Reaches the loader, static evidence (docs/tasks/results/T050.md, section T050c2c):
+Reaches the loader, static evidence:
 
 * `ui/__main__.py`'s very first statement is `from ui.app import run`. Loading `ui.app`
   runs `from ui.bridge import Api` (module scope, not inside `run()`), which loads

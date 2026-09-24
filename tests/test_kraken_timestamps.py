@@ -326,7 +326,7 @@ class TestFuturesOrderbook(unittest.TestCase):
 # --- everything RECEIPT_ONLY-absent actually evaluates that way in domain -------------
 
 
-# --- attempt 2 regressions: malformed / out-of-range times stay isolated -----------
+# --- regressions: malformed / out-of-range times stay isolated -----------
 
 
 class TestEpochSecondsToUtc(unittest.TestCase):
@@ -349,8 +349,8 @@ class TestEpochSecondsToUtc(unittest.TestCase):
 
 class TestSpotDepthMalformedLevelTime(unittest.TestCase):
     def test_fetch_depth_ignores_non_numeric_third_element_as_before(self):
-        # Regression (Reviewer, attempt 1): '' / 'x' made fetch_depth (l3.py)
-        # raise ValueError; before T022b it returned [(1.0, 1.0)].
+        # Regression: '' / 'x' made fetch_depth (l3.py) raise ValueError;
+        # earlier versions returned [(1.0, 1.0)].
         for bad in ("", "x", None, "nan", [1]):
             with self.subTest(third=bad):
                 bids, asks = fetch_depth(
@@ -381,7 +381,7 @@ class TestSpotDepthMalformedLevelTime(unittest.TestCase):
         self.assertEqual(fetched.timing.source_time, datetime(2023, 11, 14, 22, 13, 20, tzinfo=UTC))
 
     def test_milliseconds_sized_level_time_is_none_rest_of_book_intact(self):
-        # Regression (Reviewer, attempt 1): 1700000000000 raised OSError and
+        # Regression: 1700000000000 raised OSError and
         # took down the whole depth fetch.
         payload = _depth_payload(
             bids=[["50000.0", "1.0", 1700000000000]],

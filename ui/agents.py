@@ -266,13 +266,12 @@ def collect_real_agent_communications(
     check, same dedup by id. This is a real query now, not a hardcoded [].
 
     It still returns [] today: nothing in the current pipeline calls
-    `SnapshotStore.record_handoff` (the T032b worker/controller wiring that
-    would is later work - see docs/tasks/results/T033a.md "Not wired yet").
+    `SnapshotStore.record_handoff` (the worker/controller wiring that would
+    is later work).
     A handoff's `sender`/`receiver` are also validated by the outbox as
     lowercase `[a-z][a-z0-9_]*` role identifiers, which the current
     hyphenated `AgentDefinition.id`s (e.g. `qwen-14b`) do not match - that
-    projection is explicitly deferred to T033b/T070 in the same note, and is
-    still open (see docs/tasks/results/T033.md). Nothing here fabricates a
+    projection is deferred and still open. Nothing here fabricates a
     handoff to paper over either gap: a real, valid row still passes through
     once one is ever recorded, and only that.
 

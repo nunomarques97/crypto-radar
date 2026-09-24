@@ -281,8 +281,8 @@ class TestCostPreviewDomainAdapter(unittest.TestCase):
 
     def test_cost_preview_stays_compact_for_the_qwen_payload(self):
         # cost_preview reaches every finalist of the live local Qwen payload
-        # (heartbeat._build_qwen_payload). HEAD before T040: 237 bytes spot, 479 spot+futures;
-        # T040 attempt 1 with the itemised scenario inside: 3332 / 6678 bytes.
+        # (heartbeat._build_qwen_payload). Before tradeability: 237 bytes spot, 479 spot+futures;
+        # an earlier version with the itemised scenario inside: 3332 / 6678 bytes.
         awkward = DepthMetrics(
             mid=1.2345, spread_bps=7.123456789, bid_depth_usd_0_5pct=1.0, ask_depth_usd_0_5pct=1.0,
             bid_depth_usd_1pct=1.0, ask_depth_usd_1pct=1.0, imbalance=0.0,

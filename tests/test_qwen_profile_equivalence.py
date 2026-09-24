@@ -10,7 +10,7 @@ of the frozen literals below (D55(2)).
 
 **Why this is not tautological.** Every expected value below (`EXPECTED_*`) is a constant
 written by hand from one offline run of the real code, inspected and copied in before this
-test existed (see the commands in `docs/tasks/results/T050.md` section T050c2a) — never
+test existed — never
 derived from `radar_v08.config` or `radar_v08.qwen` at test time. The test only ever compares
 what the CURRENT code actually sends/returns (captured through `unittest.mock` on
 `requests.post`, real network never touched) against those pre-written literals. If a future
@@ -42,8 +42,7 @@ from pathlib import Path
 REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
 
 # --------------------------------------------------------------------------------------------
-# Frozen literals (obtained once, offline, from the code as it stands before this test existed;
-# see docs/tasks/results/T050.md section T050c2a for the exact commands used to capture them).
+# Frozen literals (obtained once, offline, from the code as it stood before this test existed).
 # --------------------------------------------------------------------------------------------
 
 # The synthetic finalist the child process feeds to review_finalists() in every scenario.

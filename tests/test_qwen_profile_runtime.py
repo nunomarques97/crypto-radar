@@ -1,6 +1,6 @@
 """T050c2b: the Qwen runtime (radar_v08/qwen.py + config.QWEN_*) is resolved by the T050a loader.
 
-What is proven here (D55, Forja task T9):
+What is proven here:
 
 * ``config.resolve_qwen_runtime`` builds what ``qwen.py`` sends from the DEFAULT profile of a
   profiles file: model, endpoint, timeout, temperature and think. A copy of the versioned file

@@ -396,8 +396,7 @@ test("(5) the same communication id cannot trigger the wake-up twice", (t) => {
   // what the real-timer version proved (the pulse, then the full default
   // WAKE_MS wake-up, run to completion and settle before the dedup is
   // checked) - it just no longer needs a slack margin to tolerate
-  // scheduler delay under load, which is what made this assertion flaky
-  // (see docs/tasks/results/T026.md).
+  // scheduler delay under load, which is what made this assertion flaky.
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const conn = new FakeConnection("qwen-14b", "qwen-red-team");
   const receiver = new FakeWorkstation("qwen-red-team", "sleeping");
@@ -450,8 +449,7 @@ test("(8) backend state remains authoritative even for TEST MODE's forced demo",
   // synchronously, proving the same thing the original assertion proved
   // (the forced demo still reconciles to the real NOT_CONFIGURED backend
   // state, never freezes on the synthetic "working" beat) without the
-  // wall-clock margin that made it flaky under load - see
-  // docs/tasks/results/T026.md.
+  // wall-clock margin that made it flaky under load.
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const receiver = new FakeWorkstation("qwen-red-team", "not-configured");
   const room = new FakeRoomFull([], [receiver]);

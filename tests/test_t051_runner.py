@@ -841,7 +841,7 @@ class TestOutDirectory(RunnerCase):
                 status, summary = runner.run_invocation(CORPUS, out, 100, runtime=self.runtime())
                 self.assertIs(status, runner.Status.REFUSED)
                 self.assertIn("inside the repository", summary["reason"])
-        # Other spellings of the same directory (Security Reviewer, T4 attempt 1): device path,
+        # Other spellings of the same directory, found in security review: device path,
         # admin shares by name and by IP, the UNC device form, a forward-slash UNC path, and
         # the other device form.
         root = os.fspath(REPOSITORY_ROOT)

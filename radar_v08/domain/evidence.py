@@ -1,5 +1,5 @@
 """Immutable, versioned, hash-bound evidence identities (T030 domain part, ARCHITECTURE.md
-"Integrity and evidence", DECISIONS.md D05).
+"Integrity and evidence").
 
 Sealed evidence binds a run, one venue instrument, the facts it contains and the OC-1
 integrity report (``radar_v08.domain.integrity``) to a deterministic content hash. The

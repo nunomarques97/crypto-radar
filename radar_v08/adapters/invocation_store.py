@@ -25,7 +25,8 @@ with ``domain.invocation.fence_status`` and the ``UPDATE`` repeats the generatio
 owner in its ``WHERE`` clause, so a stale holder changes nothing and gets a typed
 ``Transition`` status instead.
 
-Rollback of the schema is documented in ``docs/tasks/results/T031a.md``.
+Rollback: drop the guard triggers, then the three invocation tables. No legacy table
+is touched by the migration.
 """
 
 from __future__ import annotations

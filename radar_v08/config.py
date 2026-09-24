@@ -246,9 +246,8 @@ L3_MIN_OPPORTUNITY_TO_CONSIDER = float(os.getenv("RADAR_L3_MIN_OPPORTUNITY", "40
 L3_FETCH_WORKERS = int(os.getenv("RADAR_L3_FETCH_WORKERS", "4"))
 
 DEPTH_BOOK_COUNT = int(os.getenv("RADAR_DEPTH_BOOK_COUNT", "25"))
-# Reference order size for slippage/depth-at-size estimates - configurable per
-# Sponsor's typical order (architecture doc section 3, "tamanho típico de
-# ordem do Sponsor").
+# Reference order size for slippage/depth-at-size estimates - configurable to the
+# operator's typical order size (architecture doc section 3).
 REFERENCE_ORDER_SIZE_USD = float(os.getenv("RADAR_REFERENCE_ORDER_SIZE_USD", "250.0"))
 DEPTH_BAND_PCT_TIGHT = float(os.getenv("RADAR_DEPTH_BAND_PCT_TIGHT", "0.5"))  # +/-0.5%
 DEPTH_BAND_PCT_WIDE = float(os.getenv("RADAR_DEPTH_BAND_PCT_WIDE", "1.0"))    # +/-1%

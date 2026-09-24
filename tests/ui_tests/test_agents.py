@@ -262,9 +262,9 @@ class TestAgentCommunications(AgentsTestCase):
         self.assertEqual(validate_agent_communications(raw), [])
 
     def test_a_real_persisted_handoff_is_returned(self):
-        """T033b: collect_real_agent_communications now runs a real query over
-        the T033a outbox. The outbox's role charset (lowercase, underscores
-        only - see docs/tasks/results/T033a.md) does not accept the current
+        """collect_real_agent_communications runs a real query over the
+        outbox. The outbox's role charset (lowercase, underscores
+        only) does not accept the current
         hyphenated AGENT_REGISTRY ids, so this proves the wiring with a
         custom registry (the same extensibility seam TestConnections and
         TestExtensibility already use), not by inventing a handoff on the

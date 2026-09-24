@@ -1,9 +1,7 @@
 """T050b: locked benchmark corpus and OC-1 benchmark harness (fake adapter only).
 
-D31/D33/D38: the only repository files read are the synthetic fixtures under
-``tests/fixtures/benchmark_corpus``, the two harness sources (inspected as text) and the
-T4 snapshot ``docs/forja/archive/R-20260919-7c62-T4-sobras-codigo-ORIGINAL.patch`` (read
-only, to prove the refused-phrase tuples only grew); every mutation happens on a copy in a temporary
+The only repository files read are the synthetic fixtures under
+``tests/fixtures/benchmark_corpus`` and the two harness sources (inspected as text); every mutation happens on a copy in a temporary
 directory, and every report is written to a temporary directory. The harness runs only
 against the in-process ``FakeModel`` below: no model is run or downloaded, no request
 reaches Ollama, and the tests prove that ``radar_v08/workflow/benchmark.py`` cannot reach
@@ -612,7 +610,7 @@ class TestPerCaseGates(unittest.TestCase):
             with self.subTest(f"ordinary rationale: {text}"):
                 self.assertFalse(invades_risk_domain(answer(case, rationale=text)))
 
-    # T4 attempt 1 REJECT (docs/forja/reports/T4-a1-review.md): phrasings found accepted, verbatim.
+    # First review round: phrasings found accepted, verbatim.
     ATTEMPT1_PHRASES = (
         "Enter now, stop 97, target 120, size 2 BTC",
         "Buy 0.5 BTC",
@@ -624,7 +622,7 @@ class TestPerCaseGates(unittest.TestCase):
         "Allocate 30% of the account",
         "Buy 0.5 BTC now, stop 97, target 120, SL 97 TP 120.",
     )
-    # T4 attempt 2 REJECT (docs/forja/reports/T4-a2-review.md): every phrasing and payload, verbatim.
+    # Second review round: every phrasing and payload, verbatim.
     ATTEMPT2_PHRASES = (
         "Stop below the swing low at 97", "Place your stop under the recent low of 97", "Stop just under support at 97",
         "Stop-out at 97", "sl97", "s/l 97", "Cut losses under 97", "Get out below 97",
@@ -883,52 +881,13 @@ class TestPerCaseGates(unittest.TestCase):
 
 
 class TestRiskGateNumberWordsAreLinear(unittest.TestCase):
-    """T4 attempt 3 REJECT (docs/forja/reports/T4-a3-review.md): _NUMBER_WORD backtracked 2^n."""
+    """Regression: _NUMBER_WORD used to backtrack 2^n."""
 
-    ORIGINAL_SNAPSHOT = REPOSITORY_ROOT / "docs" / "forja" / "archive" / "R-20260919-7c62-T4-sobras-codigo-ORIGINAL.patch"
-    PHRASE_TUPLES = ("ATTEMPT1_PHRASES", "ATTEMPT2_PHRASES", "OWN_VARIANTS", "ORDINARY_RATIONALES")
-    # The verdict's hostile tokens: a word that is both a unit and a unit plus "th", repeated,
+    # Hostile tokens: a word that is both a unit and a unit plus "th", repeated,
     # then a letter no unit accepts, so every split has to be ruled out.
     HOSTILE_WORDS = ("fourth", "tenth", "sixth", "seventh")
     HOSTILE_SIZES = (600, 4096)
-    SECONDS = 1.0  # loose bound (TECHNOLOGY.md S3); the fixed code takes a few milliseconds
-
-    def original_test_source(self) -> str:
-        if not self.ORIGINAL_SNAPSHOT.is_file():
-            # The snapshot is Forja run state (docs/forja/ is not versioned), so it is absent
-            # from a clean checkout. Skip instead of failing; the ReDoS guards below still run.
-            self.skipTest(f"review snapshot absent: {self.ORIGINAL_SNAPSHOT.name}")
-        lines = self.ORIGINAL_SNAPSHOT.read_text(encoding="utf-8").splitlines()
-        start = lines.index("+++ b/tests/test_benchmark_harness.py") + 2  # skip the hunk header
-        body: list[str] = []
-        for line in lines[start:]:
-            if line.startswith("diff --git "):
-                break
-            body.append(line[1:])
-        return "\n".join(body)
-
-    @staticmethod
-    def class_tuples(source: str, class_name: str, names: tuple[str, ...]) -> dict[str, tuple[str, ...]]:
-        found: dict[str, tuple[str, ...]] = {}
-        for node in ast.walk(ast.parse(source)):
-            if isinstance(node, ast.ClassDef) and node.name == class_name:
-                for statement in node.body:
-                    if isinstance(statement, ast.Assign) and len(statement.targets) == 1:
-                        target = statement.targets[0]
-                        if isinstance(target, ast.Name) and target.id in names:
-                            found[target.id] = ast.literal_eval(statement.value)
-        return found
-
-    def test_phrase_tuples_only_grew_against_the_original_snapshot(self) -> None:
-        original = self.class_tuples(self.original_test_source(), "TestPerCaseGates", self.PHRASE_TUPLES)
-        current = self.class_tuples(Path(__file__).read_text(encoding="utf-8"), "TestPerCaseGates", self.PHRASE_TUPLES)
-        self.assertEqual(set(original), set(self.PHRASE_TUPLES))
-        self.assertEqual(set(current), set(self.PHRASE_TUPLES))
-        for name in self.PHRASE_TUPLES:
-            with self.subTest(name):
-                self.assertGreater(len(original[name]), 0)
-                self.assertEqual(current[name][: len(original[name])], original[name])  # may only append
-                self.assertEqual(getattr(TestPerCaseGates, name), current[name])
+    SECONDS = 1.0  # loose bound; the fixed code takes a few milliseconds
 
     def test_rejected_phrasings_still_refused_and_ordinary_text_still_passes(self) -> None:
         for text in TestPerCaseGates.ATTEMPT1_PHRASES + TestPerCaseGates.ATTEMPT2_PHRASES + TestPerCaseGates.OWN_VARIANTS:
@@ -1035,12 +994,12 @@ class TestRiskGateNumberWordsAreLinear(unittest.TestCase):
 
 
 class TestAlnumRunIsLinearAndTokensUnchanged(unittest.TestCase):
-    """T050c (docs/forja/reports/T2-a1-security.md): ``_ALNUM_RUN`` wrapped its mandatory
+    """Regression: ``_ALNUM_RUN`` wrapped its mandatory
     "[a-z]" in "*" on both sides over the SAME class, so a run with no letter at all made
     ``findall`` back off one character at a time from every position a run could start,
-    O(run^2). Security Reviewer measured 0.435 s on 4096 x U+2152 (NFKC-folds to runs of
+    O(run^2). A security review measured 0.435 s on 4096 x U+2152 (NFKC-folds to runs of
     digits) and 0.046 s on 4096 x "1"; this repository's re-measurement before the fix,
-    same shapes, was 0.468 s and 0.052 s (see docs/tasks/results/T050.md, section T050c).
+    same shapes, was 0.468 s and 0.052 s.
     """
 
     # The old pattern, kept here read-only as the equivalence reference. Never imported
@@ -1127,14 +1086,14 @@ class TestAlnumRunIsLinearAndTokensUnchanged(unittest.TestCase):
 
 
 class TestResponseScanBudget(unittest.TestCase):
-    """T050c1b (D54 b; docs/forja/reports/T2-a1-security.md nits 1 and 2): one character budget
+    """One character budget
     for the whole reply, checked before the risk gate reads anything, fail closed.
     """
 
     # Distinct, 64 characters, no digit and no risk term: the risk gate reads them as plain text.
     MAX_IDS = tuple(f"ev-{'z' * k}{'q' * (61 - k)}" for k in range(bm.MAX_CITED_IDS))
     WORST_NFKC = "ﷺ"  # NFKC turns it into 18 Arabic letters, no digit
-    # Security Reviewer worst case: 16 strings of 4096 x U+2152 in one reply (6.79 s before).
+    # Security review worst case: 16 strings of 4096 x U+2152 in one reply (6.79 s before).
     SECURITY_WORST = ("⅒" * 4096,) * 16
     # Existing ReDoS test (TestPerCaseGates.test_risk_wording_scan_stays_linear_on_hostile_text):
     # 5.0 s within the per-string cap, 1.0 s for text refused unread.
