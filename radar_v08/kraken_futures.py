@@ -49,9 +49,9 @@ def fetch_tickers(session: GuardedSession) -> list[dict[str, Any]]:
 def fetch_tickers_with_server_time(session: GuardedSession) -> tuple[list[dict[str, Any]], str | None]:
     """Same request and caller contract as `fetch_tickers`, plus Kraken
     Futures' own `serverTime` (raw ISO8601 string, unparsed) when the
-    envelope supplies one. T022b: exposes a field the response already
+    envelope supplies one. Exposes a field the response already
     carries and `fetch_tickers` used to discard; not wired to any consumer
-    here (see radar_v08/adapters, T023b wires a validator).
+    here (see radar_v08/adapters, which wires a validator).
     """
     response = session.get(f"{config.FUTURES_URL}/tickers")
     payload = response.json()
@@ -79,9 +79,9 @@ def fetch_orderbook_with_server_time(
 ) -> tuple[list[tuple[float, float]], list[tuple[float, float]], str | None]:
     """Same request and caller contract as `fetch_orderbook`, plus Kraken
     Futures' own `serverTime` (raw ISO8601 string, unparsed) when the
-    envelope supplies one. T022b: exposes a field the response already
+    envelope supplies one. Exposes a field the response already
     carries and `fetch_orderbook` used to discard; not wired to any consumer
-    here (see radar_v08/adapters, T023b wires a validator).
+    here (see radar_v08/adapters, which wires a validator).
     """
     response = session.get(f"{config.FUTURES_URL}/orderbook", params={"symbol": symbol})
     payload = response.json()

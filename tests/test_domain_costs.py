@@ -1,4 +1,4 @@
-"""T040: exact itemised round-trip cost scenarios (radar_v08/domain/costs.py).
+"""Exact itemised round-trip cost scenarios (radar_v08/domain/costs.py).
 
 Pure domain: no I/O, no database, no configuration. Golden values below are computed by
 hand in the comments, never by re-running the implementation.

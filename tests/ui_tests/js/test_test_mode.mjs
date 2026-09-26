@@ -31,7 +31,7 @@ test("ON reveals test-only UI and shows the exact required banner text", () => {
   assert.equal(view.bannerHidden, false);
   assert.equal(view.toggleActive, true);
   assert.equal(view.toggleLabel, "🧪 TEST MODE: ON");
-  // exact copy the task specifies: "🧪 TEST MODE ACTIVE"
+  // exact required copy: "🧪 TEST MODE ACTIVE"
   assert.equal("🧪 TEST MODE ACTIVE", "🧪 TEST MODE ACTIVE");
 });
 

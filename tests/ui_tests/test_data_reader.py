@@ -179,8 +179,8 @@ class TestEventLifecycle(DataReaderTestCase):
 
 
 class TestLifecycleStateReading(DataReaderTestCase):
-    """T033b: the reader may only show QUEUED/LOADING/RUNNING/FINISHED (or one
-    of the T032 outcomes) when a real `lifecycle_items` row proves it."""
+    """The reader may only show QUEUED/LOADING/RUNNING/FINISHED (or one
+    of the terminal outcomes) when a real `lifecycle_items` row proves it."""
 
     def test_unknown_item_reads_as_unknown_not_a_guessed_stage(self):
         self.assertEqual(self.reader.lifecycle_state("no-such-item"), "UNKNOWN")

@@ -259,7 +259,7 @@ class TestBuildModelContext(unittest.TestCase):
 
 
 class TestEvidenceVerifiedContext(unittest.TestCase):
-    """T030b: the builder refuses evidence whose run/instrument/hash does not match (typed)."""
+    """The builder refuses evidence whose run/instrument/hash does not match (typed)."""
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

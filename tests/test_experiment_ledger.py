@@ -1,7 +1,7 @@
-"""T042a: experiment ledger — cohorts, episodes, purged chronological splits, sample minima,
+"""Experiment ledger — cohorts, episodes, purged chronological splits, sample minima,
 UNCALIBRATED results, sealed manifests and trial counts (``radar_v08/domain/experiments.py``).
 
-Every observation is synthetic: built in memory through the real T041 path
+Every observation is synthetic: built in memory through the real labeling path
 (``outcomes.label_horizon``) from generated quotes, with ``random.Random(seed)`` where a
 fixture needs variety. Nothing reads or writes a file, a database, the network, a model or
 the UI; no real backtest. Expected counts are derived by hand in the comments from how each
@@ -75,7 +75,7 @@ def observation(
     features=FEATURES,
     tolerance=timedelta(minutes=2),
 ):
-    """One labelled T041 outcome: entry mid 100 at ``decided``, exit quote at target + exit_delay."""
+    """One labelled outcome: entry mid 100 at ``decided``, exit quote at target + exit_delay."""
     side = Side.LONG if direction is Direction.LONG else Side.SHORT
     costs = (HorizonCost(horizon, cost(cost_status, side=side, policy=cost_policy)),) if record_cost else ()
     subject = OutcomeSubject(
@@ -169,7 +169,7 @@ class TestHandPurgeAtBoundaries(unittest.TestCase):
         items = []
         for index, offset in enumerate(self.HOURS):
             if index == 3:
-                # exit quote 96h late (tolerance 100h): a legitimate T041 label known at 144+1+96 = 241h
+                # exit quote 96h late (tolerance 100h): a legitimate label known at 144+1+96 = 241h
                 items.append(
                     observation("E3", T0 + offset, exit_delay=timedelta(hours=96), tolerance=timedelta(hours=100))
                 )
@@ -278,7 +278,7 @@ class TestExclusions(unittest.TestCase):
         )
         self.assertEqual(body["episodes"]["eligible"], 1)
         self.assertEqual(sum(body["splits"].values()), 1)
-        # the incomplete label really has no net (T041), and nothing was substituted for it
+        # the incomplete label really has no net, and nothing was substituted for it
         self.assertIsNone(items[1].outcome.label.net_markout)
         self.assertEqual(items[0].outcome.label.net_markout, Decimal("0.008"))  # 101/100-1-0.002
 

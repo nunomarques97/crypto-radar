@@ -3,7 +3,7 @@
 Usage::
 
     python scripts/run_t051_block.py --corpus benchmarks/oc1_screener_v1 \
-        --out <t051-workdir> --budget-seconds 540 [--include-optional]
+        --out C:/Users/User/crypto-radar-t051 --budget-seconds 540 [--include-optional]
     python scripts/run_t051_block.py --corpus benchmarks/oc1_screener_v1 --write-freeze
 
 Each invocation (at most ``MAX_BUDGET_SECONDS`` = 540 s, so it fits one 10-minute shell call):
@@ -773,7 +773,7 @@ def write_freeze(corpus: str | os.PathLike[str], runtime: Runtime | None = None)
 def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="One resumable invocation of the T051 Screener benchmark.")
     parser.add_argument("--corpus", required=True, help="locked corpus directory (benchmarks/oc1_screener_v1)")
-    parser.add_argument("--out", help="raw results directory outside the repository (<t051-workdir>)")
+    parser.add_argument("--out", help="raw results directory outside the repository (C:/Users/User/crypto-radar-t051)")
     parser.add_argument("--budget-seconds", type=int, help="wall-clock budget of this invocation, 1..540")
     parser.add_argument("--include-optional", action="store_true", help=f"also run {OPTIONAL_MODEL} after every mandatory step")
     parser.add_argument("--write-freeze", action="store_true", help="write <corpus>/t051_freeze.json and exit (no network)")

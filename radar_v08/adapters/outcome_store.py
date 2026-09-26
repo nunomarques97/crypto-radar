@@ -1,4 +1,4 @@
-"""SQLite store and L2 labeler for prospective outcome labels (T041).
+"""SQLite store and L2 labeler for prospective outcome labels.
 
 Persists ``radar_v08.domain.outcomes`` in the three tables of ledger version 5
 (``evidence_store.OUTCOME_MIGRATION``): ``outcome_subjects``, ``outcome_subject_costs`` and

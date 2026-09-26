@@ -34,6 +34,10 @@ def run() -> None:
         min_size=(1024, 720),
     )
 
+    if window is None:
+        api.close()
+        return
+
     def _on_closed():
         try:
             api.close()

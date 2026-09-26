@@ -267,6 +267,19 @@ def _venue_scenarios(
     }
 
 
+def venue_cost_scenarios(
+    kind: InstrumentKind, depth: DepthMetrics | None, taker_fee_bps: float
+) -> dict[cost_domain.Side, cost_domain.CostScenario]:
+    """Public accessor for outcome tracking: the same `cost_domain.CostScenario` objects
+    `_venue_scenarios` builds for `build_cost_preview` and `build_cost_scenario_detail`,
+    one per `cost_domain.Side`, with nothing recalculated and no change to either
+    function's signature or return shape. A caller that keeps the returned objects (e.g.
+    to later derive `RecordedCost` for outcome tracking) still gets an `INCOMPLETE`
+    `CostScenario` as-is when a component is missing - it is never partially summed or
+    filled in from the other side."""
+    return _venue_scenarios(kind, depth, taker_fee_bps)
+
+
 def _decimal_text(value: Decimal) -> str:
     """Exact plain-text form of a Decimal (trailing zeros dropped, never rounded)."""
     exact = Context(prec=cost_domain.COST_CONTEXT.prec, traps=[Inexact])
@@ -417,7 +430,7 @@ def build_cost_preview(
     funding_rate_raw: float | None,
 ) -> dict[str, Any]:
     """Preliminary cost preview, SPOT vs FUTURES kept separate (task section 4),
-    priced by the exact two-leg domain in radar_v08.domain.costs (T040).
+    priced by the exact two-leg domain in radar_v08.domain.costs.
 
     `total_cost_bps` / `net_move_required_pct` are the amplitude needed to clear the
     round-trip costs of the worse side (long or short) at the reference size - never a
@@ -455,7 +468,7 @@ def build_cost_scenario_detail(
     futures_available: bool,
     futures_depth: DepthMetrics | None,
 ) -> dict[str, Any]:
-    """Itemised two-leg cost scenarios (T040) for the same book inputs build_cost_preview
+    """Itemised two-leg cost scenarios for the same book inputs build_cost_preview
     prices: per side, every line with its leg, direction, exact Decimal string, presented
     projection and source; every missing and not-applicable component with its reason.
 

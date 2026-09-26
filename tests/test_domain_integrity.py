@@ -1,4 +1,4 @@
-"""Pure fixture tests for radar_v08.domain.integrity (OC-1 section 1, task T022a).
+"""Pure fixture tests for radar_v08.domain.integrity (OC-1 section 1).
 
 No network, no files, no wall clock: every check receives an explicit ``now``.
 Boundary tests pin each limit exactly at the bound (PASS) and one microsecond above.

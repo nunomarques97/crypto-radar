@@ -13,9 +13,9 @@ SQLite (the `events` table) is the source of state; `events.jsonl` stays the
 append-only audit log (events.py already writes both). This module only ever
 transitions events through their SQLite row - never edits the jsonl log.
 
-Budget, claim and cooldown (T031b, TAKEOVER_AUDIT P1): an event is taken in
+Budget, claim and cooldown (TAKEOVER_AUDIT P1): an event is taken in
 this order - (1) the event row moves PENDING/DEFERRED -> PROCESSING (a lost
-race means someone else has it: skip, nothing charged); (2) the T031a atomic
+race means someone else has it: skip, nothing charged); (2) the atomic
 claim + budget reservation for the event's invocation identity, which is the
 only place a budget unit is spent (refused -> event DEFERRED, nothing charged;
 an identical active invocation held elsewhere -> event DEFERRED, nothing
@@ -131,7 +131,7 @@ def _api_key_present(env: dict | None = None) -> bool:
 
 
 def _dispatch_is_disabled() -> bool:
-    """Return the non-configurable T010 runtime containment decision."""
+    """Return the non-configurable runtime containment decision."""
     return not config.CLAUDE_BRIDGE_DISPATCH_ENABLED
 
 
@@ -305,7 +305,7 @@ INVOCATION_POLICY_VERSION = f"{POLICY_VERSION}/{config.MODEL_VERSION_TAG['SONNET
 
 
 def _lease_seconds() -> int:
-    """The invocation lease matches the stale-PROCESSING window (bounded by T031a's limits)."""
+    """The invocation lease matches the stale-PROCESSING window (bounded by the invocation store's lease limits)."""
     return min(MAX_LEASE_SECONDS, max(MIN_LEASE_SECONDS, int(config.CLAUDE_BRIDGE_PROCESSING_STALE_SECONDS)))
 
 
@@ -317,8 +317,8 @@ def event_evidence_hash(event_row: Any) -> str:
     """``sha256:<hex>`` of the event's persisted, immutable evidence version.
 
     The hash covers the event ID and the context JSON exactly as stored when the
-    event was created (never rewritten afterwards). It is not a T030 sealed
-    evidence hash: sealed evidence is not attached to events yet (T032/T033).
+    event was created (never rewritten afterwards). It is not a sealed
+    evidence hash: sealed evidence is not attached to events yet.
     """
     payload = json.dumps(
         {"event_id": event_row["event_id"], "context_json": event_row["context_json"]},

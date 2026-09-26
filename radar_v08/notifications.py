@@ -28,9 +28,9 @@ mobile push failure can be retried across cycles (see `retry_pending_ntfy`)
 without ever re-sending the Windows toast or touching the event's own
 analysis status.
 
-Notification ID (T033b): `notification_id_for_event` derives a stable ID from
+Notification ID: `notification_id_for_event` derives a stable ID from
 the FIRST EVENT outbox row recorded for the event
-(`SnapshotStore.first_outbox_entry`, T033a). Outbox rows are append-only and
+(`SnapshotStore.first_outbox_entry`). Outbox rows are append-only and
 never deleted, so that row is fixed once written: later writes to the same
 event (`mark_event_notified` right after a send, a status change, ...) add
 new rows after it and never move it. A resend of the same event - a cross-
@@ -98,7 +98,7 @@ if ($Sound -eq '1') {
 
 $toast = [Windows.UI.Notifications.ToastNotification]::new($template)
 if ($Tag) {
-    # T033b: a stable per-notification tag (from a real outbox delivery ID) so a
+    # A stable per-notification tag (from a real outbox delivery ID) so a
     # resend of the same event replaces this toast instead of piling up a duplicate.
     $toast.Tag = $Tag
     $toast.Group = 'crypto-radar'
@@ -128,7 +128,7 @@ def send_windows_notification(
     raises - a notification failure must never take the radar down with it
     (task section 13/16: the radar keeps working regardless).
 
-    `notification_id` (T033b), when given, becomes the toast's Tag/Group so a
+    `notification_id`, when given, becomes the toast's Tag/Group so a
     resend of the same event (same outbox delivery ID, see
     `notification_id_for_event`) replaces the earlier toast instead of piling
     up a duplicate. Never fabricated here - `None` (no ID) is the honest
@@ -211,7 +211,7 @@ def mobile_notifications_enabled() -> bool:
 
 
 def stable_notification_id(delivery_id: str) -> str:
-    """Deterministic, transport-safe ID for one notification (T033b), derived
+    """Deterministic, transport-safe ID for one notification, derived
     from a real outbox delivery ID (`OutboxEntry.delivery_id`). The same
     delivery ID - the same outbox row read again on a cross-cycle retry or
     after a restart - always yields the same notification ID: this is what
@@ -224,11 +224,11 @@ def stable_notification_id(delivery_id: str) -> str:
 
 
 def notification_id_for_event(event: dict[str, Any], store: "SnapshotStore | None") -> str | None:
-    """The stable notification ID for one event (T033b), or `None` when it
+    """The stable notification ID for one event, or `None` when it
     cannot be proven.
 
     Looks up the first EVENT outbox row ever recorded for `event["event_id"]`
-    (`SnapshotStore.first_outbox_entry`, T033a) and derives the ID from its
+    (`SnapshotStore.first_outbox_entry`) and derives the ID from its
     `delivery_id`. The first row is used, not the latest, because every later
     event write (including `mark_event_notified`, which the bridge calls right
     after sending) appends a new row - pinning to the latest would change the
@@ -265,7 +265,7 @@ def send_mobile_notification(
     updates `ntfy_status`/`ntfy_last_error` so `retry_pending_ntfy` can pick
     it up later (task section 7).
 
-    `notification_id` (T033b): the caller may pass a precomputed stable ID
+    `notification_id`: the caller may pass a precomputed stable ID
     (e.g. `notify_for_event` reuses the one it already looked up); when
     omitted, it is derived here via `notification_id_for_event` so a direct
     call (e.g. `retry_pending_ntfy`'s cross-cycle resend) still gets the same
@@ -367,7 +367,7 @@ def notify_for_event(event: dict[str, Any], store: "SnapshotStore | None" = None
     if level == "LOW":
         return result  # terminal only, task section 4/13
 
-    # T033b: derived once and reused for both channels, so a single call sends
+    # Derived once and reused for both channels, so a single call sends
     # the Windows toast and the ntfy push under the same stable ID.
     notification_id = notification_id_for_event(event, store)
     result["notification_id"] = notification_id

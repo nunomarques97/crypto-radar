@@ -23,7 +23,7 @@ Reading the source (external input, fail closed with a typed ``BuildError``)
   header is checked, then the bytes actually read) is refused. Rows must be strict ASCII
   ``epoch,open,high,low,close,volume,trades`` on the 5-minute grid, strictly increasing.
 * No intermediate files are needed; if a later step ever needs one, D59 designates
-  ``<t051-workdir>/work`` only.
+  ``C:/Users/User/crypto-radar-t051/work`` only.
 
 Episodes and separation
 -----------------------
@@ -136,8 +136,8 @@ from .benchmark_corpus import (
 
 REPOSITORY_ROOT = Path(__file__).resolve().parent.parent.parent
 SYNTHETIC_FIXTURE_CORPUS = REPOSITORY_ROOT / "tests" / "fixtures" / "benchmark_corpus"
-SEXTANT_ROOT = Path("<sextant-repo>")
-WORK_DIR = Path("<t051-workdir>/work")  # D59: the only place for intermediate files
+SEXTANT_ROOT = Path("C:/Users/User/Desktop/sextant")
+WORK_DIR = Path("C:/Users/User/crypto-radar-t051/work")  # D59: the only place for intermediate files
 
 CORPUS_ID = "oc1-sec6-kraken-ohlcvt-v1"
 RULES_VERSION = "oc1-corpus-rules-1"

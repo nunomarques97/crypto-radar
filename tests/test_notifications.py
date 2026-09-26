@@ -289,7 +289,7 @@ class TestNotificationIdForEvent(_StoreTestCase):
         self.assertEqual(first, second)
 
     def test_the_id_does_not_move_when_later_writes_add_outbox_rows(self):
-        # Regression reproduction: the bridge calls
+        # The reviewer's reproduction of attempt 1: the bridge calls
         # mark_event_notified right after the send, which appends a new EVENT
         # outbox row. The id must be the same before and after that row.
         event_id = self._make_event_row()
@@ -339,7 +339,7 @@ class TestResendAfterRestartUsesTheSameNotificationId(_StoreTestCase):
         self.assertEqual(retry_id, first_id)
 
     def test_real_bridge_sequence_then_restart_resends_under_the_same_id(self):
-        """The full bridge flow, end to end on a
+        """The reviewer's required flow for attempt 2, end to end on a
         disposable SQLite file: claim -> PROCESSED -> notify_for_event (toast
         ok, ntfy push fails) -> mark_event_notified (exactly what
         claude_bridge does right after notify_fn, adding an outbox row) ->

@@ -59,6 +59,8 @@ DEFAULT_RUNTIME = QwenRuntime(
     timeout_seconds=30.0,
     temperature=0.0,
     think=False,
+    context_tokens=4096,
+    output_cap_tokens=768,
 )
 
 
@@ -135,7 +137,7 @@ class TestValidOverrides(_ProfilesDir):
         )
         self.assertEqual(
             runtime,
-            QwenRuntime("screener-qwen3-14b", "qwen3:8b", "http://127.0.0.1:11434", 20.0, 0.0, False),
+            QwenRuntime("screener-qwen3-14b", "qwen3:8b", "http://127.0.0.1:11434", 20.0, 0.0, False, 4096, 768),
         )
 
     def test_whole_second_decimal_and_boundaries_are_accepted(self) -> None:
@@ -294,7 +296,8 @@ def fake_post_fn(payload):
 
 def run(**kwargs):
     try:
-        result = qwen.review_finalists(**kwargs)
+        # Freeze elapsed time here: shared-deadline behavior has dedicated tests.
+        result = qwen.review_finalists(**kwargs, monotonic=lambda: 0.0)
     except RuntimeError as exc:
         return {"exception": str(exc)}
     return {"status": result.status, "error": result.error, "error_code": result.error_code,
@@ -366,7 +369,7 @@ class TestOneSourceOfTruthInAChild(_ProfilesDir):
         self.assertEqual(out["ui_model"], "qwen3:14b")
         self.assertEqual(out["posted"], [{
             "url": "http://localhost:11434/api/chat", "model": "qwen3:14b", "timeout": 30.0,
-            "options": {"temperature": 0.0}, "keys": ["format", "messages", "model", "options", "stream", "think"],
+            "options": {"temperature": 0.0, "num_ctx": 4096, "num_predict": 768}, "keys": ["format", "messages", "model", "options", "stream", "think"],
         }])
         self.assertEqual(out["injected"], ["qwen3:14b"])
         self.assertEqual(out["default_transport"]["status"], "OK")

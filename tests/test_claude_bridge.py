@@ -300,7 +300,7 @@ class TestRunBridgeCycleContainment(BridgeCycleTestCase):
 
     def test_budget_exhausted_event_is_not_deferred_or_charged(self):
         event_id, _ = create_event_if_new(self.store, **make_event_kwargs(model_demand="FABLE"))
-        # T031b: the budget is the T031a reservation counter (the legacy
+        # The budget is the invocation reservation counter (the legacy
         # model_budget_usage table is no longer charged), so exhaust that one.
         for index in range(config.MODEL_BUDGETS["FABLE"]["hourly"]):
             identity = InvocationIdentity(

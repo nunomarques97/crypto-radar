@@ -2,6 +2,8 @@
 
 Only GET /0/public/AssetPairs and GET /0/public/Ticker are used, both public,
 both called once per heartbeat (Ticker) or once per cache TTL (AssetPairs).
+A full cycle may add one pair-filtered Ticker request for its L3 finalists
+just before the evidence seal, never one request per asset.
 No per-asset requests happen here (architecture doc: "CHEAP GLOBAL").
 
 `fetch_ohlc` below IS a per-asset request (architecture doc: "CANDIDATE
@@ -65,8 +67,14 @@ def fetch_asset_pairs(session: GuardedSession) -> dict[str, dict[str, Any]]:
     return _get_json(session, "AssetPairs")
 
 
-def fetch_ticker(session: GuardedSession) -> dict[str, dict[str, Any]]:
-    return _get_json(session, "Ticker")
+def fetch_ticker(session: GuardedSession, pairs: list[str] | None = None) -> dict[str, dict[str, Any]]:
+    """Global Ticker when `pairs` is None (the per-heartbeat call). With
+    `pairs`, one request filtered to those pairs (the seal refresh)."""
+    if pairs is None:
+        return _get_json(session, "Ticker")
+    if not pairs:
+        raise ValueError("pairs must be None (global Ticker) or a non-empty list")
+    return _get_json(session, "Ticker", params={"pair": ",".join(pairs)})
 
 
 def load_asset_pairs_cache(
@@ -236,7 +244,7 @@ def _parse_book_level(entry: list[Any]) -> tuple[float, float, float | None]:
     """One Depth bid/ask entry: ``[price, volume]`` or ``[price, volume,
     timestamp]`` (epoch seconds). Kraken includes the per-level update time
     on this endpoint; a missing third element is ``None``, never a
-    fabricated 0 (T022b: radar_v08/adapters maps this into ``SourceTiming``).
+    fabricated 0 (radar_v08/adapters maps this into ``SourceTiming``).
     """
     price, volume, *rest = entry
     return float(price), float(volume), _level_epoch(rest[0] if rest else None)
@@ -280,9 +288,9 @@ def fetch_depth_with_times(
 ) -> tuple[list[tuple[float, float, float | None]], list[tuple[float, float, float | None]]]:
     """Same request and caller contract as `fetch_depth`, plus each level's
     Kraken-reported update time (epoch seconds) when the response supplies
-    one. T022b: exposes a field the response already carries and
+    one. Exposes a field the response already carries and
     `fetch_depth` used to discard; not wired to any consumer here (see
-    radar_v08/adapters, T023b wires a validator). `fetch_depth` keeps its
+    radar_v08/adapters, which wires a validator). `fetch_depth` keeps its
     own original parsing and does not go through this function, so a
     malformed level time can never change what current consumers get.
     """

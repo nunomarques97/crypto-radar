@@ -1,15 +1,15 @@
 """Reproducible experiment ledger: cohorts, episodes, purged chronological splits, sample
-minima and sealed manifests with trial counts (T042a, OPERATING_CONTRACTS.md §7 and §10).
+minima and sealed manifests with trial counts (OPERATING_CONTRACTS.md §7 and §10).
 
 Pure: no I/O, no wall clock, no configuration, no randomness drawn. ``evaluated_as_of`` and
-the ``seed`` are always passed in. Nothing here is persisted (T042a has no store); the
+the ``seed`` are always passed in. Nothing here is persisted (there is no ledger store yet); the
 ``TrialLedger`` is an immutable in-memory value that a later store can rebuild and verify.
 
 Input
 -----
 
-``CohortObservation`` = one T041 ``LinkedOutcome`` (subject + matured label at one horizon)
-plus the two cohort attributes T041 does not carry: the deterministic strategy ``setup`` and
+``CohortObservation`` = one ``LinkedOutcome`` (subject + matured label at one horizon)
+plus the two cohort attributes an outcome does not carry: the deterministic strategy ``setup`` and
 the ``feature_version`` it was computed with. The ``CohortKey`` fixes setup, direction
 (LONG or SHORT), horizon, feature version and outcome policy version. An observation that
 does not match it, or was decided after ``evaluated_as_of``, is excluded with a typed,
@@ -26,7 +26,7 @@ seals a new episode (anchored on the seal, no chaining). The episode's outcome i
 label and nothing else: a member can never replace a seal whose label is missing. An episode
 is excluded with a typed, counted reason (``EPISODE_REASONS``) when the seal's label is not
 available by ``evaluated_as_of``, its net markout is missing (``GROSS_UNAVAILABLE`` /
-``COST_NOT_RECORDED`` / ``COST_INCOMPLETE`` of T041: never read as zero), or its net was
+``COST_NOT_RECORDED`` / ``COST_INCOMPLETE`` of the outcome labels: never read as zero), or its net was
 priced under another cost policy than the benchmark's.
 
 Chronological split (§7)
@@ -91,7 +91,7 @@ EXPERIMENT_POLICY_VERSION = "EXPERIMENT-1"
 MANIFEST_ID_PREFIX = "manifest:sha256:"
 MAX_TEXT_LENGTH = 200
 
-#: The longest label horizon T041 writes (24h): the purge width and the episode window.
+#: The longest outcome label horizon (24h): the purge width and the episode window.
 MAX_LABEL_HORIZON: timedelta = max(horizon.duration for horizon in HORIZONS)
 
 #: Chronological split in percent of eligible episodes: fit / calibration / test.
@@ -244,7 +244,7 @@ class FailedMinimum(Enum):
 
 
 class EvaluationStatus(Enum):
-    SAMPLE_SUFFICIENT = "SAMPLE_SUFFICIENT"  # minima met; the splits may be used (T042b)
+    SAMPLE_SUFFICIENT = "SAMPLE_SUFFICIENT"  # minima met; the splits may be used (calibration)
     UNCALIBRATED = "UNCALIBRATED"  # a minimum failed; no split, no number
 
 
@@ -307,7 +307,7 @@ class BenchmarkKey:
 
 @dataclass(frozen=True, slots=True)
 class CohortObservation:
-    """One T041 labelled outcome with the setup and feature version it was decided under."""
+    """One labelled outcome with the setup and feature version it was decided under."""
 
     outcome: LinkedOutcome
     setup: str
@@ -316,7 +316,7 @@ class CohortObservation:
     def __post_init__(self) -> None:
         if not isinstance(self.outcome, LinkedOutcome):
             raise ExperimentInputError(
-                ExperimentErrorCode.INVALID_FIELD, "CohortObservation.outcome", "must be a T041 LinkedOutcome"
+                ExperimentErrorCode.INVALID_FIELD, "CohortObservation.outcome", "must be a LinkedOutcome"
             )
         _require_text(self.setup, "CohortObservation.setup")
         _require_text(self.feature_version, "CohortObservation.feature_version")

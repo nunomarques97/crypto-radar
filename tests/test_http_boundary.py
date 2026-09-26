@@ -1,4 +1,4 @@
-"""T023a - public HTTP boundary: exact allowlist, redirects never followed.
+"""Public HTTP boundary: exact allowlist, redirects never followed.
 
 No network: every test uses either a duck-typed fake inner session or a real
 requests.Session whose transport adapter is replaced by a recording fake, so
@@ -422,9 +422,9 @@ class TestGuardNotWidened(unittest.TestCase):
                         modules = [node.module]
                     if any(m.split(".")[0] in {"requests", "urllib3", "httpx", "aiohttp", "socket"} or m in {"urllib.request", "http.client"} for m in modules):
                         importers.add(os.path.relpath(path, REPO_ROOT).replace(os.sep, "/"))
-        # T032b adds the loopback-only Ollama adapter (refuses every non-loopback host,
+        # The loopback-only Ollama adapter (refuses every non-loopback host,
         # never follows redirects; see tests/test_local_inference_adapter.py).
-        # T051c (D61) adds the benchmark-only Ollama adapter: host 127.0.0.1 only (through
+        # The benchmark-only Ollama adapter: host 127.0.0.1 only (through
         # loopback_base_url), five allowlisted routes, no redirects; the radar runtime never
         # imports it (see tests/test_t051_runner.py).
         self.assertEqual(importers, {"radar_v08/http_client.py", "radar_v08/ntfy.py", "radar_v08/qwen.py",

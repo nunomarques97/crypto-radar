@@ -69,7 +69,7 @@ def _has_unsafe_characters(url: str) -> bool:
 
 
 def assert_allowed_request(method: str, url: str) -> None:
-    """Abort unless (method, url) matches the exact public HTTP allowlist (T023a).
+    """Abort unless (method, url) matches the exact public HTTP allowlist.
 
     Allowed only when: method is GET; scheme is https; the authority is exactly
     an allowlisted host (no userinfo, no port - not even :443 - no trailing

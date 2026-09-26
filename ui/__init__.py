@@ -4,7 +4,7 @@ Observability + process control only: this package never reimplements a
 radar_v08 mechanism (events, alerts, prompts, notifications, budgets) - it
 only reads radar_v08's own store/config/output and starts/stops radar.py as
 a subprocess. See DESIGN.md for the visual system and
-<home>\\.claude\\plans\\deep-jingling-avalanche.md for the plan this
+C:\\Users\\User\\.claude\\plans\\deep-jingling-avalanche.md for the plan this
 package implements.
 
 `radar_v08/config.py` derives its default STATE_DIR from its own `__file__`

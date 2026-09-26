@@ -1,4 +1,4 @@
-"""OC-1 local inference worker (T032b, OC-1 sections 2 and 3).
+"""OC-1 local inference worker (OC-1 sections 2 and 3).
 
 Orchestration only: every effect comes in through an injected port (clock, local
 inference, prompt source, result interpreter, invocation ledger, transition sink).
@@ -7,7 +7,7 @@ model: the model comes from the injected ``InferenceProfile``.
 
 Rules:
 
-* Consumes the T032a policy (``DeadlineScheduler``) and the T031a lease/generation
+* Consumes the scheduler policy (``DeadlineScheduler``) and the invocation lease/generation
   (``InvocationLedger`` port over ``adapters.invocation_store``). Concurrency is one:
   ``process_next`` runs at most one item, and the scheduler holds one running slot.
 * Every model call is authorized by the scheduler first. Its hard limit is the
@@ -238,7 +238,7 @@ class ResultInterpreter[R](Protocol):
 
 
 class InvocationLedger(Protocol):
-    """T031a claim/lease/fence operations; implementations raise ``InvocationError`` on storage failure."""
+    """Invocation claim/lease/fence operations; implementations raise ``InvocationError`` on storage failure."""
 
     def claim(self, identity: InvocationIdentity, model: str, lease_seconds: int) -> Claimed | Duplicate | Refused: ...
 

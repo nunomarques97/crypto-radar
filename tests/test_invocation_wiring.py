@@ -1,10 +1,10 @@
-"""T031b - heartbeat and bridge use the T031a atomic claim + reservation.
+"""Heartbeat and bridge use the atomic claim + reservation.
 
-TAKEOVER_AUDIT P1: the heartbeat charged budget and started the cooldown before
+Regression: the heartbeat charged budget and started the cooldown before
 its dedup, and the bridge charged the budget again before its claim, so one
 opportunity cost 2 units. These tests run the real heartbeat (`run_heartbeat`
 over the fake Kraken of `test_integrity_wiring`: no socket, fake Qwen, temporary
-SQLite and log paths) and the real bridge cycle. The bridge's T010 containment is
+SQLite and log paths) and the real bridge cycle. The bridge's cloud-dispatch containment is
 lifted only inside each test by patching `_dispatch_is_disabled`, and every model
 call goes to a fake `create_fn`: nothing reaches a network or a cloud client.
 """
@@ -80,7 +80,7 @@ class FakeModel:
 
 
 def dispatch_enabled():
-    """Test-only: lift the T010 guard so the cycle reaches the fake create_fn."""
+    """Test-only: lift the cloud-dispatch guard so the cycle reaches the fake create_fn."""
     return mock.patch.object(claude_bridge, "_dispatch_is_disabled", return_value=False)
 
 
@@ -153,7 +153,7 @@ class TestHeartbeatAndBridgeChargeOnce(wiring.IntegrityWiringBase, LedgerAsserti
         self.assertIsNone(self.cooldown_row("BTC", "SONNET"))
         self.assertEqual(self.invocations(), [])
 
-        # T010 containment is intact without the test patch: nothing is charged.
+        # Cloud-dispatch containment is intact without the test patch: nothing is charged.
         contained = claude_bridge.run_bridge_cycle(self.store, now=BRIDGE_NOW, create_fn=FakeModel())
         self.assertEqual(contained.health, "DISABLED")
         self.assertEqual(self.reserved("SONNET"), (0, 0))

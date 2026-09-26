@@ -19,7 +19,7 @@ Every leaf value that is missing is the literal string "UNAVAILABLE" (task
 section 3), never a fabricated number, so the model can tell "confirmed zero"
 apart from "we don't know".
 
-Evidence (T030b): when the caller passes the event's stored evidence
+Evidence: when the caller passes the event's stored evidence
 (`SnapshotStore.load_event_evidence`), `build_model_context` first checks the
 event's claim against the sealed evidence - evidence id/hash, run, instrument
 and the event's own asset - and raises `ContextEvidenceRejected` (a typed
@@ -225,7 +225,7 @@ def build_model_context(event_row: Any, *, evidence: EventEvidence | None = None
     With `evidence`, the claim is verified first (`verify_event_evidence`) and
     the context gains an `evidence` block; a mismatch raises
     `ContextEvidenceRejected` instead of returning any context. Without it the
-    output is unchanged from before T030b.
+    output is unchanged from before sealed evidence existed.
     """
     verified = verify_event_evidence(event_row, evidence) if evidence is not None else None
     persisted = _load_persisted_context(event_row)

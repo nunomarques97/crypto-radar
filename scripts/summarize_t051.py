@@ -1,7 +1,7 @@
-"""T051e: print the measured metrics of the T051 Screener runs as Markdown (D62).
+"""Print the measured metrics of the T051 Screener runs as Markdown.
 
 Reads ONE file, read-only: the runner's append-only results
-``<t051-workdir>/results/t051_results.jsonl`` (``--results`` points it at
+``C:/Users/User/crypto-radar-t051/results/t051_results.jsonl`` (``--results`` points it at
 another file, which the tests use with a synthetic file in a temporary directory). Writes
 nothing anywhere: the report goes to stdout. The file comes from outside the repository and is
 treated as untrusted input: size capped, strict UTF-8, strict JSON (no NaN/Infinity), every
@@ -40,7 +40,7 @@ from radar_v08.workflow.t051_metrics import (  # noqa: E402
     summarize,
 )
 
-DEFAULT_RESULTS = Path("<t051-workdir>/results/t051_results.jsonl")
+DEFAULT_RESULTS = Path("C:/Users/User/crypto-radar-t051/results/t051_results.jsonl")
 MAX_RESULTS_BYTES = 64 * 1024 * 1024
 MAX_FIELD_CHARS = 160
 NOT_MEASURED_TEXT = "not measured"
@@ -294,7 +294,7 @@ def render(summary: Summary, path: Path, size: int, sha256: str) -> str:
     ) if summary.stability else ["No stability call: not measured."]
     out.append("")
 
-    out.append("## Holdout coverage (D59 f)")
+    out.append("## Holdout coverage")
     out.append("")
     out += _table(
         ["Model", "Distinct labelled holdout cases (holdout step)", "Labelled holdout calls", "Sealed (no gold) holdout cases sent"],

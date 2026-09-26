@@ -1,4 +1,4 @@
-"""Kraken public-adapter time mapping (T022b).
+"""Kraken public-adapter time mapping.
 
 For every fetch `heartbeat`/`L2`/`L3` use - spot ticker, spot OHLC, spot
 depth, spot trades, futures tickers, futures order book - this module
@@ -19,7 +19,7 @@ provides:
 Additive only: `radar_v08.kraken_spot` and `radar_v08.kraken_futures`'s
 existing fetch functions and every current caller (heartbeat/l2/l3) are
 unchanged and behave exactly as before. Nothing here is wired to a
-consumer or to the OC-1 validator yet (T023b); this module has no callers
+consumer or to the OC-1 validator yet; this module has no callers
 in production code.
 """
 
@@ -117,8 +117,8 @@ class SpotTickerFetch:
     timing: SourceTiming
 
 
-def fetch_spot_ticker(session: GuardedSession, clock: Clock) -> SpotTickerFetch:
-    raw = kraken_spot.fetch_ticker(session)
+def fetch_spot_ticker(session: GuardedSession, clock: Clock, pairs: list[str] | None = None) -> SpotTickerFetch:
+    raw = kraken_spot.fetch_ticker(session) if pairs is None else kraken_spot.fetch_ticker(session, pairs)
     received = receipt_time(clock)
     return SpotTickerFetch(raw=raw, timing=SourceTiming(received_at=received, source_time=None))
 
@@ -149,7 +149,7 @@ class SpotOhlcFetch:
     """`source_time` is the last returned bar's own open time (every bar
     already carries Kraken's epoch) - `None` only when no bar came back.
 
-    Caution for T023b: Kraken's last OHLC bar is normally the one still
+    Caution for a future consumer: Kraken's last OHLC bar is normally the one still
     forming, so this is its *open* time - up to one full interval older
     than the data in it. It is not a data-freshness measure; OC-1 OHLC
     checks use their own `last_close` (`evaluate_ohlc`).

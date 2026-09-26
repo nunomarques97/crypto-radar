@@ -1,8 +1,8 @@
-"""OC-1 admission, queue and deadline policy (T032a, OC-1 sections 1 to 3).
+"""OC-1 admission, queue and deadline policy (OC-1 sections 1 to 3).
 
 Pure policy: no I/O, no database, no network, no wall-clock reads. The only effect
 is the injected ``Clock`` port; every operation reads it once. Every state change is
-returned to the caller as a ``Transition`` value (the caller persists it, T032b/T033);
+returned to the caller as a ``Transition`` value (the caller persists it: the worker and the outbox);
 nothing is written from here, so nothing can be half-written from here.
 
 Rules (docs/OPERATING_CONTRACTS.md, OC-1):
@@ -13,7 +13,7 @@ Rules (docs/OPERATING_CONTRACTS.md, OC-1):
   repair or a re-observation.
 * Maximum queued age per horizon: 15 s, 30 s, 45 s, counted from admission.
 * One running inference and at most 16 queued opportunity versions.
-* Identity is the T031a ``InvocationIdentity``: an identical active identity returns
+* Identity is the ``InvocationIdentity`` of ``domain.invocation``: an identical active identity returns
   the existing ID; a different evidence hash is a different invocation.
 * Ranking: deterministic opportunity-score band (high >= 70, eligible 50 to 69), then
   earliest deadline, then earliest seal, then stable ID. No model confidence exists in

@@ -1,8 +1,8 @@
-"""Model budgets (task section 12) on the single charging path of T031b.
+"""Model budgets on the single charging path (atomic claim + reservation).
 
-Before T031b these tests drove `budgets.try_consume_budget`, a check-then-increment
+Earlier versions of these tests drove `budgets.try_consume_budget`, a check-then-increment
 on the legacy `model_budget_usage` table that the heartbeat and the bridge each
-called for the same opportunity (TAKEOVER_AUDIT P1, the double count). That
+called for the same opportunity (the double count). That
 function was the defect and is gone; the same four limits are now asserted on
 the atomic claim + reservation (`SnapshotStore.claim_invocation`) with the limits
 `budgets.model_budget` maps from `config.MODEL_BUDGETS`, read back through

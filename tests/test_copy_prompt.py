@@ -149,7 +149,7 @@ class TestNotifyForEventTriggersCopyPrompt(_StoreTestCase):
 
 
 class TestSyntheticTestEventEndToEnd(_StoreTestCase):
-    """TESTE REAL (task section): a synthetic event explicitly marked
+    """TESTE REAL: a synthetic event explicitly marked
     TEST_EVENT=true never touches Kraken/Qwen/Claude and still produces a
     correctly-copied, event-specific prompt with a terminal confirmation.
     """

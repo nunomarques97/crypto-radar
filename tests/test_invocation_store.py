@@ -1,4 +1,4 @@
-"""T031a: SQLite invocation claims, atomic budget reservation, lease fencing and migration v3.
+"""SQLite invocation claims, atomic budget reservation, lease fencing and migration v3.
 
 Every database is a fixture in a fresh temporary directory. Nothing opens, reads or copies
 ``radar_state.sqlite`` or any other root state file. No network, model or notification.
@@ -51,8 +51,9 @@ MODEL = "qwen3:14b"
 ROOMY = ModelBudget(MODEL, 100, 1000)
 NEW_TABLES = {"invocations", "invocation_budget", "invocation_demand"}
 LEDGER_PLAN_TABLES = NEW_TABLES | {"schema_version_ledger", "evidence_versions", "event_evidence"}
-# T033a appends ledger version 4 and T041 version 5 (new tables only) after v3.
-LATER_PLAN_TABLES = {"lifecycle_items", "outbox", "outbox_cursors"} | {
+# Ledger version 4 (lifecycle/outbox) and version 5 (outcomes) append new tables only after v3;
+# qwen_reviews is created outside the ledger.
+LATER_PLAN_TABLES = {"lifecycle_items", "outbox", "outbox_cursors", "qwen_reviews"} | {
     "outcome_subjects", "outcome_subject_costs", "outcome_labels"
 }
 
@@ -176,12 +177,12 @@ class TempDbCase(unittest.TestCase):
         )
 
 
-# --- migration v3 (D19) -------------------------------------------------------------------------
+# --- migration v3 -------------------------------------------------------------------------------
 
 
 class TestMigrationV3(TempDbCase):
     def test_v3_is_the_third_version_of_the_ledger_plan(self):
-        # T033a appended version 4 after it; v3 itself is unchanged.
+        # Version 4 was appended after it; v3 itself is unchanged.
         self.assertIs(SCHEMA_MIGRATIONS[2], INVOCATION_MIGRATION)
         self.assertEqual(INVOCATION_MIGRATION.version, 3)
 

@@ -1,4 +1,9 @@
-"""T050c2a: frozen-value equivalence test for radar_v08/qwen.py + config.py (D53/D55/D56).
+"""T050c2a compatibility probe, extended by the profile context/output limits.
+
+The limits add num_ctx/num_predict to EXPECTED_OPTIONS. Its static clock
+preserves exact first-call timeout literals here; advancing-clock and blocked
+transport cases live in test_qwen_deadline.py. The original T050c history below
+describes the earlier wiring task, not a prohibition on this later change.
 
 This test is the prerequisite of the T050c wiring (linking `qwen.py`/`config.py` to the
 T050a profile loader, D55): it captures TODAY's runtime behaviour as LITERAL constants
@@ -42,7 +47,7 @@ from pathlib import Path
 REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
 
 # --------------------------------------------------------------------------------------------
-# Frozen literals (obtained once, offline, from the code as it stood before this test existed).
+# Frozen literals (obtained once, offline, from the code as it stands before this test existed).
 # --------------------------------------------------------------------------------------------
 
 # The synthetic finalist the child process feeds to review_finalists() in every scenario.
@@ -92,7 +97,8 @@ EXPECTED_FORMAT = {
 # keep_alive or a top-level num_ctx/num_predict fails the test just like a missing one).
 EXPECTED_PAYLOAD_KEYS = ["format", "messages", "model", "options", "stream", "think"]
 
-EXPECTED_OPTIONS = {"temperature": 0.0}
+# The profile context/output limits intentionally extend the frozen T050c options contract.
+EXPECTED_OPTIONS = {"temperature": 0.0, "num_ctx": 4096, "num_predict": 768}
 EXPECTED_THINK = False
 EXPECTED_STREAM = False
 
@@ -255,7 +261,8 @@ elif scenario == "guard_bad_host":
             output["exception_message"] = str(exc)
 else:
     with mock.patch("requests.post", fake_post):
-        result = qwen.review_finalists(FINALISTS)
+        # This equivalence probe consumes no time; deadline tests advance a fake clock.
+        result = qwen.review_finalists(FINALISTS, monotonic=lambda: 0.0)
     output["status"] = result.status
     output["error"] = result.error
     output["reviews"] = sorted(result.reviews)

@@ -1,4 +1,4 @@
-"""Pure tests for radar_v08.domain.evidence (task T030a, domain part of T030).
+"""Pure tests for radar_v08.domain.evidence (the domain part of versioned evidence).
 
 No SQLite, no files, no network, no wall clock: fixtures are built in memory with an
 explicit ``NOW``. Every rejection is asserted by its typed ``RejectionCode``.

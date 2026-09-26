@@ -1,6 +1,6 @@
-"""T051a / D64: additive corpus schema v2 in adapters/benchmark_corpus.py and workflow/benchmark.py.
+"""Additive corpus schema v2 in adapters/benchmark_corpus.py and workflow/benchmark.py.
 
-Hand-built v2 corpora in temporary directories only (D31). The v1 fixtures and their tests
+Hand-built v2 corpora in temporary directories only. The v1 fixtures and their tests
 (tests/test_benchmark_harness.py) are untouched; the v1 checks here only prove that the
 added GoldSource members are refused in a v1 case and that v1 and v2 files never mix.
 """

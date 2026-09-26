@@ -1,4 +1,4 @@
-"""System clock adapter (T032b): UTC wall clock, monotonic clock and a bounded sleep.
+"""System clock adapter: UTC wall clock, monotonic clock and a bounded sleep.
 
 The only place the worker reads real time. Wall time is timezone-aware UTC (for OC-1
 deadlines, which the scheduler refuses to run backwards); elapsed time uses the

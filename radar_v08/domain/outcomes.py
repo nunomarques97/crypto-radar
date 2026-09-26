@@ -1,9 +1,9 @@
-"""Prospective outcome labels at 15m/1h/4h/24h (T041, ARCHITECTURE.md "Outcome measurement").
+"""Prospective outcome labels at 15m/1h/4h/24h (ARCHITECTURE.md "Outcome measurement").
 
 An outcome *subject* is one decision-time observation of one instrument: the pair and
 venue, the deterministic direction, the entry mid and when it was observed, the sealed
-evidence it was built from (T030), the decision or invocation that acted on it (T031),
-the ablation arm, and the hypothetical round-trip cost scenario for each horizon (T040).
+evidence it was built from, the decision or invocation that acted on it,
+the ablation arm, and the hypothetical round-trip cost scenario for each horizon.
 Every link that is not known is a typed ``LinkMissingReason``; nothing is inferred.
 
 An outcome *label* is the market outcome of one subject at one horizon, written once the
@@ -35,7 +35,7 @@ Prices are mids, ``(bid + ask) / 2``, as ``decimal.Decimal``. ``market_return`` 
 ``exit_mid / entry_mid - 1`` (unsigned). ``gross_markout`` is the direction-signed
 ``market_return`` (LONG: +, SHORT: -); a subject with direction NONE has no gross or net
 markout (``NO_DIRECTION``). ``net_markout = gross_markout - total_fraction`` of the
-horizon's T040 cost scenario, only when that scenario is ``COST_COMPLETE``; otherwise the
+horizon's cost scenario, only when that scenario is ``COST_COMPLETE``; otherwise the
 net markout is unavailable with a reason (``COST_NOT_RECORDED`` / ``COST_INCOMPLETE`` /
 ``GROSS_UNAVAILABLE``). A missing value is never zero.
 
@@ -225,11 +225,11 @@ class LinkMissingReason(Enum):
     """Why a subject has no evidence, decision or arm link. Never inferred afterwards."""
 
     NOT_RECORDED = "not_recorded"  # the caller had no value at decision time
-    LEGACY_UNVERSIONED = "legacy_unversioned"  # evidence only: the event has no sealed evidence (T030)
+    LEGACY_UNVERSIONED = "legacy_unversioned"  # evidence only: the event has no sealed evidence
 
 
 class DecisionKind(Enum):
-    INVOCATION = "invocation"  # an invocation id of radar_v08.adapters.invocation_store (T031)
+    INVOCATION = "invocation"  # an invocation id of radar_v08.adapters.invocation_store
     DECISION = "decision"  # a deterministic decision id with no invocation behind it
 
 
@@ -253,7 +253,7 @@ class DecisionRef:
 
 @dataclass(frozen=True, slots=True)
 class RecordedCost:
-    """What the outcome keeps of a T040 ``CostScenario``: side, kind, status and total.
+    """What the outcome keeps of a ``CostScenario``: side, kind, status and total.
 
     ``total_fraction`` is set exactly when the status is ``COST_COMPLETE``; an incomplete
     scenario keeps no partial sum.
@@ -280,7 +280,7 @@ class RecordedCost:
     @classmethod
     def from_scenario(cls, scenario: CostScenario) -> RecordedCost:
         if not isinstance(scenario, CostScenario):
-            raise OutcomeInputError(OutcomeErrorCode.INVALID_FIELD, "scenario", "must be a T040 CostScenario")
+            raise OutcomeInputError(OutcomeErrorCode.INVALID_FIELD, "scenario", "must be a CostScenario")
         total = scenario.total_fraction if scenario.status is CostStatus.COMPLETE else None
         return cls(scenario.policy_version, scenario.side, scenario.instrument.kind, scenario.status, total)
 
@@ -314,7 +314,7 @@ def _link_json(value: str | LinkMissingReason | DecisionRef) -> object:
 class OutcomeSubject:
     """One decision-time observation to be labelled at every horizon.
 
-    ``instrument`` is the T030 venue identity; ``pair`` is the native key of the price
+    ``instrument`` is the sealed-evidence venue identity; ``pair`` is the native key of the price
     source (the Kraken spot pair key, e.g. ``XXBTZUSD``, or the futures symbol).
     """
 

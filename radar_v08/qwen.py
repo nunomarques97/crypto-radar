@@ -6,18 +6,23 @@ finalists that already cleared the pre-gate: veto incoherent setups, confirm
 or correct setup_type/direction within closed enums, recommend call_sonnet /
 call_fable, flag data quality. `think=false`, temperature 0, structured
 output via Ollama's `format` JSON schema (not the bare string "json"), one
-retry on invalid JSON or timeout, then UNAVAILABLE - the radar must keep
+retry on invalid JSON or timeout while time remains, then UNAVAILABLE/TIMEOUT - the radar must keep
 running on the deterministic gate alone if Qwen is down (task section 6/16).
 
-Model, endpoint, timeout, temperature and think come from config.QWEN_RUNTIME,
-the default profile of radar_v08/model_profiles.toml plus validated overrides
-(T050c). Without it nothing is sent and the batch is UNAVAILABLE.
+Model, endpoint, timeout, context/output limits, temperature and think come from config.QWEN_RUNTIME,
+the default profile of radar_v08/model_profiles.toml plus validated overrides.
+Without it nothing is sent and the batch is UNAVAILABLE. The batch
+shares one deadline across the batch and rejects late replies. A timed-out
+transport keeps the process's sole slot until it finishes; GPU cancellation is
+not implied by caller timeout.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import threading
+import time
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -26,6 +31,10 @@ import requests
 from . import config
 
 logger = logging.getLogger("radar_v08.qwen")
+
+# A timed-out HTTP call may still be running. Keep its slot until it actually
+# finishes; subsequent cycles fall back instead of piling up model requests.
+_INFERENCE_SLOT = threading.Lock()
 
 SETUP_TYPES = ("BREAKOUT", "CONTINUATION", "REVERSAL", "SQUEEZE_RELEASE", "EXHAUSTION", "NONE")
 DIRECTIONS = ("LONG", "SHORT", "NONE")
@@ -97,8 +106,18 @@ class QwenBatchResult:
     status: str  # OK | INVALID_JSON | TIMEOUT | UNAVAILABLE
     reviews: dict[str, QwenReview] = field(default_factory=dict)
     error: str | None = None
-    # ProfileErrorCode value when the model profile or an override was refused (T050c).
+    # ProfileErrorCode value when the model profile or an override was refused,
+    # otherwise a short code for why the batch is not OK (telemetry).
     error_code: str | None = None
+    # Observability only:
+    # batch wall time on the injected monotonic clock and transport calls started.
+    elapsed_ms: float | None = None
+    attempts: int = 0
+
+
+def inference_active() -> bool:
+    """True while an inference still holds the process's sole slot, timed-out calls included."""
+    return _INFERENCE_SLOT.locked()
 
 
 def _assert_local_ollama(url: str) -> None:
@@ -107,21 +126,24 @@ def _assert_local_ollama(url: str) -> None:
 
 
 def _runtime() -> config.QwenRuntime:
-    """The resolved profile, or a refusal: nothing is sent without one (T050c)."""
+    """The resolved profile, or a refusal: nothing is sent without one."""
     runtime = config.QWEN_RUNTIME
     if runtime is None:
         raise RuntimeError(f"Refusing to call Ollama without a valid model profile: {config.QWEN_PROFILE_ERROR}")
     return runtime
 
 
-def _default_post(payload: dict[str, Any]) -> dict[str, Any]:
-    runtime = _runtime()
+def _default_post(payload: dict[str, Any], runtime: config.QwenRuntime, timeout_seconds: float) -> object:
     _assert_local_ollama(runtime.endpoint)
     response = requests.post(
-        f"{runtime.endpoint}/api/chat", json=payload, timeout=runtime.timeout_seconds
+        f"{runtime.endpoint}/api/chat", json=payload, timeout=timeout_seconds
     )
     response.raise_for_status()
-    return response.json()
+    try:
+        return response.json()
+    except (ValueError, RecursionError) as exc:
+        # Translate only decoder failures into the existing request retry path.
+        raise requests.RequestException("invalid JSON in Ollama response") from exc
 
 
 def _build_payload(finalists: list[dict[str, Any]], runtime: config.QwenRuntime) -> dict[str, Any]:
@@ -136,19 +158,31 @@ def _build_payload(finalists: list[dict[str, Any]], runtime: config.QwenRuntime)
             {"role": "user", "content": user_content},
         ],
         "format": RESPONSE_SCHEMA,
-        # The profile's context_tokens / output_cap_tokens are NOT sent (no num_ctx /
-        # num_predict): options stay temperature only until T051 (T050c, D55(3)).
-        "options": {"temperature": runtime.temperature},
+        "options": {
+            "temperature": runtime.temperature,
+            "num_ctx": runtime.context_tokens,
+            "num_predict": runtime.output_cap_tokens,
+        },
         "think": runtime.think,
         "stream": False,
     }
 
 
-def _extract_content(raw_response: dict[str, Any]) -> str:
-    return raw_response.get("message", {}).get("content", "")
+def _extract_content(raw_response: object) -> str:
+    # The server envelope is untrusted too. An empty string enters the same
+    # bounded invalid-JSON retry path as missing or malformed model content.
+    if not isinstance(raw_response, dict):
+        return ""
+    message = raw_response.get("message")
+    if not isinstance(message, dict):
+        return ""
+    content = message.get("content")
+    return content if isinstance(content, str) else ""
 
 
-def _validate_reviews(parsed: dict[str, Any], valid_assets: set[str]) -> tuple[dict[str, QwenReview] | None, str | None]:
+def _validate_reviews(parsed: object, valid_assets: set[str]) -> tuple[dict[str, QwenReview] | None, str | None]:
+    if not isinstance(parsed, dict):
+        return None, "response is not an object"
     reviews_raw = parsed.get("reviews")
     if not isinstance(reviews_raw, list):
         return None, "missing 'reviews' array"
@@ -159,6 +193,8 @@ def _validate_reviews(parsed: dict[str, Any], valid_assets: set[str]) -> tuple[d
         if not isinstance(item, dict):
             return None, "review item is not an object"
         asset = item.get("asset")
+        if not isinstance(asset, str):
+            return None, "asset must be a string"
         if asset not in valid_assets:
             return None, f"unknown symbol in review: {asset!r}"
         if asset in seen_assets:
@@ -176,6 +212,13 @@ def _validate_reviews(parsed: dict[str, Any], valid_assets: set[str]) -> tuple[d
         if not isinstance(item.get("veto"), bool) or not isinstance(item.get("call_sonnet"), bool) or not isinstance(item.get("call_fable"), bool):
             return None, "veto/call_sonnet/call_fable must be booleans"
 
+        reason = item.get("reason")
+        notes = item.get("data_quality_notes")
+        if not isinstance(reason, str):
+            return None, "reason must be a string"
+        if not isinstance(notes, list) or not all(isinstance(note, str) for note in notes):
+            return None, "data_quality_notes must be an array of strings"
+
         out[asset] = QwenReview(
             asset=asset,
             setup_type=item["setup_type"],
@@ -185,8 +228,8 @@ def _validate_reviews(parsed: dict[str, Any], valid_assets: set[str]) -> tuple[d
             call_sonnet=item["call_sonnet"],
             call_fable=item["call_fable"],
             confidence=item["confidence"],
-            reason=str(item.get("reason", ""))[:200],
-            data_quality_notes=[str(n) for n in (item.get("data_quality_notes") or [])],
+            reason=reason[:200],
+            data_quality_notes=list(notes),
         )
 
     missing = valid_assets - seen_assets
@@ -208,13 +251,34 @@ def _profile_unavailable() -> QwenBatchResult:
 
 def review_finalists(
     finalists: list[dict[str, Any]],
-    post_fn: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
+    post_fn: Callable[[dict[str, Any]], object] | None = None,
+    *,
+    monotonic: Callable[[], float] | None = None,
 ) -> QwenBatchResult:
     """Review up to L3_MAX_FINALISTS finalists. `post_fn` is injectable for
     tests (no real Ollama call needed); defaults to the real local call.
     Without a valid model profile (config.QWEN_RUNTIME is None) nothing is
     posted and the result is UNAVAILABLE with a typed `error_code`.
+    A batch that reached the deadline start also carries `elapsed_ms` and
+    `attempts`; the fail-closed and empty paths keep `elapsed_ms` None.
     """
+    clock = monotonic or time.monotonic
+    started: list[float] = []
+    attempts = [0]
+    result = _review_batch(finalists, post_fn, clock, started, attempts)
+    if started:
+        result.elapsed_ms = max(0.0, (clock() - started[0]) * 1000)
+    result.attempts = attempts[0]
+    return result
+
+
+def _review_batch(
+    finalists: list[dict[str, Any]],
+    post_fn: Callable[[dict[str, Any]], object] | None,
+    clock: Callable[[], float],
+    started: list[float],
+    attempts: list[int],
+) -> QwenBatchResult:
     runtime = config.QWEN_RUNTIME
     if runtime is None:
         if finalists and post_fn is None and config.OLLAMA_URL is not None:
@@ -226,38 +290,131 @@ def review_finalists(
     if not finalists:
         return QwenBatchResult(status="OK", reviews={})
 
-    post = post_fn or _default_post
+    # The deadline read is also the telemetry start: no extra clock read.
+    started.append(clock())
+    deadline = started[0] + runtime.timeout_seconds
+    if not _INFERENCE_SLOT.acquire(blocking=False):
+        return QwenBatchResult(status="UNAVAILABLE", error="previous inference still active", error_code="inference_busy")
+
+    done = threading.Event()
+    cancelled = threading.Event()
+    results: list[QwenBatchResult] = []
+    errors: list[BaseException] = []
+    ownership = threading.Lock()
+    work_started = False
+    slot_released = False
+
+    def release_slot(*, only_unstarted: bool = False) -> None:
+        nonlocal slot_released
+        with ownership:
+            if not slot_released and (not only_unstarted or not work_started):
+                slot_released = True
+                _INFERENCE_SLOT.release()
+
+    def work() -> None:
+        nonlocal work_started
+        with ownership:
+            # start() can be interrupted after launching the native thread.
+            # A relinquished slot must never be used by a late-starting worker.
+            if slot_released:
+                done.set()
+                return
+            work_started = True
+        try:
+            results.append(_review_until_deadline(finalists, runtime, post_fn, clock, deadline, cancelled, attempts))
+        except BaseException as exc:
+            # Relay internal errors to the caller; do not disguise bugs as model
+            # unavailability. The deadline still fences errors arriving late.
+            errors.append(exc)
+        finally:
+            release_slot()
+            done.set()
+
+    try:
+        worker = threading.Thread(target=work, name="qwen-batch", daemon=True)
+        worker.start()
+    except BaseException:
+        cancelled.set()
+        release_slot(only_unstarted=True)
+        raise
+    try:
+        finished = done.wait(max(0.0, deadline - clock()))
+    except BaseException:
+        cancelled.set()
+        raise
+    if not finished or clock() >= deadline:
+        cancelled.set()
+        return _deadline_timeout()
+    if errors:
+        raise errors[0]
+    return results[0]
+
+
+def _deadline_timeout() -> QwenBatchResult:
+    return QwenBatchResult(status="TIMEOUT", error="timeout: batch deadline exceeded", error_code="deadline_exceeded")
+
+
+def _review_until_deadline(
+    finalists: list[dict[str, Any]],
+    runtime: config.QwenRuntime,
+    post_fn: Callable[[dict[str, Any]], object] | None,
+    clock: Callable[[], float],
+    deadline: float,
+    cancelled: threading.Event,
+    attempts: list[int],
+) -> QwenBatchResult:
     valid_assets = {f["asset"] for f in finalists}
     payload = _build_payload(finalists, runtime)
 
     last_error: str | None = None
+    last_error_code: str | None = None
     for attempt in range(config.QWEN_MAX_RETRIES_ON_INVALID + 1):
+        remaining = deadline - clock()
+        if cancelled.is_set() or remaining <= 0:
+            return _deadline_timeout()
+        attempts[0] += 1
         try:
-            raw_response = post(payload)
+            raw_response = post_fn(payload) if post_fn is not None else _default_post(payload, runtime, remaining)
         except requests.Timeout as exc:
-            last_error = f"timeout: {exc}"
+            last_error, last_error_code = f"timeout: {exc}", "timeout"
             logger.warning("Qwen call timed out (attempt %d): %s", attempt + 1, exc)
             continue
         except requests.RequestException as exc:
-            last_error = f"request error: {exc}"
+            last_error, last_error_code = f"request error: {exc}", "request_error"
             logger.warning("Qwen call failed (attempt %d): %s", attempt + 1, exc)
             continue
+
+        if cancelled.is_set() or clock() >= deadline:
+            return _deadline_timeout()
+        if isinstance(raw_response, dict):
+            count = raw_response.get("eval_count")
+            if (
+                raw_response.get("done") is False
+                or raw_response.get("done_reason", "stop") != "stop"
+                or ("eval_count" in raw_response and (type(count) is not int or count < 0 or count > runtime.output_cap_tokens))
+            ):
+                last_error, last_error_code = "incomplete response or invalid output token count", "incomplete_response"
+                continue
 
         content = _extract_content(raw_response)
         try:
             parsed = json.loads(content)
-        except (json.JSONDecodeError, TypeError) as exc:
-            last_error = f"invalid JSON: {exc}"
+        except (ValueError, RecursionError) as exc:
+            last_error, last_error_code = f"invalid JSON: {exc}", "invalid_json"
             logger.warning("Qwen returned invalid JSON (attempt %d): %s", attempt + 1, exc)
             continue
 
         reviews, validation_error = _validate_reviews(parsed, valid_assets)
         if reviews is None:
-            last_error = f"schema validation failed: {validation_error}"
+            last_error, last_error_code = f"schema validation failed: {validation_error}", "schema_invalid"
             logger.warning("Qwen response failed validation (attempt %d): %s", attempt + 1, validation_error)
             continue
 
+        if cancelled.is_set() or clock() >= deadline:
+            return _deadline_timeout()
         return QwenBatchResult(status="OK", reviews=reviews)
 
+    if cancelled.is_set() or clock() >= deadline:
+        return _deadline_timeout()
     status = "TIMEOUT" if last_error and last_error.startswith("timeout") else "UNAVAILABLE"
-    return QwenBatchResult(status=status, reviews={}, error=last_error)
+    return QwenBatchResult(status=status, reviews={}, error=last_error, error_code=last_error_code)

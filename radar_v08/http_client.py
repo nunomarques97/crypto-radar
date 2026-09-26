@@ -1,6 +1,6 @@
 """Guarded HTTP client: the only way radar v0.8 code is allowed to reach the
 Kraken public market-data network. Every call is checked against the exact
-public allowlist (security.assert_allowed_request, T023a: https, exact host,
+public allowlist (security.assert_allowed_request: https, exact host,
 exact path, GET only, no userinfo/port) before it leaves the process.
 Redirects are never followed (allow_redirects=False): a 3xx to a target
 outside the allowlist raises security.RedirectRefused, and one to an
@@ -29,7 +29,7 @@ class ApiError(RuntimeError):
 
 
 class RedirectNotFollowed(ApiError):
-    """A 3xx response was received and, by policy, not followed (T023a).
+    """A 3xx response was received and, by policy, not followed.
 
     Used when the redirect has no usable Location or points to an allowlisted
     target; a target outside the allowlist raises security.RedirectRefused.

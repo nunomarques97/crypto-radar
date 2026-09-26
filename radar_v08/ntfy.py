@@ -15,7 +15,7 @@ ntfy.sh being unreachable, slow, or erroring must never take the radar down
 (offline/failure handling requirement). Dedup by event_id and cross-cycle
 retry live in notifications.py, backed by SQLite (`events.ntfy_status`).
 
-`notification_id` (T033b), when given, rides the `X-ID` header ntfy's publish
+`notification_id`, when given, rides the `X-ID` header ntfy's publish
 API accepts for a caller-chosen message ID (see https://docs.ntfy.sh/publish/
 #message-id). It is derived in notifications.py from a real outbox delivery
 ID and is the same value on a cross-cycle retry of the same event - this
@@ -95,7 +95,7 @@ def send_ntfy_notification(
     limited number of retries. Returns one of RESULT_SUCCESS/RESULT_FAILED/
     RESULT_DISABLED.
 
-    `notification_id` (T033b) is a stable ID derived from a real outbox
+    `notification_id` is a stable ID derived from a real outbox
     delivery ID; see the module docstring. Never fabricated here - the caller
     passes `None` when it has no real outbox row to derive one from, and this
     function simply sends without the header in that case.

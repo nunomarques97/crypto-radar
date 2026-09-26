@@ -1,4 +1,4 @@
-"""T023b - OC-1 integrity validator wired before L1/L2/L3/router/Qwen consumption.
+"""OC-1 integrity validator wired before L1/L2/L3/router/Qwen consumption.
 
 Integration tests: `run_heartbeat(full=True)` runs for real over a
 GuardedSession whose transport is a fake Kraken (no socket, no network), a
@@ -309,6 +309,9 @@ class IntegrityWiringBase(unittest.TestCase):
             ),
             mock.patch.object(config, "EVENTS_LOG_PATH", os.path.join(self.tmp, "events.jsonl")),
             mock.patch.object(heartbeat, "review_finalists", self.qwen),
+            # These fixtures prove the inline path (Qwen feeds the router);
+            # shadow became the default. Every subclass inherits the pin.
+            mock.patch.object(config, "RADAR_QWEN_MODE", "inline"),
             mock.patch.object(heartbeat, "route", spy_route),
             mock.patch.object(heartbeat, "compute_anomaly", _fake_anomaly),
             mock.patch.object(l2, "classify_setup", _fake_setup),
@@ -618,14 +621,33 @@ class TestClockIsNeverAssumedSynchronised(IntegrityWiringBase):
         self.assertEqual(self.count("SELECT COUNT(*) FROM spot_snapshots WHERE pair = ?", "XXBTZUSD"), 1)
 
     def test_skewed_local_clock_fails_and_blocks(self):
+        # Clock correction off: the raw local clock and the per-cycle offset bound.
         kraken = FakeKraken()
         kraken.futures_tickers["serverTime"] = _iso_z(T0 + timedelta(seconds=2))
 
-        output = self.run_cycle(kraken)
+        with mock.patch.object(config, "RADAR_CLOCK_CORRECTION_ENABLED", False):
+            output = self.run_cycle(kraken)
 
         self.assert_blocked_before_model(output)
         self.assertEqual(output["data_quality"]["integrity"]["clock"], "FAIL")
         self.assertEqual(output["data_quality"]["integrity"]["clock_reasons"], ["clock_uncertainty_exceeded"])
+
+    def test_skewed_local_clock_passes_on_the_corrected_clock(self):
+        # Clock correction on: the 2 s skew is measured and corrected; the
+        # uncertainty is the round trip's, not the skew.
+        kraken = FakeKraken()
+        kraken.futures_tickers["serverTime"] = _iso_z(T0 + timedelta(seconds=2))
+
+        with mock.patch.object(config, "RADAR_CLOCK_CORRECTION_ENABLED", True):
+            output = self.run_cycle(kraken)
+
+        integrity = output["data_quality"]["integrity"]
+        self.assertEqual(integrity["clock"], "PASS")
+        self.assertEqual(integrity["clock_reasons"], [])
+        self.assertEqual(integrity["clock_reference"]["status"], "applied")
+        self.assertLess(integrity["clock_reference"]["uncertainty_ms"], 500)
+        self.assertAlmostEqual(integrity["clock_reference"]["offset_ms"], 2000, delta=5)
+        self.assertEqual(self.qwen.assets, ["BTC"])
 
     def test_venue_clock_sample_bounds_the_offset_by_the_round_trip(self):
         sent = T0

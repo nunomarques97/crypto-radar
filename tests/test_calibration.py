@@ -1,8 +1,8 @@
-"""T042b: regularized logistic calibration on the T042a splits, Brier against the prevalence
+"""Regularized logistic calibration on the experiment splits, Brier against the prevalence
 baseline and the ten-bin calibration error (``radar_v08/domain/calibration.py``).
 
-Every observation is synthetic and built in memory through the real T041 path
-(``outcomes.label_horizon``) and the real T042a ``evaluate_cohort``; variety comes from
+Every observation is synthetic and built in memory through the real labeling path
+(``outcomes.label_horizon``) and the real ``evaluate_cohort``; variety comes from
 ``random.Random(seed)``. Nothing reads or writes a file, a database, the network, a model or
 the UI; no real backtest. Golden values are derived by hand in the comments.
 """
@@ -366,7 +366,7 @@ class TestReplayAndManifest(unittest.TestCase):
         base = json.loads(evaluation.content_json)
         body = json.loads(result.evaluation.content_json)
         calibration = body.pop("calibration")
-        self.assertEqual(body, base)  # every T042a field unchanged
+        self.assertEqual(body, base)  # every evaluation field unchanged
         text = result.evaluation.content_json
         self.assertEqual(text, json.dumps(json.loads(text), sort_keys=True, separators=(",", ":"), ensure_ascii=True))
         self.assertEqual(result.evaluation.content_sha256, hashlib.sha256(text.encode()).hexdigest())
@@ -388,7 +388,7 @@ class TestReplayAndManifest(unittest.TestCase):
         self.assertEqual(calibration["metrics"]["brier"], result.metrics.brier)
         self.assertEqual(len(calibration["metrics"]["reliability"]), 10)
         self.assertEqual(calibration["samples"], {s.value: len(evaluation.splits.episodes(s)) for s in ex.SPLITS})
-        # sealed as one attempt by the unchanged T042a ledger, and verified on construction
+        # sealed as one attempt by the unchanged trial ledger, and verified on construction
         ledger, sealed = ex.TrialLedger().register(result.evaluation)
         self.assertEqual(sealed.attempt, 1)
         self.assertEqual(ledger.attempts(COHORT), 1)

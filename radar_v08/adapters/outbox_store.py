@@ -1,4 +1,4 @@
-"""SQLite lifecycle transitions, delivery outbox, consumer cursors and JSONL export (T033a).
+"""SQLite lifecycle transitions, delivery outbox, consumer cursors and JSONL export.
 
 Tables come from ledger migration version 4 (``evidence_store.OUTBOX_MIGRATION``):
 ``lifecycle_items``, ``outbox`` and ``outbox_cursors``. The only legacy table this module
@@ -10,7 +10,7 @@ Three kinds of outbox row, never mixed:
   transaction as the change to that row (creation, status change, claim, recovery,
   notified flag). ``state`` is the row's status.
 * ``LIFECYCLE``: a work item entering one real state: QUEUED, LOADING, RUNNING, FINISHED,
-  FAILED, or the T032 outcomes ABORT_STALE, SUPERSEDED and DROPPED_BACKPRESSURE. The
+  FAILED, or the scheduler outcomes ABORT_STALE, SUPERSEDED and DROPPED_BACKPRESSURE. The
   item's current state (``lifecycle_items``) and its outbox row are written in one
   transaction. The allowed moves form an acyclic graph, so an item enters each state at
   most once and ``lifecycle:<item>:<state>`` is a stable delivery ID.
@@ -107,7 +107,7 @@ TERMINAL_STATES: frozenset[LifecycleState] = frozenset(
         LifecycleState.DROPPED_BACKPRESSURE,
     }
 )
-# An admission can be refused outright (T032: superseded, dropped or stale on arrival).
+# An admission can be refused outright (by the scheduler: superseded, dropped or stale on arrival).
 INITIAL_STATES: frozenset[LifecycleState] = frozenset(
     {
         LifecycleState.QUEUED,
@@ -769,7 +769,7 @@ def first_for_subject(conn: sqlite3.Connection, kind: OutboxKind, subject_id: st
     Outbox rows are append-only and never deleted, so the lowest ``seq`` for a subject is
     fixed the moment it is written: later writes to the same subject (a status change,
     ``mark_event_notified``, ...) add rows after it and never move it. That is what lets a
-    consumer that keeps no cursor of its own (T033b's notification id) derive the same
+    consumer that keeps no cursor of its own (the notification sender's id) derive the same
     stable ID on a resend across cycles or after a restart. ``None`` when nothing has been
     recorded for the subject yet - never guessed.
     """

@@ -20,7 +20,7 @@ from .adapters import model_profiles as _model_profiles
 SPOT_URL = "https://api.kraken.com/0/public"
 FUTURES_URL = "https://futures.kraken.com/derivatives/api/v3"
 
-# T023a: exact public-HTTP allowlist enforced by security.assert_allowed_request
+# Exact public-HTTP allowlist enforced by security.assert_allowed_request
 # for every GuardedSession call. Scheme https only, default port only, no
 # userinfo, GET only, and only the exact paths the radar calls today
 # (kraken_spot.py / kraken_futures.py). Hardcoded on purpose - never read from
@@ -284,8 +284,8 @@ TRADEABILITY_HARD_MAX_SPREAD_BPS = float(os.getenv("RADAR_TRADEABILITY_HARD_MAX_
 # Qwen 3:14b (Ollama, local, structured output) - review/veto only, never a
 # score calculator (architecture doc section 6).
 #
-# T050c: model, endpoint, timeout, temperature and think come from the default
-# profile of radar_v08/model_profiles.toml, read by the T050a loader. The
+# Model, endpoint, timeout, temperature and think come from the default
+# profile of radar_v08/model_profiles.toml, read by the model_profiles loader. The
 # overrides RADAR_QWEN_MODEL, RADAR_QWEN_TIMEOUT_SECONDS, RADAR_QWEN_TEMPERATURE
 # and RADAR_OLLAMA_URL still win over the profile, but each passes the loader's
 # own rules (model_profiles.apply_overrides) and the endpoint must also be an
@@ -295,8 +295,8 @@ TRADEABILITY_HARD_MAX_SPREAD_BPS = float(os.getenv("RADAR_TRADEABILITY_HARD_MAX_
 # QWEN_TEMPERATURE / QWEN_THINK are None (never a value written here) and
 # qwen.review_finalists answers UNAVAILABLE without calling Ollama. Importing
 # this module never raises because of the profile or these overrides.
-# Not sent to Ollama yet: context_tokens, output_cap_tokens (no num_ctx /
-# num_predict) and the resource reserves - pending T051.
+# The profile's context/output limits are sent to Ollama and the batch shares one deadline.
+# Resource reserves are still not enforced in this synchronous runtime path.
 # --------------------------------------------------------------------------
 OLLAMA_ALLOWED_HOSTS = {"http://localhost:11434", "http://127.0.0.1:11434"}
 
@@ -311,6 +311,8 @@ class QwenRuntime:
     timeout_seconds: float
     temperature: float
     think: bool
+    context_tokens: int
+    output_cap_tokens: int
 
 
 def resolve_qwen_runtime(environ: Mapping[str, str], path: str | os.PathLike[str]) -> QwenRuntime:
@@ -341,6 +343,8 @@ def resolve_qwen_runtime(environ: Mapping[str, str], path: str | os.PathLike[str
         timeout_seconds=float(inference.hard_timeout_seconds),
         temperature=profile.temperature,
         think=inference.think,
+        context_tokens=inference.context_tokens,
+        output_cap_tokens=inference.output_cap_tokens,
     )
 
 
@@ -364,6 +368,27 @@ QWEN_MAX_RETRIES_ON_INVALID = int(os.getenv("RADAR_QWEN_MAX_RETRIES", "1"))
 
 # Deterministic pre-gate: which L3 finalists are even worth a Qwen call.
 QWEN_PREGATE_MIN_OPPORTUNITY = float(os.getenv("RADAR_QWEN_PREGATE_MIN_OPPORTUNITY", "50.0"))
+
+# RADAR_QWEN_MODE: where the Qwen review sits.
+# inline = the review feeds the router in the cycle (the original behaviour);
+# shadow = the batch runs off the critical path, the router decides as if Qwen were
+# SKIPPED and the review is only stored (qwen_reviews); off = Qwen is never called.
+# An unknown value refuses to load instead of falling back.
+QWEN_MODES = ("inline", "shadow", "off")
+QWEN_MODE_DEFAULT = "shadow"
+
+
+def parse_qwen_mode(raw: str | None) -> str:
+    """``RADAR_QWEN_MODE`` trimmed and case-folded; unset means the default, set-but-blank is invalid."""
+    if raw is None:
+        return QWEN_MODE_DEFAULT
+    mode = raw.strip().lower()
+    if mode not in QWEN_MODES:
+        raise ValueError(f"RADAR_QWEN_MODE must be one of {', '.join(QWEN_MODES)}; got {raw!r}")
+    return mode
+
+
+RADAR_QWEN_MODE = parse_qwen_mode(os.getenv("RADAR_QWEN_MODE"))
 
 # --------------------------------------------------------------------------
 # Demand router: IGNORE | SONNET | FABLE (never OPUS). UNCALIBRATED.
@@ -407,7 +432,7 @@ EVENT_STATUSES = ("PENDING", "PROCESSING", "PROCESSED", "DEFERRED", "FAILED")
 # Never trading: no order placement, cancellation, leverage, or transfers.
 # Model choice is the Demand Router's alone: IGNORE | SONNET | FABLE, never OPUS.
 # --------------------------------------------------------------------------
-# T010 containment policy.  This is deliberately a source-level constant, not
+# Containment policy.  This is deliberately a source-level constant, not
 # an environment setting: credentials, a present SDK, or an injected client
 # must never grant a legacy cloud provider permission at runtime.
 CLAUDE_BRIDGE_DISPATCH_ENABLED = False
@@ -486,3 +511,35 @@ COPY_PROMPT_POPUP_ENABLED = os.getenv("RADAR_COPY_PROMPT_POPUP_ENABLED", "1") no
 # table; adds no new persistence of its own.
 # --------------------------------------------------------------------------
 ALERTS_HISTORY_LIMIT = int(os.getenv("RADAR_ALERTS_HISTORY_LIMIT", "20"))
+
+# --------------------------------------------------------------------------
+# Outcome tracking - registers an OutcomeSubject
+# per shortlisted candidate each heartbeat cycle and labels due outcomes next
+# to the existing forward-return labeling. Off means: register nothing and
+# label nothing; rows already written are never touched. Default on, same
+# on/off pattern as NOTIFICATIONS_ENABLED (above) and COPY_PROMPT_ENABLED
+# (above).
+# --------------------------------------------------------------------------
+RADAR_OUTCOME_TRACKING_ENABLED = os.getenv("RADAR_OUTCOME_TRACKING_ENABLED", "1") not in ("0", "false", "False")
+
+# --------------------------------------------------------------------------
+# Seal ticker refresh -
+# on a full cycle, when the cycle-start spot ticker is older than the OC-1
+# ticker_max_age at the evidence seal, make at most one extra public Ticker
+# request for the L3 finalists' pairs and seal them on that fresh reading.
+# Scores, thresholds, routing and ticker_max_age are unchanged. Off means:
+# the seal uses the cycle-start ticker, as before. Default on, same on/off
+# pattern as RADAR_OUTCOME_TRACKING_ENABLED (above).
+# --------------------------------------------------------------------------
+RADAR_SEAL_TICKER_REFRESH_ENABLED = os.getenv("RADAR_SEAL_TICKER_REFRESH_ENABLED", "1") not in ("0", "false", "False")
+
+# --------------------------------------------------------------------------
+# Corrected clock - the
+# cycle's time stamps and every freshness check read the local clock corrected
+# by the offset measured against Kraken Futures' serverTime
+# (radar_v08/clock_reference.py); OC-1's 500 ms limit applies to that
+# estimate's uncertainty. Off means: the raw local clock and the previous
+# per-cycle offset bound, as before. Default on, same on/off pattern as
+# RADAR_SEAL_TICKER_REFRESH_ENABLED (above).
+# --------------------------------------------------------------------------
+RADAR_CLOCK_CORRECTION_ENABLED = os.getenv("RADAR_CLOCK_CORRECTION_ENABLED", "1") not in ("0", "false", "False")

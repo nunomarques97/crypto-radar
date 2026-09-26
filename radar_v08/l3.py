@@ -4,7 +4,7 @@ per cycle, never the shortlist and never the whole universe - task sections
 preview, then applies the deterministic pre-gate that decides who is even
 worth a Qwen call (task section 5).
 
-Integrity (T023b, OC-1): when `run_l3` is given a `clock`, the spot book,
+Integrity (OC-1): when `run_l3` is given a `clock`, the spot book,
 the spot trades and the futures book are fetched with their receipt time
 and validated by `radar_v08.domain.integrity` before any metric is derived
 from them. A response keyed by another pair is an identity mismatch, never
@@ -19,6 +19,7 @@ legacy path is unchanged.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field, replace
 from datetime import datetime
@@ -34,6 +35,8 @@ from .adapters.kraken_timestamps import (
 from .adapters.kraken_timestamps import (
     fetch_futures_orderbook as fetch_futures_orderbook_timed,
 )
+from .clock_reference import sample_source
+from .domain import costs as cost_domain
 from .domain.integrity import (
     BookLevel,
     BookSnapshot,
@@ -41,6 +44,7 @@ from .domain.integrity import (
     CheckStatus,
     ClockSample,
     InstrumentId,
+    InstrumentKind,
     Reason,
     ReasonCode,
     SourceTiming,
@@ -63,7 +67,12 @@ from .microstructure import (
     compute_trades_metrics,
 )
 from .router import valid_taker_buy_ratio
-from .tradeability import TradeabilityResult, build_cost_preview, compute_tradeability
+from .tradeability import (
+    TradeabilityResult,
+    build_cost_preview,
+    compute_tradeability,
+    venue_cost_scenarios,
+)
 
 logger = logging.getLogger("radar_v08.l3")
 
@@ -84,7 +93,7 @@ class L3CandidateInput:
     futures_volume_24h_usd: float | None
     funding_rate_raw: float | None
     l2_result: L2Result
-    # T023b: identities the spot book/trades and the futures book must belong
+    # Identities the spot book/trades and the futures book must belong
     # to. `instrument` is required when run_l3 runs with a clock.
     instrument: InstrumentId | None = None
     futures_instrument: InstrumentId | None = None
@@ -97,7 +106,14 @@ class L3Result:
     cost_preview: dict[str, Any]
     qwen_eligible: bool
     flags: list[str] = field(default_factory=list)
-    # T023b fields (defaults on the legacy path). `taker_buy_ratio` is None
+    # The same cost_domain.CostScenario objects _venue_scenarios builds for
+    # cost_preview, kept by venue ("spot", and "futures" only when available) and by
+    # cost_domain.Side, for a later caller (outcome tracking) to read without
+    # recalculating anything. Nothing here changes cost_preview, build_cost_preview's
+    # dict shape, or the score/ranking - and nothing ever serializes this field: no
+    # output.py candidate, no _build_qwen_payload, no event context, no UI reads it.
+    cost_scenarios: dict[str, dict[cost_domain.Side, cost_domain.CostScenario]] = field(default_factory=dict)
+    # Integrity fields (defaults on the legacy path). `taker_buy_ratio` is None
     # whenever it is unavailable - absent, invalid or not validated - never 0.
     taker_buy_ratio: float | None = None
     integrity: tuple[CapabilityResult, ...] = ()
@@ -105,6 +121,28 @@ class L3Result:
     trades_observation: TradesObservation | None = None
     trades_extra_reasons: tuple[Reason, ...] = ()
     futures_book_result: CapabilityResult | None = None
+
+
+def _cost_scenarios_by_venue(
+    futures_available: bool,
+    spot_depth: DepthMetrics | None,
+    futures_depth: DepthMetrics | None,
+) -> dict[str, dict[cost_domain.Side, cost_domain.CostScenario]]:
+    """The exact cost_domain.CostScenario objects build_cost_preview prices
+    for this finalist, kept by venue and side. Reads config.UNCALIBRATED_FEES and picks
+    the venue kind by the same rule build_cost_preview uses (spot always; futures only
+    when futures_available) - no recalculation, no change to build_cost_preview's own
+    signature or dict. An INCOMPLETE scenario (no book, missing slippage, ...) is kept
+    as-is: it is never summed partially and one side never borrows the other's numbers."""
+    fees = config.UNCALIBRATED_FEES
+    scenarios: dict[str, dict[cost_domain.Side, cost_domain.CostScenario]] = {
+        "spot": venue_cost_scenarios(InstrumentKind.SPOT, spot_depth, fees["spot_taker_bps"]),
+    }
+    if futures_available:
+        scenarios["futures"] = venue_cost_scenarios(
+            InstrumentKind.FUTURES, futures_depth, fees["futures_taker_bps"]
+        )
+    return scenarios
 
 
 def select_finalists(candidates: list[L3CandidateInput]) -> list[L3CandidateInput]:
@@ -172,7 +210,7 @@ _Levels = list[tuple[float, float]]
 
 @dataclass(frozen=True)
 class _CheckedBook:
-    """One book fetched with its receipt time (T023b); `error` when not collected."""
+    """One book fetched with its receipt time; `error` when not collected."""
 
     snapshot: BookSnapshot | None
     bids: _Levels
@@ -182,7 +220,7 @@ class _CheckedBook:
 
 @dataclass(frozen=True)
 class _CheckedTrades:
-    """Trades fetched with their receipt time (T023b); `error` when not collected.
+    """Trades fetched with their receipt time; `error` when not collected.
 
     `rows` are Kraken's rows as parsed (used for metrics only after the
     observation PASSes); `extra` holds reasons for rows that could not be
@@ -313,12 +351,12 @@ def run_l3(
     session: GuardedSession,
     candidates: list[L3CandidateInput],
     clock: Clock | None = None,
-    clock_sample: ClockSample | None = None,
+    clock_sample: ClockSample | Callable[[], ClockSample] | None = None,
 ) -> tuple[dict[str, L3Result], int, int]:
     """Returns (results_by_asset, requests_made, failures). Only ever called
     on the already-selected finalist list (see `select_finalists`).
 
-    With `clock` (T023b) every book/trades response is validated before any
+    With `clock` every book/trades response is validated before any
     metric is derived from it (see the module docstring).
     """
     if not candidates:
@@ -411,6 +449,7 @@ def run_l3(
             cost_preview=cost_preview,
             qwen_eligible=qwen_eligible,
             flags=flags,
+            cost_scenarios=_cost_scenarios_by_venue(c.futures_available, depth, futures_depth),
         )
 
     return results, requests_made, failures
@@ -420,11 +459,12 @@ def _run_l3_checked(
     session: GuardedSession,
     candidates: list[L3CandidateInput],
     clock: Clock,
-    clock_sample: ClockSample | None,
+    clock_sample: ClockSample | Callable[[], ClockSample] | None,
 ) -> tuple[dict[str, L3Result], int, int]:
-    """T023b path of `run_l3`: validate every book/trades response before use."""
-    # No clock evidence at all is UNKNOWN (never "synchronised").
-    sample = clock_sample if clock_sample is not None else ClockSample(None, None, None)
+    """Integrity path of `run_l3`: validate every book/trades response before use."""
+    # No clock evidence at all is UNKNOWN (never "synchronised"). A callable
+    # (the corrected clock) is re-derived at every clock evaluation.
+    sample_at = sample_source(clock_sample)
     books: dict[str, _CheckedBook] = {}
     futures_books: dict[str, _CheckedBook] = {}
     trades_by_asset: dict[str, _CheckedTrades] = {}
@@ -469,7 +509,7 @@ def _run_l3_checked(
     results: dict[str, L3Result] = {}
     for c in candidates:
         evaluated_at = receipt_time(clock)  # an aware UTC reading of the injected clock
-        clock_result = evaluate_clock(sample, evaluated_at)
+        clock_result = evaluate_clock(sample_at(), evaluated_at)
         clock_ok = clock_result.status is CheckStatus.PASS
         flags: list[str] = []
         if not clock_ok:
@@ -547,6 +587,7 @@ def _run_l3_checked(
             cost_preview=cost_preview,
             qwen_eligible=passes_qwen_pregate(c, tradeability),
             flags=flags,
+            cost_scenarios=_cost_scenarios_by_venue(c.futures_available, depth, futures_depth),
             taker_buy_ratio=valid_taker_buy_ratio(trades.taker_buy_ratio) if trades is not None else None,
             integrity=integrity,
             book_observation=book.snapshot if book is not None else None,

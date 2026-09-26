@@ -668,7 +668,7 @@ class TestOutputDirectory(unittest.TestCase):
         self.assertRefused(data, data)
         self.assertRefused(data / "kraken-archive" / "corpus", data)
         self.assertRefused(data.parent, data, BuildErrorCode.OUTPUT_REFUSED)
-        self.assertRefused(Path("<sextant-repo>/data/corpus"), data)
+        self.assertRefused(Path("C:/Users/User/Desktop/sextant/data/corpus"), data)
         self.assertRefused(Path("c:/users/user/desktop/SEXTANT/elsewhere"), data)
         self.assertRefused(Built.out, data, BuildErrorCode.OUTPUT_EXISTS)
         allowed = ob.check_output_dir(REPOSITORY_ROOT / "docs" / "benchmark_corpus_oc1_not_created", data)

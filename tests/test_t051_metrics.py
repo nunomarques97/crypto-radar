@@ -1,6 +1,6 @@
 """T051e metrics tests: synthetic results JSONL in temporary directories only.
 
-No test reads the real results under <t051-workdir> or calls any model: every
+No test reads the real results under C:/Users/User/crypto-radar-t051 or calls any model: every
 file here is written by the test into a ``tempfile.TemporaryDirectory`` and read back through
 ``scripts/summarize_t051.py`` (read-only), exactly as the real file is read.
 """
@@ -546,7 +546,7 @@ class TestScript(TempResults):
         self.assertEqual(sorted(os.listdir(REPOSITORY_ROOT)), root)
 
     def test_default_input_is_the_designated_results_file(self) -> None:
-        self.assertEqual(summarizer.DEFAULT_RESULTS.as_posix(), "<t051-workdir>/results/t051_results.jsonl")
+        self.assertEqual(summarizer.DEFAULT_RESULTS.as_posix(), "C:/Users/User/crypto-radar-t051/results/t051_results.jsonl")
         self.assertEqual(summarizer.parse_arguments([]).results, str(summarizer.DEFAULT_RESULTS))
 
     def test_module_is_pure(self) -> None:

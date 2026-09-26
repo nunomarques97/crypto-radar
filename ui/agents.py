@@ -146,7 +146,7 @@ def _build_claude_bridge_model(
     model_id = config.CLAUDE_BRIDGE_MODEL_IDS.get(defn.bridge_model_key or "")
     latest_analysis = _latest_model_analysis(store, model_id) if model_id else None
 
-    # T010 is a runtime policy, not a health failure.  Old bridge rows remain
+    # Disabled cloud dispatch is a runtime policy, not a health failure.  Old bridge rows remain
     # readable below, but no stale ONLINE row or queued legacy demand may make
     # a disabled cloud role look active in the Control Room.
     if not config.CLAUDE_BRIDGE_DISPATCH_ENABLED:
@@ -259,7 +259,7 @@ def collect_real_agent_communications(
 ) -> list[dict[str, Any]]:
     """The Phase 4 backend hook point for `get_state()["agent_communications"]`.
 
-    T033b: reads every persisted HANDOFF row from the T033a delivery outbox
+    Reads every persisted HANDOFF row from the delivery outbox
     (`SnapshotStore.outbox_entries`, `radar_v08/adapters/outbox_store.py`) and
     runs it through `validate_agent_communications()` exactly like any other
     candidate event - same id/from/to/ts requirement, same topology-edge

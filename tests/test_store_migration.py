@@ -305,6 +305,54 @@ class TestLegacyMigration(TempDbCase):
         self.assertEqual(es.apply_schema_migrations(b, now=NOW), ())
 
 
+class TestForwardReturnsColumnMigration(TempDbCase):
+    """The unlabelable-row columns arrive through the additive forward_returns path."""
+
+    PHASE_2_COLUMNS = ("entry_price", "mfe_pct", "mae_pct", "labeled_at", "pair")
+
+    def build(self, extra_columns):
+        conn = sqlite3.connect(self.path)
+        try:
+            conn.executescript(store.SCHEMA)  # Phase-1 forward_returns: (id, asset, ts, horizon_minutes, return_pct)
+            for column in extra_columns:
+                conn.execute(f"ALTER TABLE forward_returns ADD COLUMN {column} {store._FORWARD_RETURNS_MIGRATION_COLUMNS[column]}")
+            conn.execute(
+                "INSERT INTO forward_returns (asset, ts, horizon_minutes, return_pct) "
+                "VALUES ('BTC', '2026-09-01T00:05:00+00:00', 15, 0.4)"
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def columns(self):
+        return [row[1] for row in self.open_conn().execute("PRAGMA table_info(forward_returns)")]
+
+    def assert_upgraded_in_place(self):
+        self.open_store()
+        self.assertIn("unlabelable_reason", store._FORWARD_RETURNS_MIGRATION_COLUMNS)
+        self.assertIn("unlabelable_at", store._FORWARD_RETURNS_MIGRATION_COLUMNS)
+        self.assertEqual(
+            self.columns(),
+            ["id", "asset", "ts", "horizon_minutes", "return_pct", *store._FORWARD_RETURNS_MIGRATION_COLUMNS],
+        )
+        rows = self.open_conn().execute(
+            "SELECT asset, ts, horizon_minutes, return_pct, unlabelable_reason, unlabelable_at FROM forward_returns"
+        ).fetchall()
+        self.assertEqual(rows, [("BTC", "2026-09-01T00:05:00+00:00", 15, 0.4, None, None)])
+
+    def test_phase_1_database_gains_every_column_in_place(self):
+        self.build(())
+        self.assert_upgraded_in_place()
+
+    def test_phase_2_database_gains_the_unlabelable_columns_in_place(self):
+        self.build(self.PHASE_2_COLUMNS)
+        self.assertNotIn("unlabelable_reason", self.columns())
+        self.assert_upgraded_in_place()
+        # Reopening adds nothing twice.
+        self.open_store()
+        self.assertEqual(self.columns().count("unlabelable_reason"), 1)
+
+
 class TestInjectedFailure(TempDbCase):
     BAD = Migration(3, "injected_failure", ("CREATE TABLE injected_ok (x INTEGER)", "INSERT INTO no_such_table VALUES (1)"))
     # T031a: the next version after the real plan (now 6, T041), for failures on a migrated db.

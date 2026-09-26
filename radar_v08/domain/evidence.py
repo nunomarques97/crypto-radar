@@ -1,4 +1,4 @@
-"""Immutable, versioned, hash-bound evidence identities (T030 domain part, ARCHITECTURE.md
+"""Immutable, versioned, hash-bound evidence identities (ARCHITECTURE.md
 "Integrity and evidence").
 
 Sealed evidence binds a run, one venue instrument, the facts it contains and the OC-1

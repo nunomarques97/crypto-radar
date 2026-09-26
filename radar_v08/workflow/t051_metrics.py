@@ -1,6 +1,6 @@
-"""T051e: metrics of the T051 Screener runs, computed from the append-only results records.
+"""Metrics of the T051 Screener runs, computed from the append-only results records.
 
-Pure (D62: the report measures, it never decides). No I/O, no clock, no network, no
+Pure (the report measures, it never decides). No I/O, no clock, no network, no
 environment: the caller (``scripts/summarize_t051.py``) reads the results file and hands this
 module its text. Everything here is a function of that text, so the same file always gives the
 same numbers.
@@ -480,7 +480,7 @@ def group_metrics(model: str, block: str, calls: Sequence[Call]) -> GroupMetrics
 
 @dataclass(frozen=True, slots=True)
 class GoldMetrics:
-    """Gold on the three deterministic categories only (D60)."""
+    """Gold on the three deterministic categories only."""
 
     model: str
     block: str
@@ -497,7 +497,7 @@ class GoldMetrics:
 def _has_gold(item: Call) -> bool:
     if item.labelled is not True or item.category not in DETERMINISTIC_CATEGORIES or item.abstain_expected is None:
         return False
-    # The label must be the one its category fixes by construction (D60); anything else is not gold.
+    # The label must be the one its category fixes by construction; anything else is not gold.
     return item.abstain_expected is (item.category != NO_EDGE_CATEGORY)
 
 
@@ -576,7 +576,7 @@ class HoldoutCoverage:
     model: str
     labelled_distinct: int  # distinct labelled holdout cases in the holdout block
     labelled_calls: int
-    sealed_sent: int  # holdout calls on a case without gold, any block: must be 0 (D59 f)
+    sealed_sent: int  # holdout calls on a case without gold, any block: must be 0 (sealed cases are never sent)
 
 
 def holdout_coverage(model: str, calls: Sequence[Call]) -> HoldoutCoverage:

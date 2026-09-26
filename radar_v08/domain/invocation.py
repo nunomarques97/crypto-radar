@@ -1,4 +1,4 @@
-"""Invocation identity, budget reservation and lease fencing (T031a, OC-1 §2).
+"""Invocation identity, budget reservation and lease fencing (OC-1 §2).
 
 An invocation is one planned piece of model work for one opportunity version. Its
 identity is exactly the OC-1 §2 tuple ``(venue, market_kind, native_instrument, setup,

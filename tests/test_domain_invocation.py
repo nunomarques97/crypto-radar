@@ -1,4 +1,4 @@
-"""T031a: pure invocation identity, budget decision and lease fencing (radar_v08/domain/invocation.py).
+"""Pure invocation identity, budget decision and lease fencing (radar_v08/domain/invocation.py).
 
 No database, no I/O: the store adapter is covered by tests/test_invocation_store.py.
 """

@@ -9,7 +9,7 @@ PROCESSING/DEFERRED event for it is still open; a genuinely new situation
 (setup/direction/model_demand changed, or the prior event was resolved)
 does create a fresh one.
 
-T033a: events.jsonl is now an export of the SQLite outbox
+events.jsonl is now an export of the SQLite outbox
 (`radar_v08.adapters.outbox_store`). Every change to an `events` row commits
 together with its outbox row, so a crash can never leave a durable change with
 no record of it. The export then appends the pending outbox rows to the log and

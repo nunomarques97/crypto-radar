@@ -1,5 +1,5 @@
-"""Regularized logistic calibration on the T042a splits, with Brier against the prevalence
-baseline and a ten-bin calibration error on the held-out block (T042b, OPERATING_CONTRACTS.md §7).
+"""Regularized logistic calibration on the experiment-ledger splits, with Brier against the prevalence
+baseline and a ten-bin calibration error on the held-out block (OPERATING_CONTRACTS.md §7).
 
 Pure: no I/O, no wall clock, no configuration, no random draws. Nothing here is wired to the
 runtime; scores, ranking, alerts and prompts never read it.
@@ -7,12 +7,12 @@ runtime; scores, ranking, alerts and prompts never read it.
 Input
 -----
 
-A T042a ``ExperimentEvaluation`` plus one ``EpisodeFeatures`` row per episode: the
+An experiment-ledger ``ExperimentEvaluation`` plus one ``EpisodeFeatures`` row per episode: the
 deterministic score and/or features the caller declares in a ``FeatureSpec``, computed with
 the cohort's ``feature_version``. There is no field for a model's self-confidence, and a
 declared feature whose name says confidence or certainty is refused
 (``SELF_CONFIDENCE_REFUSED``): a model's self-score is never calibrated as evidence. The
-label is the benchmark target ``net_markout > 0`` of the episode's seal (T042a already
+label is the benchmark target ``net_markout > 0`` of the episode's seal (the ledger already
 excluded every missing net; a net of exactly 0 is a negative).
 
 If the evaluation is ``UNCALIBRATED`` nothing is fitted, no feature row is read and the
@@ -52,10 +52,10 @@ the unpenalized intercept has no finite optimum) and a solver that does not conv
 Manifest
 --------
 
-``calibrate`` returns a new ``ExperimentEvaluation`` whose canonical content is the T042a
+``calibrate`` returns a new ``ExperimentEvaluation`` whose canonical content is the ledger's
 content plus one ``calibration`` key: policy, feature spec and the sha256 of the feature
 rows used, status and reasons, sample and positive counts per block, standardization,
-coefficients, iterations, metrics and reliability curve. The seed is the T042a seed (no
+coefficients, iterations, metrics and reliability curve. The seed is the ledger's seed (no
 step here draws a random number). Floats are written by ``json`` as their shortest
 round-trip text, so the same inputs give the same bytes and the same ``content_sha256``,
 and ``TrialLedger.register`` seals it as one attempt of the cohort.
@@ -145,7 +145,7 @@ def _sha256(text: str) -> str:
 
 
 class CalibrationStatus(Enum):
-    UNCALIBRATED = "UNCALIBRATED"  # T042a minima failed: nothing fitted
+    UNCALIBRATED = "UNCALIBRATED"  # sample-size minima failed: nothing fitted
     PROBABILITY_AVAILABLE = "PROBABILITY_AVAILABLE"  # every §7 gate passed on the test block
     PROBABILITY_UNAVAILABLE = "PROBABILITY_UNAVAILABLE"  # score/rank only, with typed reasons
 
@@ -186,7 +186,7 @@ class FeatureSpec:
 
 @dataclass(frozen=True, slots=True)
 class EpisodeFeatures:
-    """The declared feature values of one episode (keyed by the T042a episode id)."""
+    """The declared feature values of one episode (keyed by the ledger episode id)."""
 
     episode_id: str
     values: tuple[float, ...]
@@ -482,7 +482,7 @@ def _label(episode: Episode) -> int:
 
 @dataclass(frozen=True, slots=True)
 class CalibrationResult:
-    """Status, typed reasons, the fitted pieces that exist, and the extended T042a evaluation."""
+    """Status, typed reasons, the fitted pieces that exist, and the extended ledger evaluation."""
 
     status: CalibrationStatus
     reasons: tuple[UnavailableReason, ...]
@@ -548,7 +548,7 @@ def calibrate(
 ) -> CalibrationResult:
     """Fit on the fit block, map on the calibration block, judge on the test block (§7)."""
     if not isinstance(evaluation, ExperimentEvaluation):
-        raise _invalid("evaluation", "must be a T042a ExperimentEvaluation")
+        raise _invalid("evaluation", "must be an ExperimentEvaluation")
     if not isinstance(spec, FeatureSpec):
         raise _invalid("spec", "must be FeatureSpec")
     body = json.loads(evaluation.content_json)

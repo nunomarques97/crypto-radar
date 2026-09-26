@@ -1,10 +1,10 @@
-"""Fixture tests for radar_v08.adapters.kraken_timestamps (T022b).
+"""Fixture tests for radar_v08.adapters.kraken_timestamps.
 
 No network: every fetch is called with a fake, duck-typed session (same
 pattern as tests/test_l2_ohlc.py) and an injected fake clock. Covers: source
 time present/absent per fetch, seconds-not-milliseconds on Depth's per-level
 timestamp, and one bad/missing futures serverTime staying isolated from the
-rest of the payload. Attempt 2 adds regressions for malformed, non-finite and
+rest of the payload. Also covers regressions for malformed, non-finite and
 milliseconds-sized level/trade times (isolated to `None`, fetch never fails,
 `fetch_depth` unchanged) and for the receipt clock being read after the
 response, not before the request.
@@ -190,7 +190,7 @@ class TestSpotDepth(unittest.TestCase):
         self.assertIsNone(fetched.timing.source_time)
 
     def test_fetch_depth_compatibility_unchanged_with_or_without_timestamps(self):
-        """T022b compatibility: fetch_depth (existing consumers) is unaffected
+        """Compatibility: fetch_depth (existing consumers) is unaffected
         whether or not the fixture carries a third (timestamp) element.
         """
         with_ts = _depth_payload(bids=[["50000.0", "1.0", 1700000000]], asks=[["50010.0", "2.0", 1700000010]])

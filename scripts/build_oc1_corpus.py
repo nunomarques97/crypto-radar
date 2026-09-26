@@ -1,4 +1,4 @@
-"""Build the OC-1 section 6 corpus from recorded Kraken OHLCVT zips (T051a, D59/D60/D64).
+"""Build the OC-1 section 6 corpus from recorded Kraken OHLCVT zips.
 
 Usage (both arguments required, no default)::
 

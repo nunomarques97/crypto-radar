@@ -1,7 +1,9 @@
-"""T050b: locked benchmark corpus and OC-1 benchmark harness (fake adapter only).
+"""Locked benchmark corpus and OC-1 benchmark harness (fake adapter only).
 
 The only repository files read are the synthetic fixtures under
-``tests/fixtures/benchmark_corpus`` and the two harness sources (inspected as text); every mutation happens on a copy in a temporary
+``tests/fixtures/benchmark_corpus``, the two harness sources (inspected as text) and, when
+present, an unversioned snapshot of this file's original phrase tuples (read only, to prove
+the refused-phrase tuples only grew); every mutation happens on a copy in a temporary
 directory, and every report is written to a temporary directory. The harness runs only
 against the in-process ``FakeModel`` below: no model is run or downloaded, no request
 reaches Ollama, and the tests prove that ``radar_v08/workflow/benchmark.py`` cannot reach
@@ -9,7 +11,7 @@ the network (no ``requests``/``socket``/``OllamaLocalInference`` import, no ``__
 no new CLI).
 
 The fixture corpus is SYNTHETIC: it proves the harness, it is not the 300-case corpus of
-OPERATING_CONTRACTS.md section 6, and T051 stays blocked on that corpus.
+OPERATING_CONTRACTS.md section 6 that the T051 benchmark uses.
 """
 
 import ast
@@ -91,7 +93,7 @@ OK_RESOURCES = ResourceReport(oom=False, min_free_vram_gib=3.0, min_free_ram_gib
 
 
 def default_profile() -> BenchmarkProfile:
-    """The T050a default profile from the versioned radar_v08/model_profiles.toml."""
+    """The default profile from the versioned radar_v08/model_profiles.toml."""
     profiles = load_model_profiles()
     return benchmark_profile(profiles.get(profiles.default_profile_id))
 
@@ -883,11 +885,50 @@ class TestPerCaseGates(unittest.TestCase):
 class TestRiskGateNumberWordsAreLinear(unittest.TestCase):
     """Regression: _NUMBER_WORD used to backtrack 2^n."""
 
+    ORIGINAL_SNAPSHOT = REPOSITORY_ROOT / "docs" / "forja" / "archive" / "R-20260919-7c62-T4-sobras-codigo-ORIGINAL.patch"
+    PHRASE_TUPLES = ("ATTEMPT1_PHRASES", "ATTEMPT2_PHRASES", "OWN_VARIANTS", "ORDINARY_RATIONALES")
     # Hostile tokens: a word that is both a unit and a unit plus "th", repeated,
     # then a letter no unit accepts, so every split has to be ruled out.
     HOSTILE_WORDS = ("fourth", "tenth", "sixth", "seventh")
     HOSTILE_SIZES = (600, 4096)
     SECONDS = 1.0  # loose bound; the fixed code takes a few milliseconds
+
+    def original_test_source(self) -> str:
+        if not self.ORIGINAL_SNAPSHOT.is_file():
+            # The snapshot is not versioned, so it is absent
+            # from a clean checkout. Skip instead of failing; the ReDoS guards below still run.
+            self.skipTest(f"original snapshot absent: {self.ORIGINAL_SNAPSHOT.name}")
+        lines = self.ORIGINAL_SNAPSHOT.read_text(encoding="utf-8").splitlines()
+        start = lines.index("+++ b/tests/test_benchmark_harness.py") + 2  # skip the hunk header
+        body: list[str] = []
+        for line in lines[start:]:
+            if line.startswith("diff --git "):
+                break
+            body.append(line[1:])
+        return "\n".join(body)
+
+    @staticmethod
+    def class_tuples(source: str, class_name: str, names: tuple[str, ...]) -> dict[str, tuple[str, ...]]:
+        found: dict[str, tuple[str, ...]] = {}
+        for node in ast.walk(ast.parse(source)):
+            if isinstance(node, ast.ClassDef) and node.name == class_name:
+                for statement in node.body:
+                    if isinstance(statement, ast.Assign) and len(statement.targets) == 1:
+                        target = statement.targets[0]
+                        if isinstance(target, ast.Name) and target.id in names:
+                            found[target.id] = ast.literal_eval(statement.value)
+        return found
+
+    def test_phrase_tuples_only_grew_against_the_original_snapshot(self) -> None:
+        original = self.class_tuples(self.original_test_source(), "TestPerCaseGates", self.PHRASE_TUPLES)
+        current = self.class_tuples(Path(__file__).read_text(encoding="utf-8"), "TestPerCaseGates", self.PHRASE_TUPLES)
+        self.assertEqual(set(original), set(self.PHRASE_TUPLES))
+        self.assertEqual(set(current), set(self.PHRASE_TUPLES))
+        for name in self.PHRASE_TUPLES:
+            with self.subTest(name):
+                self.assertGreater(len(original[name]), 0)
+                self.assertEqual(current[name][: len(original[name])], original[name])  # may only append
+                self.assertEqual(getattr(TestPerCaseGates, name), current[name])
 
     def test_rejected_phrasings_still_refused_and_ordinary_text_still_passes(self) -> None:
         for text in TestPerCaseGates.ATTEMPT1_PHRASES + TestPerCaseGates.ATTEMPT2_PHRASES + TestPerCaseGates.OWN_VARIANTS:
@@ -1038,8 +1079,8 @@ class TestAlnumRunIsLinearAndTokensUnchanged(unittest.TestCase):
         self.assertNotIn(sre_parse.MIN_REPEAT, [op for op, _ in parsed])  # type: ignore[attr-defined]
 
     def test_phrase_tuples_did_not_shrink(self) -> None:
-        # Pinned to the counts named in the task: 102 refused (9 + 32 + 61), 14 accepted
-        # rationales (D42), 12 refused on purpose. A shrink here would silently narrow the
+        # Pinned counts: 102 refused (9 + 32 + 61), 14 accepted
+        # rationales, 12 refused on purpose. A shrink here would silently narrow the
         # equivalence corpus below.
         self.assertEqual(len(TestPerCaseGates.ATTEMPT1_PHRASES), 9)
         self.assertEqual(len(TestPerCaseGates.ATTEMPT2_PHRASES), 32)
@@ -1238,7 +1279,7 @@ class TestResponseScanBudget(unittest.TestCase):
                 elapsed = time.perf_counter() - started
                 self.assertIs(item.outcome, CaseOutcome.RESPONSE_BUDGET_EXCEEDED)
                 self.assertLess(elapsed, self.REDOS_REFUSED_UNREAD_SECONDS)
-        with self.subTest("the linear scan alone (T050c1a) is also under the ReDoS limit"):
+        with self.subTest("the linear scan alone is also under the ReDoS limit"):
             started = time.perf_counter()
             bm.invades_risk_domain(shapes["16 strings in one list"], case.evidence_ids)
             self.assertLess(time.perf_counter() - started, self.REDOS_WITHIN_CAP_SECONDS)
@@ -1544,8 +1585,8 @@ class TestHarnessCannotReachAModel(unittest.TestCase):
         self.assertFalse((REPOSITORY_ROOT / "radar_v08" / "__main__.py").exists())
         self.assertNotIn("benchmark", (REPOSITORY_ROOT / "radar_v08" / "cli.py").read_text(encoding="utf-8"))
         self.assertNotIn("[project.scripts]", (REPOSITORY_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-        # T051c (D61): scripts/run_t051_block.py is the ONE authorised entry point to the harness
-        # (the T051 procedure itself). It reaches Ollama only through the loopback allowlist of
+        # scripts/run_t051_block.py is the ONE authorised entry point to the harness
+        # (the T051 benchmark procedure). It reaches Ollama only through the loopback allowlist of
         # radar_v08/adapters/t051_ollama.py and is tested only against a fake server
         # (tests/test_t051_runner.py); it imports no HTTP or socket module of its own.
         authorised = REPOSITORY_ROOT / "scripts" / "run_t051_block.py"

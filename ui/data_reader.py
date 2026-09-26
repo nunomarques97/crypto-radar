@@ -125,12 +125,12 @@ class DataReader:
         return build_agents(self.store, self.read_output_snapshot())
 
     def lifecycle_state(self, item_id: str) -> str:
-        """The real T033a lifecycle state for one work item - one of QUEUED,
+        """The real lifecycle state for one work item - one of QUEUED,
         LOADING, RUNNING, FINISHED, FAILED, ABORT_STALE, SUPERSEDED or
         DROPPED_BACKPRESSURE - or "UNKNOWN" when no `lifecycle_items` row
         proves one yet. Never inferred from event/bridge status: only a real
         row recorded via `SnapshotStore.record_lifecycle_transition` can move
-        this away from "UNKNOWN" (T033b). An id the outbox refuses (malformed)
+        this away from "UNKNOWN". An id the outbox refuses (malformed)
         or a store that cannot answer (`OutboxError`) is also "UNKNOWN" - the
         reader never throws into the UI and never guesses.
         """

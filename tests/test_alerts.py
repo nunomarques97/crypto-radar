@@ -293,7 +293,7 @@ class TestCliIntegration(_StoreTestCase):
 
 
 class TestMockAlertRecoveryEndToEnd(_StoreTestCase):
-    """TESTE FINAL (task section 9): the mock event created by --mode
+    """TESTE FINAL: the mock event created by --mode
     mock-alert is visible in --mode alerts and recoverable by --mode prompt.
     """
 

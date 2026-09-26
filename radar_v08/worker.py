@@ -1,4 +1,4 @@
-"""Local inference worker entry point (T032b): ``python -m radar_v08.worker``.
+"""Local inference worker entry point: ``python -m radar_v08.worker``.
 
 Nothing starts automatically. This module is not imported by the radar loop, the CLI
 or the UI, and running it starts no worker, opens no database and makes no network
@@ -9,9 +9,9 @@ request:
   the resolved configuration (exit 0) or the refusal code (exit 2).
 
 There is no run mode yet: the worker's durable admission source (the collector's
-transitions/outbox in SQLite) is T033. Until then the worker exists as tested code
-(``radar_v08.workflow.worker``) and this wiring: ``SqliteInvocationLedger`` adapts the
-T031a store functions to the worker's ``InvocationLedger`` port.
+transitions/outbox in SQLite) is not wired yet. Until then the worker exists as tested
+code (``radar_v08.workflow.worker``) and this wiring: ``SqliteInvocationLedger`` adapts the
+invocation store functions to the worker's ``InvocationLedger`` port.
 """
 
 from __future__ import annotations
@@ -42,7 +42,7 @@ DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434"
 
 
 class SqliteInvocationLedger:
-    """``InvocationLedger`` over the T031a store: every call is one short transaction."""
+    """``InvocationLedger`` over the invocation store: every call is one short transaction."""
 
     def __init__(self, conn: sqlite3.Connection, budget: ModelBudget, clock: WorkerClock, owner: str) -> None:
         self._conn = conn
@@ -76,9 +76,9 @@ class SqliteInvocationLedger:
 
 
 _ABOUT = (
-    "radar_v08.worker: local inference worker (T032b). Nothing was started: no worker, "
-    "no database, no network. There is no run mode until T033 provides the durable "
-    "admission source. Use --check to validate a profile and a loopback endpoint offline."
+    "radar_v08.worker: local inference worker. Nothing was started: no worker, "
+    "no database, no network. There is no run mode until a durable "
+    "admission source is wired. Use --check to validate a profile and a loopback endpoint offline."
 )
 
 

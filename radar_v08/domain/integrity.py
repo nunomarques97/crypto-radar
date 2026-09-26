@@ -313,6 +313,9 @@ class ClockSample:
     synchronized: bool | None
     offset_uncertainty: timedelta | None
     previous_wall_time: datetime | None
+    # A backward wall-clock step measured against a monotonic clock
+    # with no valid reference measured since (None: none detected).
+    backward_jump: timedelta | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -856,6 +859,14 @@ def evaluate_clock(sample: ClockSample, now: datetime, policy: IntegrityPolicy =
                     f"now {now.isoformat()} < previous {previous.isoformat()}",
                 )
             )
+    if sample.backward_jump is not None:
+        reasons.append(
+            Reason(
+                ReasonCode.CLOCK_BACKWARD_JUMP,
+                "backward_jump",
+                f"wall clock stepped {sample.backward_jump.total_seconds()}s against the monotonic clock",
+            )
+        )
     return _result(Capability.CLOCK, "utc", reasons, TimeBasis.NONE)
 
 

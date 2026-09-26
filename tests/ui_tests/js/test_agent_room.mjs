@@ -385,7 +385,7 @@ test("(4) the pulse and the receiver reaction are synchronized - waking never st
 });
 
 test("(5) the same communication id cannot trigger the wake-up twice", (t) => {
-  // T026: deterministic virtual clock (node:test's built-in timer mock,
+  // Deterministic virtual clock (node:test's built-in timer mock,
   // node: core only) instead of a real-timer `await wait(720)`.
   // agent_room.js looks up the global setTimeout/clearTimeout by name on
   // every call - it never caches a reference at module load - so enabling
@@ -443,7 +443,7 @@ test("(7) waking settles on whatever the backend says at the moment it finishes 
 });
 
 test("(8) backend state remains authoritative even for TEST MODE's forced demo", (t) => {
-  // T026: deterministic virtual clock instead of a real-timer `await
+  // Deterministic virtual clock instead of a real-timer `await
   // wait(25)`. reactToArrival's two nested setTimeouts (wakeMs then
   // holdMs) total exactly 10ms here; tick(10) runs both to completion
   // synchronously, proving the same thing the original assertion proved

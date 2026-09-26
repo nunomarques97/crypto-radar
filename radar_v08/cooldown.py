@@ -5,7 +5,7 @@ deterministic setup_type changed, direction changed, or opportunity_score
 jumped by >= config.COOLDOWN_OPPORTUNITY_JUMP points - all spelled out in
 config.py, none hidden inline.
 
-When a cooldown starts (T031b): `record_send` is called only after the intended
+When a cooldown starts: `record_send` is called only after the intended
 transition was accepted - the Claude Bridge took the event (PENDING/DEFERRED ->
 PROCESSING) and won the atomic claim + budget reservation for it. It is never
 called for a deduplicated event, a claim refused for budget (the event is

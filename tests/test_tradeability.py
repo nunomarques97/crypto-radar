@@ -2,11 +2,14 @@ import json
 import os
 import sys
 import unittest
+from decimal import Decimal
 from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from radar_v08 import config
+from radar_v08.domain import costs as cost_domain
+from radar_v08.domain.integrity import InstrumentKind
 from radar_v08.kraken_spot import TradeRow
 from radar_v08.microstructure import (
     DepthMetrics,
@@ -17,6 +20,7 @@ from radar_v08.tradeability import (
     build_cost_preview,
     build_cost_scenario_detail,
     compute_tradeability,
+    venue_cost_scenarios,
 )
 
 
@@ -281,8 +285,8 @@ class TestCostPreviewDomainAdapter(unittest.TestCase):
 
     def test_cost_preview_stays_compact_for_the_qwen_payload(self):
         # cost_preview reaches every finalist of the live local Qwen payload
-        # (heartbeat._build_qwen_payload). Before tradeability: 237 bytes spot, 479 spot+futures;
-        # an earlier version with the itemised scenario inside: 3332 / 6678 bytes.
+        # (heartbeat._build_qwen_payload). HEAD before T040: 237 bytes spot, 479 spot+futures;
+        # T040 attempt 1 with the itemised scenario inside: 3332 / 6678 bytes.
         awkward = DepthMetrics(
             mid=1.2345, spread_bps=7.123456789, bid_depth_usd_0_5pct=1.0, ask_depth_usd_0_5pct=1.0,
             bid_depth_usd_1pct=1.0, ask_depth_usd_1pct=1.0, imbalance=0.0,
@@ -333,6 +337,54 @@ class TestCostPreviewDomainAdapter(unittest.TestCase):
         )
         expected = max(0.0, min(1.0, 1.0 - 8.0 / (config.TRADEABILITY_SLIPPAGE_TARGET_BPS * 2.0)))
         self.assertEqual(result.breakdown["slippage"], round(expected, 4))
+
+
+@mock.patch.dict(config.UNCALIBRATED_FEES, FEES)
+class TestVenueCostScenariosExposure(unittest.TestCase):
+    """T3/T042(e): venue_cost_scenarios is the public accessor to the exact
+    cost_domain.CostScenario objects _venue_scenarios builds for build_cost_preview -
+    same values, nothing recalculated, and no change to build_cost_preview's own
+    signature or dict shape."""
+
+    def test_same_two_sides_as_the_private_builder(self):
+        scenarios = venue_cost_scenarios(InstrumentKind.SPOT, exact_book(), 26.0)
+        self.assertEqual(set(scenarios), {cost_domain.Side.LONG, cost_domain.Side.SHORT})
+        for scenario in scenarios.values():
+            self.assertIsInstance(scenario, cost_domain.CostScenario)
+
+    def test_totals_match_build_cost_preview_by_hand_value(self):
+        # Same golden numbers as test_two_leg_total_by_hand_not_max_slippage.
+        scenarios = venue_cost_scenarios(InstrumentKind.SPOT, exact_book(), 26.0)
+        for side in (cost_domain.Side.LONG, cost_domain.Side.SHORT):
+            self.assertEqual(scenarios[side].total_bps, Decimal("72.018613"))
+            self.assertEqual(float(cost_domain.present(scenarios[side].total_bps, 3)), 72.019)
+        preview = build_cost_preview(
+            market="SPOT", spot_spread_bps=12.0, spot_depth=exact_book(),
+            futures_available=False, futures_spread_bps=None, futures_depth=None,
+            funding_rate_raw=None,
+        )
+        self.assertEqual(preview["spot"]["total_cost_bps_by_side"], {"long": 72.019, "short": 72.019})
+
+    def test_missing_book_is_incomplete_as_is_never_summed_or_borrowed(self):
+        scenarios = venue_cost_scenarios(InstrumentKind.SPOT, None, 26.0)
+        for side, scenario in scenarios.items():
+            with self.subTest(side=side):
+                self.assertIs(scenario.status, cost_domain.CostStatus.INCOMPLETE)
+                self.assertIsNone(scenario.total_bps)
+
+    def test_calling_the_public_accessor_does_not_change_build_cost_preview(self):
+        depth = exact_book()
+        before = build_cost_preview(
+            market="SPOT", spot_spread_bps=12.0, spot_depth=depth, futures_available=False,
+            futures_spread_bps=None, futures_depth=None, funding_rate_raw=None,
+        )
+        venue_cost_scenarios(InstrumentKind.SPOT, depth, 26.0)
+        venue_cost_scenarios(InstrumentKind.FUTURES, depth, 5.0)
+        after = build_cost_preview(
+            market="SPOT", spot_spread_bps=12.0, spot_depth=depth, futures_available=False,
+            futures_spread_bps=None, futures_depth=None, funding_rate_raw=None,
+        )
+        self.assertEqual(before, after)
 
 
 if __name__ == "__main__":

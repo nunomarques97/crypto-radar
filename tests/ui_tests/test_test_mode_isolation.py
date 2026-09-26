@@ -1,4 +1,4 @@
-"""T011 containment tests for browser-only TEST MODE and refused legacy routes."""
+"""Containment tests for browser-only TEST MODE and refused legacy routes."""
 
 from __future__ import annotations
 

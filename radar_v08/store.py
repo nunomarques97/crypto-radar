@@ -17,9 +17,16 @@ import threading
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, Iterator
+from enum import Enum
+from typing import Any, Iterator, Sequence
 
-from .adapters import evidence_store, invocation_store, outbox_store
+from .adapters import (
+    evidence_store,
+    invocation_store,
+    outbox_store,
+    outcome_store,
+    qwen_review_store,
+)
 from .adapters.outbox_store import (
     ExportResult,
     Handoff,
@@ -28,6 +35,7 @@ from .adapters.outbox_store import (
     OutboxKind,
     RecordResult,
 )
+from .adapters.qwen_review_store import QwenReviewRow, StoredQwenReview
 from .domain.evidence import SealedEvidence
 from .domain.integrity import InstrumentId
 from .domain.invocation import (
@@ -40,6 +48,7 @@ from .domain.invocation import (
     ReleaseReason,
     Transition,
 )
+from .domain.outcomes import OutcomeSubject
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS assets (
@@ -257,7 +266,20 @@ _FORWARD_RETURNS_MIGRATION_COLUMNS = {
     "mae_pct": "REAL",
     "labeled_at": "TEXT",
     "pair": "TEXT",
+    # A due row that can provably never be labeled is marked with a
+    # typed reason instead of blocking the queue; its return stays NULL.
+    "unlabelable_reason": "TEXT",
+    "unlabelable_at": "TEXT",
 }
+
+
+class ForwardReturnUnlabelable(Enum):
+    """Why a legacy forward-return row can never be labeled."""
+
+    # No snapshot of its pair within +/- tolerance of the target, and that
+    # whole window lies before the snapshot retention boundary: no matching
+    # snapshot is retained and none can ever be written there again.
+    TARGET_OUTSIDE_SNAPSHOT_RETENTION = "target_outside_snapshot_retention"
 
 # Phase 4 adds these to `events` in place, so a Phase 1-3 radar_state.sqlite
 # upgrades rather than being replaced (same pattern as forward_returns above).
@@ -368,11 +390,15 @@ class SnapshotStore:
             self._conn.commit()
         except sqlite3.Error as exc:
             raise StoreError(f"Failed to open/initialize snapshot store at {path}: {exc}") from exc
-        # T030b: additive, ledgered migrations (new tables only) in one short
+        # Additive, ledgered migrations (new tables only) in one short
         # transaction. Already current -> no write at all. Any failure rolls back
         # and is raised as a typed SchemaMigrationError; the store is not usable.
+        # The qwen_reviews table is created with CREATE ... IF NOT EXISTS, outside
+        # the ledger, so a process running earlier code still opens this database.
         try:
             self.migrate_schema()
+            with self._lock:
+                qwen_review_store.ensure_schema(self._conn)
         except BaseException:
             self._conn.close()
             raise
@@ -392,7 +418,7 @@ class SnapshotStore:
     def close(self) -> None:
         self._conn.close()
 
-    # -- schema-version ledger and sealed evidence (T030b) ---------------------
+    # -- schema-version ledger and sealed evidence ---------------------------
 
     def migrate_schema(self) -> tuple[int, ...]:
         """Apply pending ledgered migrations; returns the versions applied (empty if current)."""
@@ -426,10 +452,10 @@ class SnapshotStore:
         with self._lock:
             return evidence_store.load_event_evidence(self._conn, event_id)
 
-    # -- invocation claims, budget reservations, lease fencing (T031a) ---------
+    # -- invocation claims, budget reservations, lease fencing ----------------
     # Each call is one short BEGIN IMMEDIATE transaction in the adapter; nothing here
     # runs network or model work. Budget limits are passed in by the caller.
-    # T031b: `now` is optional (default: the aware UTC wall clock) so the bridge can
+    # `now` is optional (default: the aware UTC wall clock) so the bridge can
     # use one injected clock for claims, leases and budget windows.
 
     @staticmethod
@@ -479,7 +505,31 @@ class SnapshotStore:
         with self._lock:
             return invocation_store.budget_usage(self._conn, budget, now=self._now(now))
 
-    # -- lifecycle transitions and delivery outbox (T033a) ---------------------
+    # -- outcome subjects -------------------------------------------------------
+    # One short BEGIN IMMEDIATE transaction in the adapter, same lock discipline
+    # as save_evidence/claim_invocation above.
+
+    def register_subject(self, subject: OutcomeSubject, *, now: datetime | None = None) -> bool:
+        with self._lock:
+            return outcome_store.register_subject(self._conn, subject, now=self._now(now))
+
+    # -- Qwen finalist reviews, inline and shadow -----------------------------
+    # One short BEGIN IMMEDIATE transaction per batch in the adapter; append-only rows.
+
+    def record_qwen_reviews(self, rows: Sequence[QwenReviewRow], *, now: datetime | None = None) -> int:
+        """Write every row of one batch atomically; returns the number inserted.
+
+        A ``(run_id, asset)`` already stored is skipped; an invalid row raises
+        ``QwenReviewStoreError`` and nothing is written.
+        """
+        with self._lock:
+            return qwen_review_store.record_batch(self._conn, rows, now=self._now(now))
+
+    def qwen_reviews_for_run(self, run_id: str) -> tuple[StoredQwenReview, ...]:
+        with self._lock:
+            return qwen_review_store.reviews_for_run(self._conn, run_id)
+
+    # -- lifecycle transitions and delivery outbox ----------------------------
     # Every change to an `events` row below writes its EVENT outbox row in the same
     # transaction (`_event_write`). Lifecycle transitions and handoffs are one short
     # BEGIN IMMEDIATE transaction each in the adapter. Delivery is at-least-once: a
@@ -533,7 +583,7 @@ class SnapshotStore:
     def first_outbox_entry(self, kind: OutboxKind, subject_id: str) -> OutboxEntry | None:
         """Read-only: the first outbox row ever recorded for ``(kind, subject_id)`` - fixed once
         written, later writes never move it - or ``None`` if nothing was recorded yet
-        (T033b notification IDs; never invented)."""
+        (the source of stable notification IDs; never invented)."""
         with self._lock:
             return outbox_store.first_for_subject(self._conn, kind, subject_id)
 
@@ -806,6 +856,18 @@ class SnapshotStore:
 
         return min(rows, key=diff_seconds)
 
+    def oldest_spot_snapshot_ts(self, pair: str | None = None) -> str | None:
+        """Oldest retained spot snapshot ts, for one pair (index-backed) or,
+        with no pair, across every pair (a full scan: call sparingly).
+        """
+        with self._cursor() as cur:
+            if pair is None:
+                cur.execute("SELECT MIN(ts) FROM spot_snapshots")
+            else:
+                cur.execute("SELECT MIN(ts) FROM spot_snapshots WHERE pair = ?", (pair,))
+            row = cur.fetchone()
+        return row[0] if row else None
+
     def spot_snapshots_between_pair(self, pair: str, start_ts: str, end_ts: str) -> list[sqlite3.Row]:
         with self._cursor() as cur:
             cur.execute(
@@ -902,24 +964,54 @@ class SnapshotStore:
                 cur.close()
 
     def pending_forward_returns(self, now: datetime, limit: int = 500) -> list[sqlite3.Row]:
-        """Rows whose horizon is due (ts + horizon_minutes <= now) and that
-        have not been labeled yet.
+        """Oldest rows whose horizon is due (ts + horizon_minutes <= now) and
+        that are neither labeled nor marked unlabelable, restricted to rows the
+        labeler can use (a pair and a non-zero entry price).
+
+        Everything is filtered in SQL before LIMIT, so rows that cannot be
+        labeled never fill the batch. `ts` is stored as UTC
+        `datetime.isoformat()` text, which sorts chronologically as text, so
+        "due" is `ts <= (now - horizon).isoformat()` per distinct horizon:
+        exact to the microsecond, with no float date arithmetic.
         """
+        if now.tzinfo is None:
+            raise ValueError("pending_forward_returns needs a timezone-aware now")
+        now_utc = now.astimezone(timezone.utc)
+        usable = (
+            "return_pct IS NULL AND unlabelable_reason IS NULL "
+            "AND pair IS NOT NULL AND pair != '' AND entry_price IS NOT NULL AND entry_price != 0"
+        )
+        with self._cursor() as cur:
+            cur.execute(f"SELECT DISTINCT horizon_minutes FROM forward_returns WHERE {usable}")
+            horizons = [row["horizon_minutes"] for row in cur.fetchall()]
+            if not horizons:
+                return []
+            cutoffs = [
+                (horizon, (now_utc - timedelta(minutes=horizon)).isoformat()) for horizon in horizons
+            ]
+            due = " OR ".join("(horizon_minutes = ? AND ts <= ?)" for _ in cutoffs)
+            cur.execute(
+                f"SELECT * FROM forward_returns WHERE {usable} AND ({due}) ORDER BY ts, id LIMIT ?",
+                [value for cutoff in cutoffs for value in cutoff] + [limit],
+            )
+            return cur.fetchall()
+
+    def mark_forward_return_unlabelable(
+        self, row_id: int, reason: ForwardReturnUnlabelable, marked_at: str
+    ) -> bool:
+        """Record why a still-unlabeled row can never be labeled. Never
+        deletes the row and never writes a return. Returns False when the row
+        was already labeled or marked (nothing is overwritten).
+        """
+        if not isinstance(reason, ForwardReturnUnlabelable):
+            raise ValueError(f"unknown forward-return unlabelable reason: {reason!r}")
         with self._cursor() as cur:
             cur.execute(
-                "SELECT * FROM forward_returns WHERE return_pct IS NULL ORDER BY ts LIMIT ?",
-                (limit * 4,),  # over-fetch a bit; horizon-due filtering happens in Python (ts is ISO text)
+                "UPDATE forward_returns SET unlabelable_reason = ?, unlabelable_at = ? "
+                "WHERE id = ? AND return_pct IS NULL AND unlabelable_reason IS NULL",
+                (reason.value, marked_at, row_id),
             )
-            rows = cur.fetchall()
-
-        due = []
-        for row in rows:
-            target = datetime.fromisoformat(row["ts"]) + timedelta(minutes=row["horizon_minutes"])
-            if target <= now:
-                due.append(row)
-            if len(due) >= limit:
-                break
-        return due
+            return cur.rowcount == 1
 
     def label_forward_return(
         self, row_id: int, return_pct: float, mfe_pct: float | None, mae_pct: float | None, labeled_at: str
@@ -1096,7 +1188,7 @@ class SnapshotStore:
             return cur.fetchone()
 
     def insert_event(self, event: dict[str, Any]) -> None:
-        """Insert the event and its first outbox row in one transaction (T033a)."""
+        """Insert the event and its first outbox row in one transaction."""
         with self._event_write() as cur:
             cur.execute(
                 """

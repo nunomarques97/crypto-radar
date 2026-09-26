@@ -1,7 +1,7 @@
-"""T051a / D64: fee-only round-trip cost lower bound (radar_v08/domain/costs.py, additive).
+"""Fee-only round-trip cost lower bound (radar_v08/domain/costs.py, additive).
 
 Pure domain: no I/O, no configuration. The expected numbers are computed by hand in the
-comments; the property test compares the bound with the COMPLETE total that the T040
+comments; the property test compares the bound with the COMPLETE total that the cost
 engine (``price_round_trip``) reports for arbitrary observed spreads and slippages.
 """
 
@@ -204,7 +204,7 @@ class TestLowerBound(unittest.TestCase):
         self.assertEqual(futures_no_funding.lower_bound_bps, D("52"))
 
     def test_existing_engine_behaviour_is_unchanged(self) -> None:
-        # T040: without spread and slippage the engine still reports no line and no total.
+        # Without spread and slippage the engine still reports no line and no total.
         result = price_round_trip(unobserved())
         self.assertIs(result.status, CostStatus.INCOMPLETE)
         self.assertEqual(result.lines, ())

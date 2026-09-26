@@ -1,4 +1,4 @@
-"""SQLite persistence for sealed evidence and the schema-version ledger (T030b).
+"""SQLite persistence for sealed evidence and the schema-version ledger.
 
 This adapter adds three things to ``radar_state.sqlite``. Every change is additive:
 new tables, indexes and triggers only. No existing table or row is altered.
@@ -14,17 +14,17 @@ new tables, indexes and triggers only. No existing table or row is altered.
   legacy-unversioned. Nothing is backfilled: old rows never get invented facts,
   hashes or links.
 
-Version 3 (T031a, ``INVOCATION_MIGRATION``) adds ``invocations``, ``invocation_budget`` and
+Version 3 (``INVOCATION_MIGRATION``) adds ``invocations``, ``invocation_budget`` and
 ``invocation_demand`` for ``radar_v08.adapters.invocation_store``: new tables, one partial
 unique index on the new ``invocations`` table, and guard triggers. No legacy table gets a
 constraint, index, column or row change.
 
-Version 4 (T033a, ``OUTBOX_MIGRATION``) adds ``lifecycle_items``, ``outbox`` and
+Version 4 (``OUTBOX_MIGRATION``) adds ``lifecycle_items``, ``outbox`` and
 ``outbox_cursors`` for ``radar_v08.adapters.outbox_store``: new tables, the delivery-ID
 uniqueness on the new ``outbox`` table only, one plain index and guard triggers. Again no
 legacy table (``events`` included) is altered, constrained or indexed.
 
-Version 5 (T041, ``OUTCOME_MIGRATION``) adds ``outcome_subjects``, ``outcome_subject_costs`` and
+Version 5 (``OUTCOME_MIGRATION``) adds ``outcome_subjects``, ``outcome_subject_costs`` and
 ``outcome_labels`` for ``radar_v08.adapters.outcome_store``: new tables whose primary keys are
 the only uniqueness, two plain indexes and immutability/no-delete triggers. The legacy
 ``forward_returns`` table stays raw: no constraint, index, column or row change.
@@ -142,7 +142,7 @@ BEGIN SELECT RAISE(ABORT, 'event_evidence rows are immutable'); END""",
     ),
 )
 
-# T031a (D19): new tables only. Active-identity uniqueness is a partial unique index on the
+# Version 3: new tables only. Active-identity uniqueness is a partial unique index on the
 # new ``invocations`` table (rows in state CLAIMED); no legacy table (``events`` included)
 # gets a constraint or index. Counters are guarded by triggers so they can only grow.
 INVOCATION_MIGRATION = Migration(
@@ -211,7 +211,7 @@ BEGIN SELECT RAISE(ABORT, 'demand counters never decrease'); END""",
     ),
 )
 
-# T033a (D19): new tables only, for ``radar_v08.adapters.outbox_store``. Delivery-ID
+# Version 4: new tables only, for ``radar_v08.adapters.outbox_store``. Delivery-ID
 # uniqueness lives on the new ``outbox`` table; ``events`` and every other legacy table get
 # no constraint, index, column or row change. Outbox rows are immutable and never deleted;
 # consumer cursors only move forward; a finished lifecycle item never changes again.
@@ -272,7 +272,7 @@ BEGIN SELECT RAISE(ABORT, 'outbox cursors are never deleted'); END""",
     ),
 )
 
-# T041 (D19): new tables only, for ``radar_v08.adapters.outcome_store``. The legacy
+# Version 5: new tables only, for ``radar_v08.adapters.outcome_store``. The legacy
 # ``forward_returns`` table (and ``events``) gets no constraint, index, column or row change.
 # Uniqueness is the primary key of the new tables. Subjects, their costs and their labels are
 # immutable and never deleted: a label is written once, when its horizon has matured.

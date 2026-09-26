@@ -37,7 +37,7 @@ class RouterContext:
     range_expansion: bool | None
     breakout_state: str
     derivatives_coherence_credit: float  # 0.0/1.0, from opportunity.breakdown
-    # From L3 trades that passed OC-1 integrity (T023b), APPROXIMATE. None =
+    # From L3 trades that passed OC-1 integrity, APPROXIMATE. None =
     # unavailable (no/invalid/unvalidated trades) - never read as 0.
     taker_buy_ratio: float | None
     qwen_status: str  # OK | INVALID_JSON | TIMEOUT | UNAVAILABLE
@@ -58,7 +58,7 @@ class RouterResult:
 
 
 def valid_taker_buy_ratio(value: float | None) -> float | None:
-    """Entry-seam check (T023b): a taker-buy ratio is evidence only as a finite
+    """Entry-seam check: a taker-buy ratio is evidence only as a finite
     number in [0, 1]. Anything else (None, NaN, inf, out of range, bool) is
     unavailable and returns None - it is never coerced to 0 or clamped.
     """

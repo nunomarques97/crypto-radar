@@ -1,4 +1,4 @@
-"""SQLite persistence for invocation claims, budget reservations and lease fencing (T031a).
+"""SQLite persistence for invocation claims, budget reservations and lease fencing.
 
 Tables come from ledger migration version 3 (``evidence_store.INVOCATION_MIGRATION``):
 ``invocations``, ``invocation_budget`` and ``invocation_demand``. Nothing here touches a

@@ -1,4 +1,4 @@
-"""Exact, itemised round-trip cost scenarios (T040, RISK.md "Current defects").
+"""Exact, itemised round-trip cost scenarios (RISK.md "Current defects").
 
 A cost scenario prices one hypothetical round trip - an ENTRY leg and an EXIT leg - of a
 declared size on one instrument, for one side (LONG or SHORT), at an unchanged reference
@@ -831,10 +831,10 @@ def _cashflow(
 
 
 # ---------------------------------------------------------------------------
-# Lower bound when the book was not observed (T051a, D64)
+# Lower bound when the book was not observed
 # ---------------------------------------------------------------------------
 #
-# Added after T040 without changing anything above: ``price_round_trip`` keeps its
+# Added later without changing anything above: ``price_round_trip`` keeps its
 # behaviour, and a scenario whose spread and slippage are unknown stays COST_INCOMPLETE
 # there. ``round_trip_cost_lower_bound`` answers a narrower question for such a scenario:
 # the least the round trip can cost, from the fees alone. It never produces a total.

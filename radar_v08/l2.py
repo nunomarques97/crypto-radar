@@ -5,7 +5,7 @@ forward-return bookkeeping.
 Only ever runs against the L1 shortlist (architecture doc: "CANDIDATE ONLY").
 No Qwen, no Fable, no order book, no Trades endpoint - those are later phases.
 
-Integrity (T023b, OC-1): when `run_l2` is given a `clock`, every candidate's
+Integrity (OC-1): when `run_l2` is given a `clock`, every candidate's
 OHLC response is validated by `radar_v08.domain.integrity` before anything
 is stored, and the closed-bar window L2 would consume is validated again
 before any feature is computed. A candidate whose OHLC (or the clock) does
@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
@@ -27,6 +28,7 @@ from typing import Any
 from . import config, kraken_spot
 from .adapters.kraken_timestamps import Clock, receipt_time
 from .anomaly import Features as L1Features
+from .clock_reference import sample_source
 from .domain.integrity import (
     AtrTimeframe,
     CapabilityResult,
@@ -45,7 +47,7 @@ from .kraken_spot import OhlcBar, fetch_ohlc
 from .l2_features import L2Features, compute_l2_features
 from .opportunity import OpportunityResult, compute_opportunity_score
 from .setups import SetupResult, classify_setup
-from .store import SnapshotStore
+from .store import ForwardReturnUnlabelable, SnapshotStore
 from .structure import Bar, bars_from_rows, closed_bars_as_of
 
 logger = logging.getLogger("radar_v08.l2")
@@ -68,7 +70,7 @@ class L2CandidateInput:
     futures_volume_24h_usd: float | None
     l1_features: L1Features
     anomaly_score: float | None
-    # T023b: the selected spot instrument (venue, pair, base/quote units) the
+    # The selected spot instrument (venue, pair, base/quote units) the
     # OHLC response must belong to. Required when run_l2 runs with a clock.
     instrument: InstrumentId | None = None
 
@@ -83,7 +85,7 @@ class L2Result:
     ohlc_missing: bool
     ohlc_error: str | None = None
     flags: list[str] = field(default_factory=list)
-    # T023b: OC-1 results this L2 result was consumed under (pair OHLC, 5m
+    # OC-1 results this L2 result was consumed under (pair OHLC, 5m
     # ATR, clock) and the validated closed-bar window, kept for the evidence
     # seal before inference. Empty/None on the legacy (no clock) path.
     integrity: tuple[CapabilityResult, ...] = ()
@@ -107,7 +109,7 @@ def _fetch_worker(
 
 @dataclass(frozen=True)
 class _CheckedOhlcFetch:
-    """Outcome of one validated OHLC fetch (T023b)."""
+    """Outcome of one validated OHLC fetch."""
 
     ok: bool
     error: str | None
@@ -135,7 +137,7 @@ def _fetch_worker_checked(
     now_iso: str,
     clock: Clock,
 ) -> _CheckedOhlcFetch:
-    """Fetch OHLC, validate the response and only then store it (T023b).
+    """Fetch OHLC, validate the response and only then store it.
 
     Unlike `kraken_spot.fetch_ohlc`, a response keyed by another pair is not
     silently taken as this pair's data: it is an identity mismatch. The one
@@ -215,12 +217,12 @@ def run_l2(
     now: datetime,
     run_id: str,
     clock: Clock | None = None,
-    clock_sample: ClockSample | None = None,
+    clock_sample: ClockSample | Callable[[], ClockSample] | None = None,
     integrity_out: dict[str, tuple[CapabilityResult, ...]] | None = None,
 ) -> tuple[dict[str, L2Result], int, int]:
     """Returns (results_by_asset, ohlc_requests_made, ohlc_failures).
 
-    With `clock` (T023b), OHLC integrity is enforced before storing and
+    With `clock`, OHLC integrity is enforced before storing and
     before consuming (see the module docstring); `integrity_out`, when
     given, receives every validated candidate's OC-1 results, blocked or not.
     """
@@ -303,15 +305,16 @@ def _run_l2_checked(
     now: datetime,
     run_id: str,
     clock: Clock,
-    clock_sample: ClockSample | None,
+    clock_sample: ClockSample | Callable[[], ClockSample] | None,
     integrity_out: dict[str, tuple[CapabilityResult, ...]] | None,
 ) -> tuple[dict[str, L2Result], int, int]:
-    """T023b path of `run_l2`: validate before storing and before consuming."""
+    """Integrity path of `run_l2`: validate before storing and before consuming."""
     now_iso = now.isoformat()
     interval = config.OHLC_INTERVAL_MINUTES
     span = timedelta(minutes=interval)
-    # No clock evidence at all is UNKNOWN (never "synchronised").
-    sample = clock_sample if clock_sample is not None else ClockSample(None, None, None)
+    # No clock evidence at all is UNKNOWN (never "synchronised"). A callable
+    # (the corrected clock) is re-derived at every clock evaluation.
+    sample_at = sample_source(clock_sample)
 
     fetched: dict[str, _CheckedOhlcFetch] = {}
     ohlc_requests_made = 0
@@ -355,7 +358,7 @@ def _run_l2_checked(
                 timing=outcome.timing,
             )
         evaluated_at = receipt_time(clock)  # an aware UTC reading of the injected clock
-        clock_result = evaluate_clock(sample, evaluated_at)
+        clock_result = evaluate_clock(sample_at(), evaluated_at)
         if series is None and outcome.response_result is not None:
             ohlc_result = outcome.response_result
         else:
@@ -464,9 +467,24 @@ def label_forward_returns(store: SnapshotStore, now: datetime) -> int:
     """Fill in return_pct/mfe_pct/mae_pct for any forward-return placeholder
     whose horizon is now due. Never used to change scoring weights directly -
     purely calibration data for a future phase.
+
+    A due row with no snapshot near its target whose whole lookup
+    window lies before the snapshot retention boundary can never be labeled,
+    so it is marked with a typed reason (return left NULL) instead of
+    occupying the batch forever. A due row inside retention with no snapshot
+    is left pending and retried, as before.
     """
     due = store.pending_forward_returns(now, limit=config.FORWARD_RETURN_LABEL_BATCH_LIMIT)
+    tolerance = timedelta(seconds=config.FORWARD_RETURN_LOOKUP_TOLERANCE_SECONDS)
+    # Retention boundary = the later of the prune cutoff (same computation as
+    # SnapshotStore.prune) and the oldest retained spot snapshot. Snapshots are
+    # only written at the current cycle time, so no snapshot can ever appear
+    # before it again.
+    prune_cutoff = now - timedelta(days=config.SNAPSHOT_RETENTION_DAYS)
+    global_oldest: datetime | None = None
+    global_oldest_loaded = False  # MIN(ts) over every pair is a full scan: lazily, once per pass
     labeled = 0
+    marked = 0
 
     for row in due:
         pair = row["pair"]
@@ -479,7 +497,24 @@ def label_forward_returns(store: SnapshotStore, now: datetime) -> int:
             pair, target_dt.isoformat(), config.FORWARD_RETURN_LOOKUP_TOLERANCE_SECONDS
         )
         if snap is None:
-            continue  # horizon due but no snapshot close enough yet - retry next heartbeat
+            window_end = target_dt + tolerance
+            outside_retention = window_end < prune_cutoff
+            if not outside_retention:
+                # The global oldest snapshot is never later than this pair's
+                # oldest (index-backed), so the full scan is only needed when
+                # the window ends before this pair's retained history.
+                pair_oldest = store.oldest_spot_snapshot_ts(pair)
+                if pair_oldest is None or window_end < datetime.fromisoformat(pair_oldest):
+                    if not global_oldest_loaded:
+                        oldest_ts = store.oldest_spot_snapshot_ts()
+                        global_oldest = datetime.fromisoformat(oldest_ts) if oldest_ts else None
+                        global_oldest_loaded = True
+                    outside_retention = global_oldest is not None and window_end < global_oldest
+            if outside_retention and store.mark_forward_return_unlabelable(
+                row["id"], ForwardReturnUnlabelable.TARGET_OUTSIDE_SNAPSHOT_RETENTION, now.isoformat()
+            ):
+                marked += 1
+            continue  # otherwise: horizon due but no snapshot close enough yet - retry next heartbeat
 
         return_pct = (snap["last"] / entry_price - 1.0) * 100.0
 
@@ -494,4 +529,9 @@ def label_forward_returns(store: SnapshotStore, now: datetime) -> int:
         store.label_forward_return(row["id"], return_pct, mfe_pct, mae_pct, now.isoformat())
         labeled += 1
 
+    if marked:
+        logger.info(
+            "Marked %d forward-return rows %s (no retained snapshot can match)",
+            marked, ForwardReturnUnlabelable.TARGET_OUTSIDE_SNAPSHOT_RETENTION.value,
+        )
     return labeled
