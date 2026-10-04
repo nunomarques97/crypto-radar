@@ -33,7 +33,7 @@ UTC = timezone.utc
 NOW = datetime(2026, 9, 25, 12, 0, 0, tzinfo=UTC)
 CYCLE_A = "2026-09-25T11:55:00.123456+00:00"
 
-# Ledger versions 1-5 exactly as HEAD recorded them: this task adds no ledger version.
+# Ledger versions 1-5 exactly as recorded before the reviews table: it adds no ledger version.
 HEAD_LEDGER = (
     (1, "schema_version_ledger", "sha256:61af0e60d5ef7a253cd55c0bd7c55846d74283ec363bf5db48d9b159ba6a3cc5"),
     (2, "evidence_versions_and_event_links", "sha256:3b1af70cbac9785d6809e419c88f8de474930903918959eab798d3504700579f"),

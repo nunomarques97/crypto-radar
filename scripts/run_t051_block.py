@@ -1,16 +1,16 @@
-"""Run one resumable invocation of the T051 Screener benchmark (T051c, D59/D61).
+"""Run one resumable invocation of the T051 Screener benchmark.
 
 Usage::
 
     python scripts/run_t051_block.py --corpus benchmarks/oc1_screener_v1 \
-        --out C:/Users/User/crypto-radar-t051 --budget-seconds 540 [--include-optional]
+        --out ~/crypto-radar-t051 --budget-seconds 540 [--include-optional]
     python scripts/run_t051_block.py --corpus benchmarks/oc1_screener_v1 --write-freeze
 
 Each invocation (at most ``MAX_BUDGET_SECONDS`` = 540 s, so it fits one 10-minute shell call):
 
 1. refuses ``--out`` inside the repository; results go to
    ``<out>/results/t051_results.jsonl`` (append only, one JSON object per line);
-2. loads the locked corpus (lock sha256 pinned below), recomputes the D59 b freeze and aborts
+2. loads the locked corpus (lock sha256 pinned below), recomputes the freeze and aborts
    if it differs from the committed ``<corpus>/t051_freeze.json`` or from the freeze hash of
    any record already written;
 3. ``GET /api/tags`` (Ollama down -> BLOCKED), ``GET /api/ps`` must be empty (else BLOCKED,
@@ -112,14 +112,14 @@ from radar_v08.workflow.t051_sequence import (  # noqa: E402
     validate_budget,
 )
 
-# Lock sha256 of benchmarks/oc1_screener_v1 as committed in 2aaab59 (T051b, D59 a).
+# Lock sha256 of benchmarks/oc1_screener_v1 as committed in 2aaab59.
 EXPECTED_LOCK_SHA256 = "25589250ad9dbe0c12e5982de1ed2df3d98c44f27ebf803e124e0f83d386b15a"
 FREEZE_FILE_NAME = "t051_freeze.json"
 CANDIDATE_PROFILES_FILE_NAME = "t051_candidate_profiles.toml"
 RUNTIME_PROFILE_ID = "screener-qwen3-14b"
 RESULTS_DIR_NAME = "results"
 RESULTS_FILE_NAME = "t051_results.jsonl"
-# Files whose sha256 the freeze holds (D59 b). CRLF is read as LF so a checkout with
+# Files whose sha256 the freeze holds. CRLF is read as LF so a checkout with
 # core.autocrlf does not change a hash; any other byte change does.
 FROZEN_FILES: tuple[tuple[str, str], ...] = (
     ("model_profiles_toml", "radar_v08/model_profiles.toml"),
@@ -219,7 +219,7 @@ def _inside(path: Path, parent: Path) -> bool:
 
 
 _DRIVE_LETTER = re.compile(r"^[A-Za-z]:$")
-_INSIDE_REPOSITORY = "--out is inside the repository; raw results live outside it (D59, D61)"
+_INSIDE_REPOSITORY = "--out is inside the repository; raw results live outside it"
 
 
 def check_out_dir(out: str | os.PathLike[str], repository_root: Path = REPOSITORY_ROOT) -> Path:
@@ -542,7 +542,7 @@ class Invocation:
         warmup_repetition: int | None = None,
     ) -> None:
         case_id = corpus.lists.warmup[0] if warmup_repetition is not None else step.case_id
-        check_not_sealed(case_id, corpus.lists)  # D59 f: the last guard before anything is sent
+        check_not_sealed(case_id, corpus.lists)  # The last guard before anything is sent
         case = corpus.cases[case_id]
         if warmup_repetition is None and step.block is Block.PROBE and not _labelled(case):
             raise SealedCaseError(f"probe case {case_id} has no gold")
@@ -773,7 +773,7 @@ def write_freeze(corpus: str | os.PathLike[str], runtime: Runtime | None = None)
 def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="One resumable invocation of the T051 Screener benchmark.")
     parser.add_argument("--corpus", required=True, help="locked corpus directory (benchmarks/oc1_screener_v1)")
-    parser.add_argument("--out", help="raw results directory outside the repository (C:/Users/User/crypto-radar-t051)")
+    parser.add_argument("--out", help="raw results directory outside the repository (for example ~/crypto-radar-t051)")
     parser.add_argument("--budget-seconds", type=int, help="wall-clock budget of this invocation, 1..540")
     parser.add_argument("--include-optional", action="store_true", help=f"also run {OPTIONAL_MODEL} after every mandatory step")
     parser.add_argument("--write-freeze", action="store_true", help="write <corpus>/t051_freeze.json and exit (no network)")

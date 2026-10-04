@@ -1,0 +1,50 @@
+{
+  "format_version": 1,
+  "imported_at_utc": "2026-10-03T19:57:42+00:00",
+  "source": "crypto-radar-feasibility workspace (external, read-only); paths below are relative to it",
+  "note": "Byte-identical historical records. Never edit, re-run or append to them. Strategy sources are stored under non-importable names and are never executed; the typed ports in radar_v08/domain/trend_strategies.py are bound to them by sha256.",
+  "files": [
+    {
+      "path": "registry.jsonl",
+      "original": "harness/registry.jsonl",
+      "bytes": 35574,
+      "sha256": "6f4dbaba82e628a97911a93381a694ffc4dbc4059e064a0647564c77232e5f4a"
+    },
+    {
+      "path": "paper_ledger.jsonl",
+      "original": "paper/ledger.jsonl",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "strategy_sources/bh_btc.py.txt",
+      "original": "harness/strategies/bh_btc.py",
+      "bytes": 436,
+      "sha256": "d9a2ebc28eef702a026e002242486fe8709119c4775f18f247171ed540e6e089"
+    },
+    {
+      "path": "strategy_sources/ens_btc.py.txt",
+      "original": "harness/strategies/ens_btc.py",
+      "bytes": 1045,
+      "sha256": "d56a80fd8c486fcbf960109229834423b9c4364ee54ca7016b68165fdba0a670"
+    },
+    {
+      "path": "strategy_sources/ens_vt_btc.py.txt",
+      "original": "harness/strategies/ens_vt_btc.py",
+      "bytes": 1260,
+      "sha256": "094bb5b97af67f22d8c80d4413691af3396f9bd4ece603441a369a999af70126"
+    },
+    {
+      "path": "strategy_sources/btc_trend5.py.txt",
+      "original": "harness/strategies/btc_trend5.py",
+      "bytes": 2581,
+      "sha256": "a96640fff254d088fe733ff0b01a7a3bb5a72158c3c8cf56ed4e933bf4e92253"
+    },
+    {
+      "path": "strategy_sources/btc_trend5_vt.py.txt",
+      "original": "harness/strategies/btc_trend5_vt.py",
+      "bytes": 3543,
+      "sha256": "28b1082d695b6662817360444e2f07569fa5a85daa187d51bc154c4ef848c412"
+    }
+  ]
+}

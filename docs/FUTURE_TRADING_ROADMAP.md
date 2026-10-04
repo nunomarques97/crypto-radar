@@ -8,7 +8,7 @@ Architecture authority: EXECUTION_ARCHITECTURE (decisions, risk, execution and p
 
 `ANALYSIS_ONLY → RETROSPECTIVE → PAPER → SHADOW_LIVE → MICRO_LIVE → CONSTRAINED_LIVE → APPROVED_ENVELOPE`.
 
-These are explicit modes, not an inferred property of which credentials happen to be present. ANALYSIS_ONLY/RETROSPECTIVE/PAPER cannot construct an order-capable private adapter. SHADOW_LIVE may use specifically authorized account reads but its composition root has no submission port. Live modes require all of: explicit live mode, local enable control, unexpired sponsor approval bound to account/strategy/code/policy/capability/limits, reconciled state, current cost/data gates, and passing risk/admission checks. Presence of credentials alone enables nothing.
+These are explicit modes, not an inferred property of which credentials happen to be present. ANALYSIS_ONLY/RETROSPECTIVE/PAPER cannot construct an order-capable private adapter. SHADOW_LIVE may use specifically authorized account reads but its composition root has no submission port. Live modes require all of: explicit live mode, local enable control, unexpired owner approval bound to account/strategy/code/policy/capability/limits, reconciled state, current cost/data gates, and passing risk/admission checks. Presence of credentials alone enables nothing.
 
 Default first live capability is **cash-funded spot LONG only**, with mandatory proven native protection. Short, margin, leveraged and perpetual execution remain disabled, even though public futures analysis exists. Unknown venue capability, account eligibility, fees, minimums or protection behavior fails the promotion gate. No generic “normal unrestricted mode” exists: APPROVED_ENVELOPE is still bounded and explicitly approved.
 

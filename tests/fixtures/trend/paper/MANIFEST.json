@@ -1,0 +1,23 @@
+{
+  "format_version": 1,
+  "purpose": "Golden window for the trend paper trader parity test (tests/test_trend_paper.py): the ENS, ENS_VT and BH_5050 records must reproduce the feasibility paper trader (paper.py) within 1e-9.",
+  "window": [
+    "2025-10-08",
+    "2025-10-23"
+  ],
+  "paper_py_sha256": "8eb37c9615b305ee16c212ee9462f91fd313e1da70b8f8f1de60d4ed65552f07",
+  "inputs": "BTCUSDT and ETHUSDT rows are the vendored ../spot1d_*.json rows up to the window end. eur_rows.json holds the BTCEUR, ETHEUR and EURUSDT daily rows [openTimeMs, open, high, low, close] of the window, from Binance public GET /api/v3/klines fetched 2026-10-03, with BTCEUR 2025-10-12, ETHEUR 2025-10-18 and EURUSDT 2025-10-20 removed on purpose so the EURUSDT fallback (and an unused missing EURUSDT day) are exercised.",
+  "outputs": "paper_golden.json holds every record paper.py run() appended for the window (16 days x 12 books), started at the window start: date, book (paper.py's BH book is named BH_5050 here), equity and, per asset, the fields listed in asset_fields. paper.py rounds traded_notional, fee and vol30 to 6 decimals in its records; the test rounds those three the same way and compares every other number unrounded.",
+  "files": [
+    {
+      "path": "eur_rows.json",
+      "bytes": 2325,
+      "sha256": "407e87f732ea223c9dfe4f569697b9b79eccbf6448bdbe50b66cf42032f7cec8"
+    },
+    {
+      "path": "paper_golden.json",
+      "bytes": 60293,
+      "sha256": "6495189137bb20ac2c2a2ef0b22aab898033d3776dd2aba39821727f12901381"
+    }
+  ]
+}

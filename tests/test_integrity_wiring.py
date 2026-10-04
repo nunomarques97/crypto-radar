@@ -264,7 +264,7 @@ class FakeQwen:
         return [payload["asset"] for batch in self.calls for payload in batch]
 
 
-def _fake_anomaly(store, asset, pair, now, features, btc_pair):
+def _fake_anomaly(store, asset, pair, now, features, btc_pair, *, btc_cache=None):
     return AnomalyResult(
         asset=asset, warmup=False, sample_count=100, history_minutes=600.0, anomaly_score=5.0,
         price_z=None, volume_z=None, trades_z=None, oi_z=None, relative_btc_z=None, features=features,

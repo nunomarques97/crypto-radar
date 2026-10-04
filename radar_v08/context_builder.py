@@ -1,4 +1,4 @@
-"""Assembles the market-analysis context sent to Claude (task section 3/4).
+"""Assembles the market-analysis context sent to Claude.
 
 Two halves:
 
@@ -12,7 +12,7 @@ Two halves:
   heartbeat, or after a restart) and reconstructs the context ONLY from what
   is persisted on the event row - never from in-memory objects that may no
   longer exist. It adds the explicit portfolio/trading-state block, which is
-  always UNAVAILABLE in this phase (task section 4: no Kraken private access,
+  always UNAVAILABLE in this phase (no Kraken private access,
   never a fabricated position).
 
 Every leaf value that is missing is the literal string "UNAVAILABLE" (task
@@ -219,7 +219,7 @@ def _evidence_block(verified: SealedEvidence | LegacyUnversionedEvidence) -> dic
 
 def build_model_context(event_row: Any, *, evidence: EventEvidence | None = None) -> dict[str, Any]:
     """Reconstructs the context sent to Claude from PERSISTED data only
-    (task section 2/3: the Bridge must reconstruct context from what is
+    (the Bridge must reconstruct context from what is
     stored, never assume live radar state is still around).
 
     With `evidence`, the claim is verified first (`verify_event_evidence`) and

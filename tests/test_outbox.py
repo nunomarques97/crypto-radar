@@ -1,4 +1,4 @@
-"""T033a: atomic lifecycle transition + outbox in SQLite, cursors, dedup, restart and JSONL export.
+"""Atomic lifecycle transition + outbox in SQLite, cursors, dedup, restart and JSONL export.
 
 Every database and every JSONL file is a fixture in a fresh temporary directory, and
 ``config.EVENTS_LOG_PATH`` is patched to a temporary file in every case. Nothing opens,
@@ -25,7 +25,7 @@ sys.path.insert(0, REPO_ROOT)
 sys.path.insert(0, TESTS_DIR)
 
 import test_integrity_wiring as wiring  # noqa: E402  (fake Kraken heartbeat harness)
-import test_invocation_wiring as bridge_wiring  # noqa: E402  (fake model, T010 guard lift)
+import test_invocation_wiring as bridge_wiring  # noqa: E402  (fake model, cloud-dispatch guard lift)
 
 from radar_v08 import claude_bridge, config, store  # noqa: E402
 from radar_v08 import events as events_module  # noqa: E402
@@ -200,12 +200,12 @@ class TempCase(unittest.TestCase):
         return self.query("SELECT status FROM events WHERE event_id = ?", event_id)[0][0]
 
 
-# --- migration v4 (D19) -------------------------------------------------------------------------
+# --- migration v4 -------------------------------------------------------------------------
 
 
 class TestMigrationV4(TempCase):
     def test_v4_is_the_fourth_version_of_the_ledger_plan(self):
-        # T041 appended version 5 after it; v4 itself is unchanged.
+        # Version 5 (outcomes) was appended after it; v4 itself is unchanged.
         self.assertIs(SCHEMA_MIGRATIONS[3], OUTBOX_MIGRATION)
         self.assertEqual(OUTBOX_MIGRATION.version, 4)
         self.assertEqual(OUTBOX_MIGRATION.name, "lifecycle_outbox_and_cursors")
@@ -534,7 +534,7 @@ class TestLifecycleStates(TempCase):
         self.assertEqual({(row[5], row[6]) for row in self.outbox()}, {(None, None)})
 
 
-# --- first_for_subject: a stable read for a consumer that keeps no cursor (T033b) ----------------
+# --- first_for_subject: a stable read for a consumer that keeps no cursor ----------------
 
 
 class TestFirstForSubject(TempCase):

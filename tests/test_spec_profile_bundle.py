@@ -1,4 +1,4 @@
-"""T050c2c: does the frozen app resolve `radar_v08/model_profiles.toml` (D55(7))?
+"""Does the frozen app resolve `radar_v08/model_profiles.toml`?
 
 Static proof only - PyInstaller is never imported and never run here, no executable is
 generated, `dist/` and `build/` are untouched.
@@ -17,7 +17,7 @@ Reaches the loader, static evidence:
   bundled `PYZ` archive, never the live source tree on disk (`ensure_importable()` has not
   inserted the repo root yet).
 * `radar_v08/config.py` resolves `QWEN_RUNTIME`/`QWEN_PROFILE_ERROR` at import time
-  (`_resolve_qwen_runtime_at_import`, T9/T050c2b) from
+  (`_resolve_qwen_runtime_at_import`) from
   `radar_v08.adapters.model_profiles.DEFAULT_PROFILES_PATH` - no env var, no `ui.paths`
   involved. That constant is `Path(__file__).resolve().parent.parent / "model_profiles.toml"`,
   purely `__file__`-relative. For a module PyInstaller loads from its frozen archive,
@@ -29,7 +29,7 @@ Reaches the loader, static evidence:
   entry (`Analysis(...).datas`; `sys._MEIPASS` in this project's onedir build,
   `exclude_binaries=True` + `COLLECT`, is the same base directory `a.datas` entries land in).
 
-So this task's branch is "reaches, including only by importing config": the pair
+So the answer is "reaches, including only by importing config": the pair
 `radar_v08/model_profiles.toml -> radar_v08` belongs in `Analysis(...).datas`, and the tests
 below prove, by simulating that bundle layout, that the path the loader actually computes
 exists inside it.

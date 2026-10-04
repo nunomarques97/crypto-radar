@@ -6,11 +6,10 @@
 
   // -- agent communication animation (Phase 2) --------------------------------
   // `seenCommunicationIds` dedups state.agent_communications across polling
-  // ticks so the same communication_id never replays a pulse (task spec
-  // section 10) - same idiom as lastLatestEventTs above. `lastRoomSignature`
+  // ticks so the same communication_id never replays a pulse - same idiom as lastLatestEventTs above. `lastRoomSignature`
   // avoids replacing #agent-room's innerHTML when nothing in agents/topology
   // actually changed, so an in-flight pulse isn't wiped out by the next
-  // ~1s poll tick (task spec section 13). Always empty in production today
+  // ~1s poll tick. Always empty in production today
   // since get_state() never populates agent_communications yet - see
   // bridge.py and agent_room.js's processCommunications doc comments.
   const seenCommunicationIds = new Set();
@@ -52,10 +51,11 @@
     if (testMode) {
       testModeSession.enable();
       stopPolling();
-      selectTab("agentes", false);
+      selectTab("agents", false);
     } else {
       testModeSession.disable();
       startPolling();
+      syncPaperPolling();
     }
     applyTestModeVisibility();
   });
@@ -97,17 +97,20 @@
   function selectTab(tabName, persist = true) {
     // TEST MODE is intentionally confined to the visual room. Do not fetch or
     // persist state while it is active, even if a caller tries another tab.
-    if (testMode) tabName = "agentes";
+    // Any id that is not a current tab (an old saved value, a typo) falls back
+    // to the dashboard, so one panel is always shown.
+    tabName = testMode ? "agents" : window.RadarTestMode.resolveTab(tabName);
     document.querySelectorAll(".nav-item[data-tab]").forEach((el) => {
       el.classList.toggle("active", el.dataset.tab === tabName);
     });
     document.querySelectorAll(".tab-panel").forEach((el) => {
       el.hidden = el.id !== `tab-${tabName}`;
     });
-    if (tabName === "alertas") loadAlerts();
-    if (tabName === "historico") loadHistory();
-    if (tabName === "sistema") loadOperationalDiagnostics();
-    if (tabName === "sistema") loadSystemInfo();
+    if (tabName === "alerts") loadAlerts();
+    if (tabName === "history") loadHistory();
+    if (tabName === "system") loadOperationalDiagnostics();
+    if (tabName === "system") loadSystemInfo();
+    syncPaperPolling();
     if (persist && !testMode) window.pywebview.api.save_ui_state({ last_tab: tabName });
   }
 
@@ -115,7 +118,93 @@
     el.addEventListener("click", () => selectTab(el.dataset.tab));
   });
 
-  // -- agent rail rendering (shared by Dashboard mini view and Agentes tab) ----
+  // -- AI Game (paper game) ----------------------------------------------------
+  // get_paper_state() is polled only while the Game tab is shown and the window
+  // is visible; paper_game.js drops any response older than one already applied.
+  const PAPER_POLL_MS = 2000;
+  const paperView = window.RadarPaperGame.createView({
+    radar: document.getElementById("pg-radar"),
+    game: document.getElementById("pg-game"),
+    wallet: document.getElementById("pg-wallet"),
+    playStatus: document.getElementById("pg-play-status"),
+    play: document.getElementById("pg-play"),
+    history: document.getElementById("pg-history"),
+    office: document.getElementById("pg-office"),
+    live: document.getElementById("pg-live"),
+    refresh: document.getElementById("pg-refresh"),
+  });
+  paperView.render(undefined);
+  const paperPoller = window.RadarPaperGame.createPoller({
+    intervalMs: PAPER_POLL_MS,
+    fetchState: () => window.pywebview.api.get_paper_state(),
+    onState: (state) => paperView.render(state),
+    onError: () => paperView.renderError(),
+  });
+
+  // The Pilot shadow panel (same tab, same rule): get_pilot_state() is read-only
+  // and pilot_shadow.js drops any response older than one already applied.
+  const PILOT_POLL_MS = 5000;
+  const pilotView = window.RadarPilotShadow.createView({
+    status: document.getElementById("ps-status"),
+    body: document.getElementById("ps-body"),
+    refresh: document.getElementById("ps-refresh"),
+    live: document.getElementById("ps-live"),
+  });
+  pilotView.render(undefined);
+  const pilotPoller = window.RadarPilotShadow.createPoller({
+    intervalMs: PILOT_POLL_MS,
+    fetchState: () => window.pywebview.api.get_pilot_state(),
+    onState: (state) => pilotView.render(state),
+    onError: () => pilotView.renderError(),
+  });
+
+  // The Trend paper panel (same tab, same rule): get_trend_paper_state() only reads
+  // the ledger and never touches the network. Its one control, "Catch up now", runs
+  // the existing catch-up; it is never called in TEST MODE, and when it finishes the
+  // poller restarts so the panel reads the ledger again at once (a response still in
+  // flight from before belongs to the old generation and is dropped).
+  const TREND_POLL_MS = 15000;
+  const trendView = window.RadarTrendPaper.createView({
+    summary: document.getElementById("tp-summary"),
+    body: document.getElementById("tp-body"),
+    refresh: document.getElementById("tp-refresh"),
+  });
+  trendView.render(undefined);
+  const trendPoller = window.RadarTrendPaper.createPoller({
+    intervalMs: TREND_POLL_MS,
+    fetchState: () => window.pywebview.api.get_trend_paper_state(),
+    onState: (state) => trendView.render(state),
+    onError: () => trendView.renderError(),
+  });
+  window.RadarTrendPaper.createCatchUp({
+    button: document.getElementById("tp-catch-up"),
+    result: document.getElementById("tp-result"),
+    live: document.getElementById("tp-live"),
+    allowed: () => !testMode && !!(window.pywebview && window.pywebview.api),
+    call: () => window.pywebview.api.trend_paper_catch_up(),
+    onDone: () => {
+      if (trendPoller.isRunning()) {
+        trendPoller.stop();
+        trendPoller.start();
+      }
+    },
+  });
+
+  function syncPaperPolling() {
+    const shown = !testMode && !document.hidden && !document.getElementById("tab-game").hidden;
+    if (shown && window.pywebview && window.pywebview.api) {
+      paperPoller.start();
+      pilotPoller.start();
+      trendPoller.start();
+    } else {
+      paperPoller.stop();
+      pilotPoller.stop();
+      trendPoller.stop();
+    }
+  }
+  document.addEventListener("visibilitychange", syncPaperPolling);
+
+  // -- agent rail rendering (shared by Dashboard mini view and Agents tab) ------
   function agentStatusClass(status) {
     if (["ONLINE", "OK", "COMPLETED"].includes(status)) return "st-ok";
     if (["PROCESSING", "RECEIVING"].includes(status)) return "st-processing";
@@ -131,9 +220,9 @@
           <div class="node-top"><span class="node-name">${escapeHtml(a.name)}</span>${pill(a.status)}</div>
           <div class="node-role">${escapeHtml(a.role)}${a.model ? " · " + escapeHtml(a.model) : ""}</div>
           <div class="node-meta">
-            ${a.current_event ? `evento atual <span class="mono">${escapeHtml(a.current_event)}</span> · ` : ""}
-            processados <span class="mono">${a.events_processed}</span>
-            ${a.last_activity ? ` · última atividade <span class="mono">${fmtTime(a.last_activity)}</span>` : ""}
+            ${a.current_event ? `current event <span class="mono">${escapeHtml(a.current_event)}</span> · ` : ""}
+            processed <span class="mono">${a.events_processed}</span>
+            ${a.last_activity ? ` · last activity <span class="mono">${fmtTime(a.last_activity)}</span>` : ""}
             ${a.last_error ? ` · <span style="color:var(--err)">${escapeHtml(a.last_error)}</span>` : ""}
           </div>
         </div>
@@ -154,7 +243,7 @@
     </div>`;
   }
 
-  // -- alert row rendering (shared by Dashboard preview / Alertas / Histórico) --
+  // -- alert row rendering (shared by Dashboard preview / Alerts / History) -----
   function alertRow(a, withLifecycle) {
     const dirClass = a.direction === "LONG" ? "dir-long" : a.direction === "SHORT" ? "dir-short" : "";
     return `<tr>
@@ -167,7 +256,7 @@
       <td>${pill(a.model_demand)}</td>
       ${withLifecycle ? `<td>${renderLifecycle(a.lifecycle)}</td>` : ""}
       <td>${pill(a.ntfy_status || "N/A")}</td>
-      <td><button class="copy-btn" data-event-id="${escapeHtml(a.event_id)}">COPIAR PROMPT</button></td>
+      <td><button class="copy-btn" data-event-id="${escapeHtml(a.event_id)}">COPY PROMPT</button></td>
     </tr>`;
   }
 
@@ -177,8 +266,8 @@
         const eventId = btn.dataset.eventId;
         btn.textContent = "…";
         const result = await window.pywebview.api.copy_prompt(eventId);
-        btn.textContent = result.copied ? "COPIADO ✓" : "FALHOU";
-        setTimeout(() => { btn.textContent = "COPIAR PROMPT"; }, 1800);
+        btn.textContent = result.copied ? "COPIED ✓" : "FAILED";
+        setTimeout(() => { btn.textContent = "COPY PROMPT"; }, 1800);
       });
     });
   }
@@ -241,6 +330,9 @@
     document.getElementById("btn-start").disabled = proc.state === "RUNNING" || proc.state === "STARTING";
     document.getElementById("btn-stop").disabled = proc.state === "STOPPED" || proc.state === "STOPPING";
     document.getElementById("btn-restart").disabled = proc.state === "STOPPED";
+    paperView.setRadarState(proc.state);
+    paperView.tick();
+    pilotView.tick();
 
     renderSystemStatus(state.system_status);
     renderFunnel(state.funnel);
@@ -263,7 +355,7 @@
 
     const previewBody = document.getElementById("alerts-preview-body");
     previewBody.innerHTML = state.alerts_preview.map((a) => alertRow(a, true)).join("")
-      || `<tr><td colspan="9" class="empty">Sem alertas reais até ao momento.</td></tr>`;
+      || `<tr><td colspan="9" class="empty">No real alerts so far.</td></tr>`;
     wireCopyButtons(previewBody);
 
     document.getElementById("alerts-badge").textContent = state.alerts_preview.length;
@@ -272,12 +364,12 @@
     if (currentTs !== lastLatestEventTs) {
       lastLatestEventTs = currentTs;
       const activeTab = document.querySelector(".nav-item.active")?.dataset.tab;
-      if (activeTab === "alertas") loadAlerts();
-      if (activeTab === "historico") loadHistory();
+      if (activeTab === "alerts") loadAlerts();
+      if (activeTab === "history") loadHistory();
     }
   }
 
-  // -- alertas / historico (fetched on tab switch / latest_event change) --------
+  // -- alerts / history (fetched on tab switch / latest_event change) --------
   async function loadAlerts() {
     const rows = await window.pywebview.api.list_alerts();
     const body = document.getElementById("alerts-body");
@@ -301,10 +393,10 @@
     document.getElementById("mocks-empty").hidden = rows.length !== 0;
     body.innerHTML = rows.map((a) => `<tr>
       <td class="mono">${fmtTime(a.ts)}</td>
-      <td class="asset">${escapeHtml(a.asset)}<span class="test-marker">[TESTE]</span></td>
+      <td class="asset">${escapeHtml(a.asset)}<span class="test-marker">[TEST]</span></td>
       <td>${escapeHtml(a.setup_type || "NONE")}</td>
       <td>${pill(a.model_demand)}</td>
-      <td><button class="copy-btn" data-event-id="${escapeHtml(a.event_id)}">COPIAR PROMPT</button></td>
+      <td><button class="copy-btn" data-event-id="${escapeHtml(a.event_id)}">COPY PROMPT</button></td>
     </tr>`).join("");
     wireCopyButtons(body);
   }
@@ -323,7 +415,7 @@
 
   document.getElementById("btn-notify-test").addEventListener("click", async () => {
     const r = await window.pywebview.api.run_operational_notify_test();
-    showMockResult(`TESTAR NTFY — exit_code=${r.exit_code}\n\n${r.output}`);
+    showMockResult(`TEST NOTIFICATION — exit_code=${r.exit_code}\n\n${r.output}`);
   });
   document.getElementById("btn-mock-alert").addEventListener("click", async () => {
     const r = await window.pywebview.api.run_operational_mock_alert();
@@ -332,7 +424,7 @@
   });
   document.getElementById("btn-clipboard-test").addEventListener("click", async () => {
     const r = await window.pywebview.api.run_operational_clipboard_test();
-    showMockResult(`TESTAR CLIPBOARD — copied=${r.copied}\n"${r.text}"`);
+    showMockResult(`TEST CLIPBOARD — copied=${r.copied}\n"${r.text}"`);
   });
 
   // Visual-only demo of the (currently unused-in-production) communication
@@ -342,7 +434,7 @@
   // the exact same pipeline as a real communication (processCommunications ->
   // triggerCommunication -> reactToArrival), just called directly with a
   // synthetic pair and `force: true` so the receiver wake-up plays even if
-  // its real backend status isn't currently SLEEPING (task spec section 9) -
+  // its real backend status isn't currently SLEEPING -
   // reactToArrival still reconciles to the REAL backend state afterwards.
   document.getElementById("btn-comm-test")?.addEventListener("click", () => {
     const simulated = testModeSession.nextSimulatedCommunication();
@@ -350,10 +442,10 @@
     const room = document.getElementById("agent-room");
     const beams = [...room.querySelectorAll(".connection")];
     if (beams.length === 0) {
-      showMockResult("TESTAR COMUNICAÇÃO — sem ligações na sala para animar.");
+      showMockResult("TEST COMMUNICATION — no connections in the room to animate.");
       return;
     }
-    // Prefer the real Qwen -> Red Team pair (task spec section 9); fall back
+    // Prefer the real Qwen -> Red Team pair; fall back
     // to the first declared connection so the demo still works if topology
     // ever changes.
     const el = beams.find((b) => b.dataset.from === simulated.from && b.dataset.to === simulated.to) || beams[0];
@@ -361,10 +453,10 @@
       resolveAgent: testModeSession.simulatedAgent,
       force: true,
     });
-    showMockResult(`TESTAR COMUNICAÇÃO — pulso visual ${el.dataset.from} → ${el.dataset.to}, com reação de "acordar" do recetor (só UI, não é uma comunicação real; o estado do backend não é alterado e o recetor volta ao seu estado real no final).`);
+    showMockResult(`TEST COMMUNICATION — visual pulse ${el.dataset.from} → ${el.dataset.to}, with a "wake-up" reaction from the receiver (UI only, not a real communication; the backend state is not changed and the receiver returns to its real state at the end).`);
   });
 
-  // -- sistema ----------------------------------------------------------------------
+  // -- system -----------------------------------------------------------------------
   async function loadSystemInfo() {
     const info = await window.pywebview.api.system_info();
     document.getElementById("sys-sqlite-path").textContent = info.sqlite_path;
@@ -372,7 +464,7 @@
     const state = await window.pywebview.api.get_state();
     document.getElementById("sys-pid").textContent = state.process.pid ?? "—";
     document.getElementById("sys-exit-code").textContent = state.process.last_exit_code ?? "—";
-    document.getElementById("log-lines").textContent = (state.log_lines || []).join("\n") || "(sem linhas ainda)";
+    document.getElementById("log-lines").textContent = (state.log_lines || []).join("\n") || "(no lines yet)";
   }
   document.getElementById("btn-open-log").addEventListener("click", () => window.pywebview.api.open_log_file());
   document.getElementById("btn-open-folder").addEventListener("click", () => window.pywebview.api.open_project_folder());
@@ -402,5 +494,6 @@
       if (saved && saved.last_tab) selectTab(saved.last_tab);
     } catch (e) { /* default tab stays dashboard */ }
     startPolling();
+    syncPaperPolling();
   });
 })();

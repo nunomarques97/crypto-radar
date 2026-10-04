@@ -1,10 +1,10 @@
 """tradeability_score (L3, finalists): a GATE, not a bonus added to
 opportunity_score. An asset with inadequate liquidity must not reach Qwen
-just because opportunity_score is high (task section 3, explicit).
+just because opportunity_score is high.
 
 States: TRADEABLE | CONSTRAINED | UNTRADEABLE.
 
-Also builds the SPOT/FUTURES cost preview (task section 4) as a thin adapter
+Also builds the SPOT/FUTURES cost preview as a thin adapter
 over radar_v08.domain.costs: two legs, both sides, spread + fee + slippage,
 with `net_move_required` as the amplitude needed to clear the round-trip
 costs - never a return prediction. A missing component makes the preview
@@ -429,7 +429,7 @@ def build_cost_preview(
     futures_depth: DepthMetrics | None,
     funding_rate_raw: float | None,
 ) -> dict[str, Any]:
-    """Preliminary cost preview, SPOT vs FUTURES kept separate (task section 4),
+    """Preliminary cost preview, SPOT vs FUTURES kept separate,
     priced by the exact two-leg domain in radar_v08.domain.costs.
 
     `total_cost_bps` / `net_move_required_pct` are the amplitude needed to clear the

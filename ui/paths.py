@@ -1,6 +1,6 @@
 """Resolves the crypto-radar repo root, whether running from source
 (`python -m ui`) or from a frozen PyInstaller build distributed inside the
-project directory (per the task's packaging requirement: the .exe ships
+project directory (a packaging requirement: the .exe ships
 inside the project, never standalone).
 
 Kept deliberately tiny and side-effect-free so it is trivial to unit test

@@ -49,8 +49,8 @@ def is_configured() -> bool:
 
 
 def masked_topic() -> str:
-    """Safe-for-logs form of the topic - never the full value (mobile
-    notifications task section 1/12: never expose the topic/credential)."""
+    """Safe-for-logs form of the topic - never the full value (never
+    expose the topic/credential)."""
     topic = config.NTFY_TOPIC
     if not topic:
         return "(unset)"

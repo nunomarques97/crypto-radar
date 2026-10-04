@@ -1,0 +1,64 @@
+"""S2 BTC trend ensemble times a weekly 30% vol-target overlay (STRATEGY-SWEEP.md #2 on #1). Pre-declared 2026-10-03."""
+import math
+from datetime import datetime, timedelta, timezone
+
+NAME = "btc_trend5_vt"
+RULE = ("Position = btc_trend5 vote share (SMA100, SMA200, close-based Donchian 20/10, 50/25, 100/50) times "
+        "min(1, 0.30 / sigma), sigma = EWMA(span 20, alpha 2/21) of squared daily log returns over the last 200 "
+        "returns, annualized x sqrt(365), recomputed weekly from closes before the most recent Monday's open. BTC "
+        "spot, rest cash, traded at today's open; trade only when |target - drifted weight| >= 0.10. No leverage.")
+PARAMS = {"sma": [100, 200], "donchian": [[20, 10], [50, 25], [100, 50]], "vol_target": 0.30, "ewma_span": 20,
+          "vol_returns": 200, "band": 0.10}
+UNIVERSE = ["BTCUSDT"]
+WARMUP_DAYS = 201
+BAND = PARAMS["band"]
+MAX_GROSS = 1.0
+# Identical for all six candidates of the top-5 batch (declared 2026-10-03, before any run). Primary scenario: fee 0.1%
+# per leg plus 5 bps slippage (runs use --slippage-bps 5). Each criterion carries the split it decides; the harness
+# evaluates every entry on every split, and the verdict for a split is the AND of the entries tagged with that split.
+# Holdout "after-tax return > 0" is expressed as after_tax_cagr > 0 (same sign). The 0.4% fee results are secondary.
+PASS_CRITERIA = [
+    {"split": "dev", "metric": "sharpe", "op": ">=", "benchmark": "bh_btc", "fee": 0.001},
+    {"split": "dev", "metric": "max_dd", "op": "<=", "benchmark": "bh_btc", "factor": 0.6, "fee": 0.001},
+    {"split": "dev", "metric": "after_tax_cagr", "op": ">=", "value": 0.05, "fee": 0.001},
+    {"split": "holdout", "metric": "after_tax_cagr", "op": ">", "value": 0.0, "fee": 0.001},
+    {"split": "holdout", "metric": "max_dd", "op": "<=", "value": 0.35, "fee": 0.001},
+]
+
+
+def donchian_long(closes, entry, exit_):
+    """Long after a close above the previous `entry` closes, flat after a close below the previous `exit_` closes.
+    State is rebuilt from history: the most recent of the two events decides (flat if neither has happened)."""
+    for t in range(len(closes) - 1, max(entry, exit_) - 1, -1):
+        c = closes[t]
+        if c > max(closes[t - entry:t]):
+            return True
+        if c < min(closes[t - exit_:t]):
+            return False
+    return False
+
+
+def trend_votes(closes):
+    votes = [closes[-1] > sum(closes[-n:]) / n for n in PARAMS["sma"]]
+    votes += [donchian_long(closes, e, x) for e, x in PARAMS["donchian"]]
+    return sum(votes) / len(votes)
+
+
+def weekly_vol_scale(h):
+    """min(1, target / sigma), sigma = EWMA (alpha = 2/(span+1)) of squared daily log returns, x sqrt(365), computed
+    from closes strictly before the open of the most recent Monday (UTC) on or before today, so it changes weekly."""
+    monday = h.today - timedelta(days=h.today.weekday())
+    monday_ms = int(datetime(monday.year, monday.month, monday.day, tzinfo=timezone.utc).timestamp() * 1000)
+    closes = [r[4] for r in h.bars("BTCUSDT", PARAMS["vol_returns"] + 8) if r[0] < monday_ms]
+    closes = closes[-(PARAMS["vol_returns"] + 1):]
+    lr = [math.log(closes[k] / closes[k - 1]) for k in range(1, len(closes))]
+    a = 2.0 / (PARAMS["ewma_span"] + 1)
+    var = lr[0] ** 2
+    for r in lr[1:]:
+        var = (1 - a) * var + a * r * r
+    sigma = math.sqrt(var * 365)
+    return min(1.0, PARAMS["vol_target"] / sigma) if sigma > 0 else 1.0
+
+
+def weights(h):
+    return {"BTCUSDT": trend_votes(h.closes("BTCUSDT")) * weekly_vol_scale(h)}

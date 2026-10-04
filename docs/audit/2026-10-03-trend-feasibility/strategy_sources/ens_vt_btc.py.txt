@@ -1,0 +1,27 @@
+"""ENS with 50% volatility targeting on BTC. Ported from robust.py run(vol_target=0.5). Pre-declared 2026-10-03."""
+import math
+
+NAME = "ens_vt_btc"
+RULE = ("ENS (fraction of SMA {20,50,100,150,200} with previous close > SMA) times min(1, 0.5 / annualized 30-day "
+        "realized volatility of daily log returns, sample sd, x sqrt(365)); executed at the next open; rebalance "
+        "only when |target - held| >= 0.2 or the target is 0.")
+PARAMS = {"lookbacks": [20, 50, 100, 150, 200], "vol_target": 0.5, "vol_days": 30, "band": 0.2}
+UNIVERSE = ["BTCUSDT"]
+WARMUP_DAYS = 201
+BAND = PARAMS["band"]
+MAX_GROSS = 1.0
+PASS_CRITERIA = [
+    {"metric": "sharpe", "op": ">=", "benchmark": "bh_btc", "fee": 0.004},
+    {"metric": "max_dd", "op": "<=", "benchmark": "bh_btc", "factor": 0.6, "fee": 0.004},
+]
+
+
+def weights(h):
+    lb, nv = PARAMS["lookbacks"], PARAMS["vol_days"]
+    closes = h.closes("BTCUSDT", max(max(lb), nv + 1))
+    c = closes[-1]
+    tgt = sum(c > sum(closes[-n:]) / n for n in lb) / len(lb)
+    lr = [math.log(closes[x] / closes[x - 1]) for x in range(len(closes) - nv, len(closes))]
+    m = sum(lr) / nv
+    vol = math.sqrt(sum((x - m) ** 2 for x in lr) / (nv - 1) * 365)
+    return {"BTCUSDT": tgt * min(1.0, PARAMS["vol_target"] / vol)}

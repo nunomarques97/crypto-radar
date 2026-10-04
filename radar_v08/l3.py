@@ -1,8 +1,7 @@
 """L3 orchestrator: order book + trades, finalists only (<= config.L3_MAX_FINALISTS
-per cycle, never the shortlist and never the whole universe - task sections
-1/2/18). Builds tradeability_score/state (a GATE) and the SPOT/FUTURES cost
+per cycle, never the shortlist and never the whole universe). Builds tradeability_score/state (a GATE) and the SPOT/FUTURES cost
 preview, then applies the deterministic pre-gate that decides who is even
-worth a Qwen call (task section 5).
+worth a Qwen call.
 
 Integrity (OC-1): when `run_l3` is given a `clock`, the spot book,
 the spot trades and the futures book are fetched with their receipt time
@@ -146,8 +145,7 @@ def _cost_scenarios_by_venue(
 
 
 def select_finalists(candidates: list[L3CandidateInput]) -> list[L3CandidateInput]:
-    """Rank L2 candidates by opportunity_score, take the top N (task section
-    1: max 8/cycle). Never burns an order-book request on a candidate with
+    """Rank L2 candidates by opportunity_score, take the top N (max 8/cycle). Never burns an order-book request on a candidate with
     no confirmed opportunity or still in l2_warmup.
     """
     eligible = [
@@ -188,7 +186,7 @@ def _fetch_trades(session: GuardedSession, pair: str) -> tuple[TradesMetrics | N
 
 
 def passes_qwen_pregate(candidate: L3CandidateInput, tradeability: TradeabilityResult) -> bool:
-    """Deterministic pre-gate (task section 5): only finalists that clear
+    """Deterministic pre-gate: only finalists that clear
     opportunity, tradeability, a valid setup and clean data quality are worth
     a Qwen call. Never a bonus - any single failing condition excludes.
     """

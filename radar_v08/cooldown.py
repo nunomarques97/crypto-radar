@@ -1,4 +1,4 @@
-"""Per-(asset, model) cooldown, SQLite-backed (task section 11).
+"""Per-(asset, model) cooldown, SQLite-backed.
 
 Default 4h, configurable. Exceptions that bypass an active cooldown: the
 deterministic setup_type changed, direction changed, or opportunity_score

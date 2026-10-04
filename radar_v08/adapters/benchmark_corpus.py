@@ -1,4 +1,4 @@
-"""Locked benchmark corpus loader and report writer (T050b, OC section 6, D33/D38).
+"""Locked benchmark corpus loader and report writer (OC section 6).
 
 Reads a corpus directory laid out as::
 
@@ -210,7 +210,7 @@ def _partition_named(name: str) -> CorpusPartition:
 
 def _parse_lock(document: object, where: str) -> _Lock:
     if isinstance(document, dict) and document.get("schema_version") == CORPUS_SCHEMA_VERSION_V2:
-        return _parse_lock_v2(document, where)  # schema v2 (T051a, D64); v1 below unchanged
+        return _parse_lock_v2(document, where)  # schema v2; v1 below unchanged
     invalid = CorpusErrorCode.LOCK_INVALID
     top = _table(document, _LOCK_KEYS, invalid, where)
     if type(top["schema_version"]) is not int or top["schema_version"] != CORPUS_SCHEMA_VERSION:
@@ -284,7 +284,7 @@ def _scan(directory: Path, partition: CorpusPartition) -> dict[str, Path]:
 
 def _case(document: object, path: Path, partition: CorpusPartition, lock: _Lock) -> tuple[BenchmarkCase, str]:
     if isinstance(lock, _LockV2) or (isinstance(document, dict) and document.get("schema_version") == CORPUS_SCHEMA_VERSION_V2):
-        return _case_v2(document, path, partition, lock)  # schema v2 (T051a, D64); v1 below unchanged
+        return _case_v2(document, path, partition, lock)  # schema v2; v1 below unchanged
     where = os.fspath(path)
     invalid = CorpusErrorCode.CASE_INVALID
     top = _table(document, _CASE_KEYS, invalid, where)
@@ -413,7 +413,7 @@ def load_partition(
 
 
 def benchmark_profile(profile: ModelProfile) -> BenchmarkProfile:
-    """The harness profile for a T050a model profile (disabled profiles are refused)."""
+    """The harness profile for a model profile (disabled profiles are refused)."""
     return BenchmarkProfile(
         inference=profile.inference_profile(),
         min_free_vram_gib=profile.reserve_vram_gib,
@@ -447,9 +447,9 @@ def write_report(report: BenchmarkReport, output_dir: str | os.PathLike[str]) ->
     return path
 
 
-# -- corpus schema v2 (T051a, D59/D60/D64) ------------------------------------------------------
+# -- corpus schema v2 ------------------------------------------------------
 #
-# Added after T050b without changing anything above: a v1 lock and its cases load exactly as
+# Added later without changing anything above: a v1 lock and its cases load exactly as
 # before. Schema v2 is the real OC-1 section 6 corpus built from recorded Kraken OHLCVT data by
 # ``adapters.oc1_corpus_builder``:
 #
@@ -472,7 +472,7 @@ CORPUS_SCHEMA_VERSION_V2 = 2
 MIN_PARTITION_GAP_SECONDS = 7 * 24 * 3600
 GOLD_STATUS_DETERMINISTIC = "deterministic"
 GOLD_STATUS_UNAVAILABLE = "gold_unavailable"
-# Categories with deterministic gold in schema v2 (D60); the other two carry none.
+# Categories with deterministic gold in schema v2; the other two carry none.
 GOLD_CATEGORIES_V2: frozenset[CaseCategory] = frozenset(
     {CaseCategory.INVALID_OR_STALE, CaseCategory.INSUFFICIENT_EVIDENCE, CaseCategory.ADMISSIBLE_NO_EDGE}
 )

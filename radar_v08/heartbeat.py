@@ -37,10 +37,10 @@ from collections.abc import Callable
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from typing import Any
+from typing import Any, NamedTuple
 
-from . import config, cooldown, events, security
-from .adapters import outcome_store
+from . import config, cooldown, events, paper_game, pilot_shadow, security
+from .adapters import outcome_store, paper_store, pilot_store
 from .adapters.kraken_timestamps import (
     FuturesTickersFetch,
     fetch_futures_tickers,
@@ -49,7 +49,13 @@ from .adapters.kraken_timestamps import (
     receipt_time,
     spot_instrument,
 )
-from .anomaly import compute_anomaly, compute_features, compute_return, lookup_past_spot
+from .anomaly import (
+    BtcHistoryCache,
+    compute_anomaly,
+    compute_features,
+    compute_return,
+    lookup_past_spot,
+)
 from .clock_reference import ClockReference, default_clock_reference
 from .context_builder import build_event_context, deep_mark_unavailable
 from .domain import costs as cost_domain
@@ -81,11 +87,14 @@ from .domain.invocation import Direction
 from .domain.outcomes import (
     DecisionRef,
     HorizonCost,
+    LabelWindow,
     LinkMissingReason,
     OutcomeSubject,
     same_cost_for_every_horizon,
 )
-from .http_client import ApiError, GuardedSession
+from .domain.paper import SkipReason as PaperSkipReason
+from .domain.risk import NoTradeReason as PilotNoTradeReason
+from .http_client import ApiError, GuardedSession, request_stats_delta
 from .kraken_futures import FuturesTickerRow, parse_perpetuals
 from .kraken_spot import SpotTickerRow, get_asset_pairs, parse_ticker_row
 from .l2 import L2CandidateInput, L2Result, label_forward_returns, run_l2
@@ -98,6 +107,7 @@ from .qwen_shadow import QwenReviewBatch, QwenShadow, default_shadow
 from .router import RouterContext, route
 from .store import FuturesSnapshotInput, SnapshotStore, SpotSnapshotInput
 from .universe import (
+    SpotMarket,
     build_spot_markets,
     find_meta,
     group_assets,
@@ -109,6 +119,75 @@ from .universe import (
 _SERVER_TIME_RESOLUTION = timedelta(milliseconds=1)
 _FUTURES_PREFIX = "PF_"
 _OFFLINE_STATUSES = frozenset({"offline", "delisted", "disabled"})
+
+# Top-level latency_ms stages, in cycle order (observability only). Every
+# statement between the cycle's first timer reading and the total_ms reading
+# belongs to exactly one of them, so latency_ms["unaccounted_ms"] is total_ms
+# minus the sum of those present. A key is present only when its stage ran.
+# "between_stages_ms" collects the log lines and local bookkeeping that sit
+# between two stages whose start/end points predate this list.
+# Nested sub-stages use a dotted prefix ("l2.ohlc_fetch_ms", "l2.compute_ms")
+# and are never part of the sum. total_ms ends before the run-record write.
+TOP_LEVEL_STAGE_KEYS = (
+    "setup_ms",
+    "asset_pairs_ms",
+    "futures_ticker_ms",
+    "spot_ticker_ms",
+    "asset_pairs_refresh_ms",
+    "ticker_gate_ms",
+    "normalize_ms",
+    "snapshot_write_ms",
+    "prune_ms",
+    "l1_ms",
+    "shortlist_ms",
+    "l2_ms",
+    "forward_labels_ms",
+    "outcome_labels_ms",
+    "finalists_ms",
+    "l3_ms",
+    "seal_ticker_refresh_ms",
+    "seal_ms",
+    "qwen_ms",
+    "router_ms",
+    "qwen_record_ms",
+    "outcome_register_ms",
+    "paper_ms",
+    "pilot_ms",
+    "alerts_ms",
+    "output_ms",
+    "between_stages_ms",
+)
+
+
+class _CycleTimer:
+    """Contiguous stage laps over one timer: each lap(key) adds the time since
+    the previous lap to latency_ms[key], so the laps partition the cycle."""
+
+    def __init__(self, timer: Callable[[], float]) -> None:
+        self.timer = timer
+        self.latency_ms: dict[str, float] = {}
+        self.started = self._last = timer()
+
+    def lap(self, key: str) -> float:
+        reading = self.timer()
+        self.latency_ms[key] = self.latency_ms.get(key, 0.0) + (reading - self._last) * 1000
+        self._last = reading
+        return reading
+
+
+def _unaccounted_ms(latency_ms: dict[str, float]) -> float:
+    return latency_ms["total_ms"] - sum(latency_ms[key] for key in TOP_LEVEL_STAGE_KEYS if key in latency_ms)
+
+
+def _http_request_stats(session: Any) -> dict[str, dict[str, float]] | None:
+    """The session's per-endpoint counters, or None when it keeps none."""
+    reader = getattr(session, "request_stats", None)
+    if not callable(reader):
+        return None
+    try:
+        return reader()
+    except Exception:  # observability only: never fail a cycle over counters
+        return None
 
 
 def make_run_id(now: datetime) -> str:
@@ -371,6 +450,255 @@ def _build_qwen_payload(
     }
 
 
+# --- paper game wiring ("Jogo da IA", pretend money only) ---------------------------------
+
+# Skip reason counted here, before the store: a new event whose asset had no
+# primary spot market this cycle has no touch to enter on.
+_PAPER_NO_SPOT_MARKET = "no_spot_market"
+_PAPER_DIRECTIONS = frozenset({"LONG", "SHORT"})
+
+
+def _paper_counts(enabled: bool) -> dict[str, Any]:
+    """The run record's ``paper`` object with every count at zero."""
+    skipped = {reason.value: 0 for reason in PaperSkipReason}
+    skipped[_PAPER_NO_SPOT_MARKET] = 0
+    return {
+        "enabled": enabled,
+        "opened": 0,
+        "closed": 0,
+        "pending": 0,
+        "skipped": skipped,
+        "open_now": 0,
+        "failures": 0,
+    }
+
+
+class _PaperNewEvent(NamedTuple):
+    """A radar event this cycle created, as the paper step needs it."""
+
+    event_id: str
+    market: SpotMarket | None
+    setup_type: str | None
+    direction: str
+    scores: dict[str, Any]
+    context: dict[str, Any]
+    #: The L2 5-minute ATR14 of closed bars and the spot pair it was computed on.
+    atr_5m: float | None
+    atr_pair: str | None
+
+
+def _paper_candidate(
+    event_id: str,
+    market: SpotMarket,
+    *,
+    run_id: str,
+    ts: str,
+    setup_type: str | None,
+    direction: str,
+    scores: dict[str, Any],
+    context: dict[str, Any],
+    atr_5m: float | None,
+    atr_pair: str | None,
+) -> paper_game.PaperCandidate:
+    """A new event entering on the cycle's primary spot touch, the values written to
+    spot_snapshots at ``ts``; ``why`` holds the event's recorded scores and features.
+    ``atr_5m``/``atr_pair`` are the L2 ATR and its pair: the store skips the play
+    (``no_valid_atr``) unless the ATR is valid and its pair is the entry pair."""
+    return paper_game.PaperCandidate(
+        event_id=event_id,
+        run_id=run_id,
+        asset=market.asset,
+        pair=market.pair_key,
+        quote=market.quote,
+        direction=direction,
+        bid=market.bid,
+        ask=market.ask,
+        snapshot_ts=ts,
+        status=market.status,
+        why=paper_game.build_why(
+            setup_type=setup_type,
+            direction=direction,
+            scores=scores,
+            features={"l1": context.get("l1_features"), "l2": context.get("l2_features")},
+        ),
+        atr=atr_5m,
+        atr_pair=atr_pair,
+    )
+
+
+def _run_paper_step(
+    counts: dict[str, Any],
+    store: SnapshotStore,
+    new_events: list[_PaperNewEvent],
+    *,
+    now: datetime,
+    run_id: str,
+    ts: str,
+    logger: Any,
+) -> None:
+    """Settle due plays, then open one per new LONG/SHORT event, into ``counts``.
+
+    Each part is caught on its own (logged, counted in ``failures``): a failed
+    settle still lets a new event open, and one bad event never blocks another.
+    Every store call is its own transaction on the store's connection, which is
+    idle between the cycle's writes.
+    """
+    conn = store._conn
+    with store._lock:
+        try:
+            settled = paper_game.settle_due(conn, now)
+        except Exception as exc:  # deliberately broad: never abort the cycle for the paper game
+            counts["failures"] += 1
+            logger.warning("Paper game: settling due plays failed: %s", exc)
+        else:
+            counts["closed"] += settled["closed"]
+            counts["pending"] += settled["pending"]
+
+        for new in new_events:
+            if new.direction not in _PAPER_DIRECTIONS:
+                counts["skipped"][PaperSkipReason.NO_DIRECTION.value] += 1
+                continue
+            if new.market is None:
+                counts["skipped"][_PAPER_NO_SPOT_MARKET] += 1
+                continue
+            try:
+                candidate = _paper_candidate(
+                    new.event_id, new.market, run_id=run_id, ts=ts, setup_type=new.setup_type,
+                    direction=new.direction, scores=new.scores, context=new.context,
+                    atr_5m=new.atr_5m, atr_pair=new.atr_pair,
+                )
+                result = paper_game.open_for_events(conn, [candidate], now)
+            except Exception as exc:  # deliberately broad: never abort the cycle for the paper game
+                counts["failures"] += 1
+                logger.warning("Paper game: opening a play for event %s failed: %s", new.event_id, exc)
+                continue
+            counts["opened"] += result["opened"]
+            for reason, skipped in result["skipped"].items():
+                counts["skipped"][reason] = counts["skipped"].get(reason, 0) + skipped
+
+        try:
+            counts["open_now"] = len(paper_store.read_open_plays(conn))
+        except Exception as exc:  # deliberately broad: never abort the cycle for the paper game
+            counts["failures"] += 1
+            counts["open_now"] = None
+            logger.warning("Paper game: counting open plays failed: %s", exc)
+
+
+
+# --- pilot shadow wiring (phase 2, pretend money only) ------------------------------------
+
+# NO_TRADE counted here, before the store: a new event whose asset had no primary
+# spot market this cycle has no pair, touch or pair rules to be evaluated on.
+_PILOT_NO_SPOT_MARKET = "no_spot_market"
+
+
+def _pilot_counts(enabled: bool) -> dict[str, Any]:
+    """The run record's ``pilot`` object with every count at zero and nothing observed."""
+    no_trade = {reason.value: 0 for reason in PilotNoTradeReason}
+    no_trade[_PILOT_NO_SPOT_MARKET] = 0
+    return {
+        "enabled": enabled,
+        "evaluated": 0,
+        "opened": 0,
+        "closed": 0,
+        "pending": 0,
+        "no_trade": no_trade,
+        "open_now": 0,
+        "equity": None,
+        "kill_switch": None,
+        "locks_active": [],
+        "failures": 0,
+    }
+
+
+def _pilot_candidate(
+    new: _PaperNewEvent,
+    market: SpotMarket,
+    *,
+    run_id: str,
+    ts: str,
+    asset_pairs: dict[str, dict[str, Any]],
+) -> pilot_shadow.PilotCandidate:
+    """The paper game's candidate as the pilot sees it: the same primary spot touch
+    written to spot_snapshots at ``ts`` and the same L2 ATR and pair, plus the pair's
+    raw AssetPairs entry (``None`` when absent: the store refuses with a typed reason)."""
+    return pilot_shadow.PilotCandidate(
+        event_id=new.event_id,
+        run_id=run_id,
+        asset=market.asset,
+        pair=market.pair_key,
+        quote=market.quote,
+        direction=new.direction,
+        bid=market.bid,
+        ask=market.ask,
+        snapshot_ts=ts,
+        status=market.status,
+        atr=new.atr_5m,
+        atr_pair=new.atr_pair,
+        pair_entry=find_meta(asset_pairs, market.pair_key),
+    )
+
+
+def _run_pilot_step(
+    counts: dict[str, Any],
+    store: SnapshotStore,
+    new_events: list[_PaperNewEvent],
+    *,
+    now: datetime,
+    run_id: str,
+    ts: str,
+    asset_pairs: dict[str, dict[str, Any]],
+    logger: Any,
+) -> None:
+    """Settle pilot positions and evaluate the locks, then offer each new event, into ``counts``.
+
+    The candidates are the paper game's (``_pilot_candidate``: the same primary spot
+    touch and L2 ATR), each with its pair's raw AssetPairs entry. Each part is caught on its own
+    (logged, counted in ``failures``): a failed settle still lets an event be
+    evaluated, and one bad event never blocks another. Every store call is its own
+    transaction on the store's connection, which is idle between the cycle's writes.
+    """
+    conn = store._conn
+    envelope = config.PILOT_ENVELOPE
+    with store._lock:
+        try:
+            settled = pilot_shadow.close_positions(conn, now, envelope=envelope)
+        except Exception as exc:  # deliberately broad: never abort the cycle for the pilot shadow
+            counts["failures"] += 1
+            logger.warning("Pilot shadow: settling positions failed: %s", exc)
+        else:
+            counts["closed"] += settled["closed"]
+            counts["pending"] += settled["pending"]
+
+        for new in new_events:
+            if new.market is None:
+                counts["evaluated"] += 1
+                counts["no_trade"][_PILOT_NO_SPOT_MARKET] += 1
+                continue
+            try:
+                candidate = _pilot_candidate(new, new.market, run_id=run_id, ts=ts, asset_pairs=asset_pairs)
+                result = pilot_shadow.open_for_candidates(conn, [candidate], now, envelope=envelope)
+            except Exception as exc:  # deliberately broad: never abort the cycle for the pilot shadow
+                counts["failures"] += 1
+                logger.warning("Pilot shadow: evaluating event %s failed: %s", new.event_id, exc)
+                continue
+            counts["evaluated"] += result["evaluated"]
+            counts["opened"] += result["opened"]
+            for reason, refused in result["no_trade"].items():
+                counts["no_trade"][reason] = counts["no_trade"].get(reason, 0) + refused
+
+        try:
+            state = pilot_store.account_state(conn, now=now)
+            counts["open_now"] = len(pilot_store.read_open_positions(conn))
+            counts["equity"] = None if state is None else pilot_store.decimal_text(state.equity)
+            counts["kill_switch"] = "engaged" if pilot_store.kill_switch(conn).engaged else "released"
+            counts["locks_active"] = sorted({lock.kind.value for lock in pilot_store.active_locks(conn)})
+        except Exception as exc:  # deliberately broad: never abort the cycle for the pilot shadow
+            counts["failures"] += 1
+            counts["open_now"] = None
+            logger.warning("Pilot shadow: reading the account failed: %s", exc)
+
+
 def run_heartbeat(
     mode: str = "HEARTBEAT",
     store: SnapshotStore | None = None,
@@ -379,6 +707,7 @@ def run_heartbeat(
     clock: Callable[[], datetime] | None = None,
     qwen_shadow: QwenShadow | None = None,
     clock_estimator: ClockReference | None = None,
+    timer: Callable[[], float] | None = None,
 ) -> dict[str, Any]:
     """One radar cycle. `session` and `clock` are injectable for tests (a
     GuardedSession over a fake transport, a deterministic aware clock); the
@@ -388,8 +717,11 @@ def run_heartbeat(
     With `config.RADAR_CLOCK_CORRECTION_ENABLED` every stamp reads
     the Kraken-referenced corrected clock of `clock_estimator`: by default
     the process's estimator, or - when only `clock` is injected - a fresh one
-    over that clock, so injected-clock tests stay deterministic and isolated."""
-    started = time.perf_counter()
+    over that clock, so injected-clock tests stay deterministic and isolated.
+
+    `timer` (default time.perf_counter) is read for every latency_ms stage;
+    it never affects what the cycle does (see TOP_LEVEL_STAGE_KEYS)."""
+    cycle = _CycleTimer(timer if timer is not None else time.perf_counter)
     logger = configure_logging()
 
     # Step 1: security validation. Aborts loudly if credentials or private
@@ -418,16 +750,19 @@ def run_heartbeat(
     store = store or SnapshotStore(config.SQLITE_PATH)
 
     api_failures = 0
-    latency_ms: dict[str, float] = {}
+    latency_ms = cycle.latency_ms
     owns_session = session is None
     if session is None:
         session = GuardedSession(config.HTTP_TIMEOUT, config.HTTP_MAX_RETRIES, config.HTTP_BACKOFF_BASE)
+    # Per-cycle HTTP counters: a delta from here, so a reused session's earlier
+    # requests are never counted in this cycle.
+    http_stats_before = _http_request_stats(session)
 
     try:
         # Step 2: AssetPairs, cached 24h.
-        t0 = time.perf_counter()
+        cycle.lap("setup_ms")
         asset_pairs, refreshed = get_asset_pairs(session, ticker_keys=None)
-        latency_ms["asset_pairs_ms"] = (time.perf_counter() - t0) * 1000
+        cycle.lap("asset_pairs_ms")
         logger.info("AssetPairs loaded (%d pairs, refreshed=%s)", len(asset_pairs), refreshed)
 
         # With the corrected clock, the futures tickers round trip (the
@@ -436,7 +771,7 @@ def run_heartbeat(
         futures_fetch: FuturesTickersFetch | None = None
         futures_error: ApiError | None = None
         if estimator is not None:
-            t0 = time.perf_counter()
+            cycle.lap("between_stages_ms")
             probe = estimator.start_probe()
             try:
                 raw_fetch = fetch_futures_tickers(session, probe.receipt)
@@ -448,7 +783,7 @@ def run_heartbeat(
                     raw_fetch,
                     timing=SourceTiming(received_at=receipt_time(read_clock), source_time=raw_fetch.timing.source_time),
                 )
-            latency_ms["futures_ticker_ms"] = (time.perf_counter() - t0) * 1000
+            cycle.lap("futures_ticker_ms")
             now = receipt_time(read_clock)
             ts = now.isoformat()
             run_id = make_run_id(now)
@@ -456,16 +791,17 @@ def run_heartbeat(
         # Step 3: Spot Ticker (global, single request). Fatal if it fails -
         # spot data is the backbone of this radar; there is no spot-only
         # degraded mode below it.
-        t0 = time.perf_counter()
+        cycle.lap("between_stages_ms")
         ticker_fetch = fetch_spot_ticker(session, read_clock)
         ticker_raw = ticker_fetch.raw
-        latency_ms["spot_ticker_ms"] = (time.perf_counter() - t0) * 1000
+        cycle.lap("spot_ticker_ms")
 
         # Force AssetPairs refresh if the Ticker mentions a symbol we don't
         # have metadata for yet (new listing).
         asset_pairs, force_refreshed = get_asset_pairs(session, ticker_keys=set(ticker_raw.keys()))
         if force_refreshed:
             logger.info("AssetPairs force-refreshed: new symbol(s) in Ticker not in cache")
+        cycle.lap("asset_pairs_refresh_ms")
 
         parsed_rows: dict[str, SpotTickerRow] = {}
         spot_instruments: dict[str, InstrumentId] = {}
@@ -492,7 +828,7 @@ def run_heartbeat(
         clock_sample = ClockSample(synchronized=None, offset_uncertainty=None, previous_wall_time=now)
         clock_reference: dict[str, Any] = {"source": "kraken-futures tickers serverTime", "status": "unavailable"}
         if estimator is None:
-            t0 = time.perf_counter()
+            cycle.lap("ticker_gate_ms")
             try:
                 sent_at = receipt_time(read_clock)
                 futures_fetch = fetch_futures_tickers(session, read_clock)
@@ -503,7 +839,7 @@ def run_heartbeat(
                 api_failures += 1
                 futures_status = "UNAVAILABLE"
                 logger.warning("Futures public data unavailable: %s", exc)
-            latency_ms["futures_ticker_ms"] = (time.perf_counter() - t0) * 1000
+            cycle.lap("futures_ticker_ms")
         elif futures_fetch is not None:
             futures_perpetuals = parse_perpetuals(list(futures_fetch.rows), ts)
             futures_timing = futures_fetch.timing
@@ -567,6 +903,7 @@ def run_heartbeat(
 
         if missing_meta:
             logger.warning("%d ticker symbols had no resolvable AssetPairs metadata", missing_meta)
+        cycle.lap("ticker_gate_ms")
 
         # Step 5: normalization + grouping.
         markets, excluded_markets = build_spot_markets(parsed_rows, asset_pairs)
@@ -578,6 +915,7 @@ def run_heartbeat(
 
         assets_eligible = [a for a in assets.values() if a.eligible]
         assets_tradeable = [a for a in assets.values() if a.tradeable]
+        cycle.lap("normalize_ms")
 
         # Step 6: snapshot persistence (batch).
         spot_inputs: list[SpotSnapshotInput] = []
@@ -612,10 +950,12 @@ def run_heartbeat(
         store.insert_spot_snapshots_batch(spot_inputs)
         store.insert_futures_snapshots_batch(futures_inputs)
         snapshot_count = len(spot_inputs) + len(futures_inputs)
+        cycle.lap("snapshot_write_ms")
 
         pruned_spot, pruned_futures = store.prune(config.SNAPSHOT_RETENTION_DAYS, now=now)
         if pruned_spot or pruned_futures:
             logger.info("Pruned %d spot / %d futures snapshots past retention", pruned_spot, pruned_futures)
+        cycle.lap("prune_ms")
 
         # Step 7: L1 anomaly detection.
         # Only assets whose selected spot ticker PASSes (under a PASS
@@ -648,6 +988,8 @@ def run_heartbeat(
 
         l1_by_asset: dict[str, tuple] = {}
         any_non_warmup = False
+        # BTC return observations for this cycle only (same result, fetched once).
+        btc_cache: BtcHistoryCache = {}
         for entry, m in l1_entries:
             fut = entry.futures
             features = compute_features(
@@ -669,9 +1011,10 @@ def run_heartbeat(
                 current_mark=fut.mark_price if fut else None,
                 current_index=fut.index_price if fut else None,
             )
-            result = compute_anomaly(store, entry.asset, m.pair_key, now, features, btc_pair)
+            result = compute_anomaly(store, entry.asset, m.pair_key, now, features, btc_pair, btc_cache=btc_cache)
             any_non_warmup = any_non_warmup or not result.warmup
             l1_by_asset[entry.asset] = (entry, features, result)
+        cycle.lap("l1_ms")
 
         # Step 8: shortlist - top N by anomaly_score (warmup/None sorted last).
         # This is the ONLY set of assets that goes on to L2 - never the whole
@@ -705,25 +1048,34 @@ def run_heartbeat(
                 )
             )
 
+        # Paper game: the spot pair each asset's L2 OHLC and ATR were computed on.
+        l2_pair_by_asset = {l2_input.asset: l2_input.pair for l2_input in l2_inputs}
+
         # Per-stage timings below:
         # observability only, each key present only when its stage ran.
         l2_integrity: dict[str, tuple[CapabilityResult, ...]] = {}
-        t0 = time.perf_counter()
+        l2_timings: dict[str, float] = {}
+        cycle.lap("shortlist_ms")
         l2_results, ohlc_requests_made, ohlc_failures_count = run_l2(
             store, session, l2_inputs, now, run_id,
             clock=read_clock, clock_sample=estimator.sample if estimator is not None else clock_sample,
-            integrity_out=l2_integrity,
+            integrity_out=l2_integrity, timings_out=l2_timings, timer=cycle.timer,
         )
-        latency_ms["l2_ms"] = (time.perf_counter() - t0) * 1000
+        cycle.lap("l2_ms")
+        # Nested inside l2_ms: never part of the unaccounted_ms sum.
+        latency_ms.update({f"l2.{key}": value for key, value in l2_timings.items()})
         api_failures += ohlc_failures_count
         integrity_flags: dict[str, list[str]] = {
             asset: ["integrity_blocked:l2"] for asset in l2_integrity if asset not in l2_results
         }
 
         # Step 9: forward-return labeling (calibration data only).
-        t0 = time.perf_counter()
-        forward_returns_labeled = label_forward_returns(store, now)
-        latency_ms["forward_labels_ms"] = (time.perf_counter() - t0) * 1000
+        cycle.lap("between_stages_ms")
+        # Rows marked unlabelable in this pass, one entry per
+        # ForwardReturnUnlabelable value.
+        forward_returns_marked: dict[str, int] = {}
+        forward_returns_labeled = label_forward_returns(store, now, marked_out=forward_returns_marked)
+        cycle.lap("forward_labels_ms")
 
         # Step 9b: label matured outcome horizons registered by
         # prior cycles, behind the same switch as subject registration
@@ -734,17 +1086,19 @@ def run_heartbeat(
         # transaction and never touches SnapshotStore's write lock (no other
         # thread ever writes this connection in the running loop); a failure
         # is caught, logged as a warning, and the cycle continues exactly like
-        # a subject-registration failure below.
+        # a subject-registration failure below. The quote window (symmetric or
+        # forward) comes from config.RADAR_OUTCOME_LABEL_WINDOW.
         outcome_labels_considered = outcome_labels_available = 0
         outcome_labels_unavailable = outcome_labels_not_mature = 0
         if config.RADAR_OUTCOME_TRACKING_ENABLED:
-            t0 = time.perf_counter()
+            cycle.lap("between_stages_ms")
             try:
                 label_run = outcome_store.label_due_outcomes(
                     store._conn,
                     now=now,
                     tolerance=timedelta(seconds=config.FORWARD_RETURN_LOOKUP_TOLERANCE_SECONDS),
                     limit=outcome_store.DEFAULT_LABEL_BATCH,
+                    window_kind=LabelWindow(config.RADAR_OUTCOME_LABEL_WINDOW),
                 )
                 outcome_labels_considered = label_run.horizons_considered
                 outcome_labels_available = label_run.labeled_available
@@ -759,7 +1113,7 @@ def run_heartbeat(
                     )
             except Exception as exc:  # deliberately broad: never abort the cycle for outcome tracking
                 logger.warning("Outcome tracking: label_due_outcomes failed: %s", exc)
-            latency_ms["outcome_labels_ms"] = (time.perf_counter() - t0) * 1000
+            cycle.lap("outcome_labels_ms")
 
         # Step 10 (Phase 3, `full` cycles only): L3 order book/trades on a
         # small finalist set, Qwen review, Demand Router, cooldown/budget,
@@ -768,6 +1122,9 @@ def run_heartbeat(
         qwen_reviews: dict[str, Any] = {}
         router_results: dict[str, Any] = {}
         event_by_asset: dict[str, tuple[str, str]] = {}
+        # Paper game: each event this cycle created, with its L2 ATR and the pair
+        # it was computed on; read only by the paper step below.
+        paper_new_events: list[_PaperNewEvent] = []
         l3_requests_made = l3_failures_count = 0
         qwen_status = "SKIPPED"
         l2_candidates_count = 0
@@ -787,6 +1144,7 @@ def run_heartbeat(
         cycle_review_batch: QwenReviewBatch | None = None
         qwen_batches_submitted = qwen_batches_dropped = 0
         qwen_rows_recorded = qwen_record_failures = 0
+        cycle.lap("between_stages_ms")
 
         if full:
             l3_inputs: list[L3CandidateInput] = []
@@ -824,12 +1182,12 @@ def run_heartbeat(
                 if not c.l2_result.l2_features.l2_warmup and (c.l2_result.opportunity.score or 0) > 0
             )
             finalists = select_finalists(l3_inputs)
-            t0 = time.perf_counter()
+            cycle.lap("finalists_ms")
             l3_results, l3_requests_made, l3_failures_count = run_l3(
                 session, finalists, clock=read_clock,
                 clock_sample=estimator.sample if estimator is not None else clock_sample,
             )
-            latency_ms["l3_ms"] = (time.perf_counter() - t0) * 1000
+            cycle.lap("l3_ms")
             api_failures += l3_failures_count
 
             # Evidence seal: re-evaluate every finalist's evidence just
@@ -849,11 +1207,13 @@ def run_heartbeat(
                         if c.spot_pair in ticker_observations and c.spot_pair in spot_instruments
                     ))
                     if stale_pairs:
+                        cycle.lap("seal_ms")
                         refetched = _refresh_seal_tickers(
                             session, read_clock, stale_pairs, asset_pairs, spot_instruments, logger
                         )
                         seal_tickers = {**ticker_observations, **refetched}
                         seal_ticker_refreshed = sum(1 for c in finalists if c.spot_pair in refetched)
+                        cycle.lap("seal_ticker_refresh_ms")
             seal_now = receipt_time(read_clock)
             seal_clock = estimator.sample() if estimator is not None else clock_sample
             seal_reports: dict[str, IntegrityReport] = {}
@@ -888,6 +1248,7 @@ def run_heartbeat(
                 if seal_fut is not None and not futures_ok[c.asset]:
                     integrity_flags.setdefault(c.asset, []).append("integrity_futures_dropped")
                 sealed.append(c)
+            cycle.lap("seal_ms")
 
             qwen_candidates = [c for c in sealed if l3_results[c.asset].qwen_eligible]
             if qwen_candidates and qwen_mode != "off":
@@ -930,6 +1291,7 @@ def run_heartbeat(
                         logger.warning("Qwen shadow: batch not submitted: %s", exc)
             else:
                 qwen_status = "SKIPPED"
+            cycle.lap("qwen_ms")
 
             for c in sealed:
                 l3r = l3_results[c.asset]
@@ -1031,6 +1393,24 @@ def run_heartbeat(
                     )
                     if created:
                         event_status = "PENDING"
+                        # Paper game: only events this cycle created, never a dedup hit.
+                        paper_new_events.append(
+                            _PaperNewEvent(
+                                event_id=event_id,
+                                market=entry.primary_market,
+                                setup_type=c.l2_result.setup.setup_type,
+                                direction=c.l2_result.setup.direction,
+                                scores={
+                                    "anomaly_score": l1_by_asset[c.asset][2].anomaly_score,
+                                    "opportunity_score": c.l2_result.opportunity.score,
+                                    "tradeability_score": l3r.tradeability.score,
+                                    "confidence": router_result.confidence,
+                                },
+                                context=event_context,
+                                atr_5m=c.l2_result.l2_features.atr_5m,
+                                atr_pair=l2_pair_by_asset.get(c.asset),
+                            )
+                        )
                     else:
                         # Dedup hit: an equivalent open event already exists. Report
                         # its real status; nothing is charged or started for it.
@@ -1043,6 +1423,7 @@ def run_heartbeat(
                 cycle_review_batch.router_decisions.update(
                     {asset: result.decision for asset, result in router_results.items()}
                 )
+            cycle.lap("router_ms")
 
         # Store the Qwen reviews on this thread, after routing, on every
         # cycle: this cycle's inline batch, then every shadow batch finished since
@@ -1058,6 +1439,7 @@ def run_heartbeat(
             except Exception as exc:  # deliberately broad: never abort the cycle for the review log
                 qwen_record_failures += 1
                 logger.warning("Qwen reviews: failed to record the batch of %s: %s", finished.run_id, exc)
+        cycle.lap("qwen_record_ms")
 
         # Step 11: one outcome subject per L2/L3 candidate this cycle
         # (scope: every non-warmup l2_results asset, including screener-only,
@@ -1069,7 +1451,7 @@ def run_heartbeat(
         # by construction, so every candidate is screener-only that cycle.
         outcome_subjects_registered = 0
         if config.RADAR_OUTCOME_TRACKING_ENABLED:
-            t0 = time.perf_counter()
+            cycle.lap("between_stages_ms")
             l2_inputs_by_asset = {c.asset: c for c in l2_inputs}
             for asset, l2_result in l2_results.items():
                 if l2_result.l2_features.l2_warmup:
@@ -1135,7 +1517,54 @@ def run_heartbeat(
                     logger.warning("Outcome tracking: failed to register subject for %s: %s", asset, exc)
             if outcome_subjects_registered:
                 logger.debug("Outcome tracking: registered %d subject(s) this cycle", outcome_subjects_registered)
-            latency_ms["outcome_register_ms"] = (time.perf_counter() - t0) * 1000
+            cycle.lap("outcome_register_ms")
+
+        # Paper game ("Jogo da IA", pretend money only - no order, no private API),
+        # behind config.RADAR_PAPER_ENABLED, on every cycle, full or not: close the
+        # plays whose stop, target or time exit shows in the recorded spot quotes
+        # (legacy plays: first valid quote after their due time), then open plays
+        # with EX-1 levels for the LONG/SHORT events this cycle created, at the
+        # primary spot touch written to spot_snapshots above. It only adds the run record's "paper" object and its
+        # own "paper_ms" stage; a failure is logged and counted, never raised.
+        paper = _paper_counts(config.RADAR_PAPER_ENABLED)
+        if config.RADAR_PAPER_ENABLED:
+            cycle.lap("between_stages_ms")
+            try:
+                _run_paper_step(paper, store, paper_new_events, now=now, run_id=run_id, ts=ts, logger=logger)
+            except Exception as exc:  # deliberately broad: never abort the cycle for the paper game
+                paper["failures"] += 1
+                logger.warning("Paper game: step failed: %s", exc)
+            if paper["opened"] or paper["closed"] or paper["pending"]:
+                logger.info(
+                    "Paper game: opened=%d closed=%d pending=%d open_now=%s",
+                    paper["opened"], paper["closed"], paper["pending"], paper["open_now"],
+                )
+            cycle.lap("paper_ms")
+
+        # Pilot shadow (phase 2, pretend money only - no order, no private API, no
+        # model), behind config.RADAR_PILOT_ENABLED, on every cycle, full or not,
+        # after the paper step and independent of it: close the positions whose
+        # stop, target or time shows in the recorded spot quotes, evaluate the loss
+        # locks, then evaluate the same new events as the paper game under the
+        # EX-1 envelope. It only adds the run record's "pilot" object and its own
+        # "pilot_ms" stage; a failure is logged and counted, never raised.
+        pilot = _pilot_counts(config.RADAR_PILOT_ENABLED)
+        if config.RADAR_PILOT_ENABLED:
+            cycle.lap("between_stages_ms")
+            try:
+                _run_pilot_step(
+                    pilot, store, paper_new_events, now=now, run_id=run_id, ts=ts,
+                    asset_pairs=asset_pairs, logger=logger,
+                )
+            except Exception as exc:  # deliberately broad: never abort the cycle for the pilot shadow
+                pilot["failures"] += 1
+                logger.warning("Pilot shadow: step failed: %s", exc)
+            if pilot["opened"] or pilot["closed"] or pilot["pending"]:
+                logger.info(
+                    "Pilot shadow: opened=%d closed=%d pending=%d open_now=%s equity=%s",
+                    pilot["opened"], pilot["closed"], pilot["pending"], pilot["open_now"], pilot["equity"],
+                )
+            cycle.lap("pilot_ms")
 
         shortlist = []
         for asset in shortlist_assets:
@@ -1162,6 +1591,7 @@ def run_heartbeat(
                 run_id=run_id, asset=candidate["asset"], ts=ts,
                 anomaly_score=candidate["anomaly_score"], warmup=candidate["warmup"], flags=candidate["flags"],
             )
+        cycle.lap("alerts_ms")
 
         if estimator is not None:
             # The offset/uncertainty stay those of the gate evaluation;
@@ -1198,6 +1628,12 @@ def run_heartbeat(
             "record_failures": qwen_record_failures,
             "batch_pending": shadow.pending(),
         }
+        # Per-cycle Kraken HTTP counters per endpoint (observability only).
+        # network_ms is summed per request, so concurrent L2/L3 requests can
+        # make it exceed their stage's wall time.
+        http_stats_after = _http_request_stats(session) if http_stats_before is not None else None
+        if http_stats_before is not None and http_stats_after is not None:
+            data_quality["http"] = request_stats_delta(http_stats_before, http_stats_after)
 
         universe_stats = {
             "pairs_seen": len(ticker_raw),
@@ -1211,6 +1647,7 @@ def run_heartbeat(
             "L2_ohlc_requests": ohlc_requests_made,
             "L2_ohlc_failures": ohlc_failures_count,
             "forward_returns_labeled": forward_returns_labeled,
+            "forward_returns_marked": dict(forward_returns_marked),
             "outcome_labels_considered": outcome_labels_considered,
             "outcome_labels_available": outcome_labels_available,
             "outcome_labels_unavailable": outcome_labels_unavailable,
@@ -1234,8 +1671,9 @@ def run_heartbeat(
             candidates=shortlist,
         )
 
-        elapsed_ms = (time.perf_counter() - started) * 1000
+        elapsed_ms = (cycle.lap("output_ms") - cycle.started) * 1000
         latency_ms["total_ms"] = elapsed_ms
+        latency_ms["unaccounted_ms"] = _unaccounted_ms(latency_ms)
 
         run_record = {
             "run_id": run_id, "ts": ts, "mode": mode,
@@ -1247,6 +1685,7 @@ def run_heartbeat(
             "L2_ohlc_requests": ohlc_requests_made,
             "L2_ohlc_failures": ohlc_failures_count,
             "forward_returns_labeled": forward_returns_labeled,
+            "forward_returns_marked": dict(forward_returns_marked),
             "outcome_labels_considered": outcome_labels_considered,
             "outcome_labels_available": outcome_labels_available,
             "outcome_labels_unavailable": outcome_labels_unavailable,
@@ -1256,7 +1695,10 @@ def run_heartbeat(
             "api_failures": api_failures,
             "data_quality": data_quality,
             "funnel": funnel,
+            "paper": paper,
+            "pilot": pilot,
         }
+        record_started = cycle.timer()
         append_run_record(run_record)
         store.insert_run(
             {
@@ -1272,6 +1714,9 @@ def run_heartbeat(
                 "api_failures": api_failures,
                 "data_quality_json": json.dumps(data_quality),
             }
+        )
+        logger.debug(
+            "run %s record written in %.1f ms (after total_ms)", run_id, (cycle.timer() - record_started) * 1000
         )
 
         logger.info(

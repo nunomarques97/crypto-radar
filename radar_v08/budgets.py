@@ -1,4 +1,4 @@
-"""Hourly/daily model budgets (task section 12), charged once per genuine call.
+"""Hourly/daily model budgets, charged once per genuine call.
 
 The only way a budget unit is spent is the atomic claim + reservation
 (`SnapshotStore.claim_invocation`, one `BEGIN IMMEDIATE` transaction in
@@ -6,7 +6,7 @@ The only way a budget unit is spent is the atomic claim + reservation
 an event for a model call. The heartbeat never charges a budget: it only records
 the router's demand as an event (created or deduplicated). A claim refused for
 budget writes no reservation; the bridge then marks the event DEFERRED, so the
-event is never lost (task section 12/13).
+event is never lost.
 
 This module maps `config.MODEL_BUDGETS` (UNCALIBRATED initial values) onto the
 domain `ModelBudget` and reads the reserved counters back for display. The old

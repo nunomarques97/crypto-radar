@@ -1,8 +1,8 @@
-"""T051a: deterministic OC-1 section 6 corpus builder (radar_v08/adapters/oc1_corpus_builder.py).
+"""Deterministic OC-1 section 6 corpus builder (radar_v08/adapters/oc1_corpus_builder.py).
 
 Every source here is SYNTHETIC: Kraken-shaped OHLCVT zips and a manifest written into a
 temporary directory by ``make_sextant``. The real Sextant is never read, and nothing is ever
-written into the repository: corpora go to temporary directories only (D31).
+written into the repository: corpora go to temporary directories only.
 
 The synthetic 5-minute bars are shaped per 3-hour slot (see ``slot_rows``) so that every
 category has more candidates than it needs; the tests check the builder's output against
@@ -668,8 +668,8 @@ class TestOutputDirectory(unittest.TestCase):
         self.assertRefused(data, data)
         self.assertRefused(data / "kraken-archive" / "corpus", data)
         self.assertRefused(data.parent, data, BuildErrorCode.OUTPUT_REFUSED)
-        self.assertRefused(Path("C:/Users/User/Desktop/sextant/data/corpus"), data)
-        self.assertRefused(Path("c:/users/user/desktop/SEXTANT/elsewhere"), data)
+        self.assertRefused(ob.SEXTANT_ROOT / "data" / "corpus", data)
+        self.assertRefused(Path(ob.SEXTANT_ROOT.as_posix().swapcase()) / "elsewhere", data)
         self.assertRefused(Built.out, data, BuildErrorCode.OUTPUT_EXISTS)
         allowed = ob.check_output_dir(REPOSITORY_ROOT / "docs" / "benchmark_corpus_oc1_not_created", data)
         self.assertFalse(allowed.exists())

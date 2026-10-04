@@ -1,6 +1,6 @@
 """RADAR_QWEN_MODE (inline | shadow | off) and the qwen_reviews log.
 
-Integration tests over the T023b wiring fixtures (fake Kraken transport, deterministic
+Integration tests over the integrity wiring fixtures (fake Kraken transport, deterministic
 clock, disposable SQLite store and JSONL paths). The model is always a fake review
 function or ``qwen.review_finalists`` over a fake transport: no network, no Ollama.
 Shadow batches run on a real thread, but every wait is on a ``threading.Event`` or a
@@ -311,6 +311,14 @@ class TestShadowDoesNotBlock(QwenModeBase):
 
 
 class TestShadowRoutingEqualsOff(QwenModeBase):
+    def setUp(self):
+        super().setUp()
+        # This compares two cycles timestamp for timestamp. The corrected clock
+        # ages its offset estimate by real elapsed time, so under machine load
+        # the two cycles can land 1 ms apart. The corrected clock is covered
+        # by tests/test_clock_correction.py.
+        self.patch(config, "RADAR_CLOCK_CORRECTION_ENABLED", False)
+
     def run_mode(self, mode, store_name):
         self.use_store(store_name)
         self.use_mode(mode)

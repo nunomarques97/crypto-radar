@@ -1,6 +1,6 @@
 """T051 benchmark adapter: loopback Ollama HTTP with a route allowlist, and resource probes.
 
-T051c (D61; TECHNOLOGY.md S6). Used only by ``scripts/run_t051_block.py``; the radar runtime
+T051c. Used only by ``scripts/run_t051_block.py``; the radar runtime
 never imports it.
 
 Network (fail closed, typed errors):
@@ -26,7 +26,7 @@ model whose ``/api/show`` capabilities include ``thinking`` and is left out othe
 unloads it explicitly). The reply is parsed by ``local_inference.parse_chat_reply`` (unchanged).
 Everything actually sent (except the prompt text, kept as sha256) is recorded per call.
 
-Resources (TECHNOLOGY.md S6): ``nvidia-smi --query-gpu=memory.used,memory.total
+Resources: ``nvidia-smi --query-gpu=memory.used,memory.total
 --format=csv,noheader,nounits``; ``GET /api/ps`` ``size`` / ``size_vram``; ``tasklist /FI
 "IMAGENAME eq ollama.exe" /FO CSV`` (sum of the working sets); each subprocess with a fixed
 argument list, no shell, a 5 s timeout. Both tools run by ABSOLUTE path, resolved once per probe

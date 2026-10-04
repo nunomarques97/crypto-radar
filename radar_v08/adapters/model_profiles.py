@@ -1,6 +1,6 @@
-"""Versioned local model profiles loader (T050a, OC-1 section 3, D33).
+"""Versioned local model profiles loader (OC-1 section 3).
 
-Reads ``radar_v08/model_profiles.toml`` with the stdlib ``tomllib`` (TECHNOLOGY.md S2)
+Reads ``radar_v08/model_profiles.toml`` with the stdlib ``tomllib``
 from a file opened in binary mode, validates every profile and returns
 ``workflow.worker.InferenceProfile`` values. It fails closed: any problem raises a
 typed ``ModelProfileError`` for the whole file, never a silent fallback to a default.
@@ -28,7 +28,7 @@ Rules:
   explicit tag, no registry host, and no cloud tag (``cloud`` or ``*-cloud``), because
   an Ollama cloud model is forwarded to a remote service by the local daemon.
 
-``apply_overrides`` (T050c) applies raw override text (read by the caller) to an enabled
+``apply_overrides`` applies raw override text (read by the caller) to an enabled
 profile through the same rules (model name, role timeout limit, temperature 0, loopback
 endpoint) and fails closed the same way; ``radar_v08/config.py`` uses it for
 ``RADAR_QWEN_*`` and ``RADAR_OLLAMA_URL``.

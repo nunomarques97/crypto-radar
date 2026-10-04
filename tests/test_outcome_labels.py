@@ -1,4 +1,4 @@
-"""T041: prospective outcome labels at 15m/1h/4h/24h, their store/labeler and ledger version 5.
+"""Prospective outcome labels at 15m/1h/4h/24h, their store/labeler and ledger version 5.
 
 Every database is a fixture in a fresh temporary directory. Nothing opens, reads or copies
 ``radar_state.sqlite`` (or the Q2 copy), and ``config.EVENTS_LOG_PATH`` is patched to a
@@ -102,7 +102,7 @@ MODEL = "qwen3:14b"
 
 
 def spot_cost(side=Side.LONG, **overrides):
-    """The T040 hand-checked round trip on spot (no funding line).
+    """The hand-checked round trip on spot (no funding line).
 
     N = 1000 USD, spread 20 bps (h = 0.001), buy slippage 10 bps from the ask, sell slippage
     5 bps from the bid, entry fee 26 bps, exit fee 16 bps.

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <title>Crypto Radar — Signal Room mock</title>
@@ -97,8 +97,8 @@
     <div class="brand"><span class="dot"></span> CRYPTO RADAR <span style="color:var(--muted-dim); font-weight:400;">— Control Room</span></div>
     <div class="topbar-status">
       <span>Uptime <b class="mono">02:14:07</b></span>
-      <span>Último heartbeat <b class="mono">há 4s</b></span>
-      <span>Próximo ciclo FULL <b class="mono">~1m 12s</b></span>
+      <span>Last heartbeat <b class="mono">4s ago</b></span>
+      <span>Next FULL cycle <b class="mono">~1m 12s</b></span>
       <span class="pill ok"><span class="dot"></span>RUNNING</span>
     </div>
     <div class="btns">
@@ -109,12 +109,12 @@
 
   <div class="sidebar">
     <div class="nav-item active">Dashboard</div>
-    <div class="nav-item">Agentes</div>
-    <div class="nav-item">Alertas <span class="badge">3</span></div>
-    <div class="nav-item">Histórico</div>
+    <div class="nav-item">Agents</div>
+    <div class="nav-item">Alerts <span class="badge">3</span></div>
+    <div class="nav-item">History</div>
     <div class="sep"></div>
-    <div class="nav-item">Mocks / Testes</div>
-    <div class="nav-item">Sistema / Logs</div>
+    <div class="nav-item">Mocks / Tests</div>
+    <div class="nav-item">System / Logs</div>
   </div>
 
   <div class="main">
@@ -130,14 +130,14 @@
     </div>
 
     <div class="panel span2">
-      <h3>Agentes</h3>
+      <h3>Agents</h3>
       <div class="rail">
         <div class="agent-node active">
           <div class="node-dot"><span class="core"></span></div><div class="line"></div>
           <div class="node-body">
             <div class="node-top"><span class="node-name">Qwen 14B</span><span class="pill info"><span class="dot"></span>PROCESSING</span></div>
             <div class="node-role">Screener · qwen3:14b</div>
-            <div class="node-meta">evento atual <span class="mono">LSK</span> · última atividade <span class="mono">09:21:03</span> · processados <span class="mono">142</span></div>
+            <div class="node-meta">current event <span class="mono">LSK</span> · last activity <span class="mono">09:21:03</span> · processed <span class="mono">142</span></div>
           </div>
         </div>
         <div class="agent-node">
@@ -145,7 +145,7 @@
           <div class="node-body">
             <div class="node-top"><span class="node-name">Qwen Red Team</span><span class="pill idle"><span class="dot"></span>NOT CONFIGURED</span></div>
             <div class="node-role">Adversarial review</div>
-            <div class="node-meta">não implementado nesta fase</div>
+            <div class="node-meta">not implemented in this phase</div>
           </div>
         </div>
         <div class="agent-node">
@@ -153,7 +153,7 @@
           <div class="node-body">
             <div class="node-top"><span class="node-name">Sonnet</span><span class="pill idle"><span class="dot"></span>IDLE</span></div>
             <div class="node-role">Orchestrator · claude-sonnet-5</div>
-            <div class="node-meta">demand (ciclo) <span class="mono">4</span> · calls reais <span class="mono">0</span> · última atividade —</div>
+            <div class="node-meta">demand (cycle) <span class="mono">4</span> · real calls <span class="mono">0</span> · last activity —</div>
           </div>
         </div>
         <div class="agent-node">
@@ -161,7 +161,7 @@
           <div class="node-body">
             <div class="node-top"><span class="node-name">Fable 5.1</span><span class="pill idle"><span class="dot"></span>WAITING</span></div>
             <div class="node-role">Trading analyst · claude-fable-5-1</div>
-            <div class="node-meta">demand (ciclo) <span class="mono">1</span> · calls reais <span class="mono">0</span> · bridge bloqueada (AUTH ERROR)</div>
+            <div class="node-meta">demand (cycle) <span class="mono">1</span> · real calls <span class="mono">0</span> · bridge blocked (AUTH ERROR)</div>
           </div>
         </div>
       </div>
@@ -180,14 +180,14 @@
       <div class="funnel-row split"><span>Fable calls</span><span class="n mono">0</span></div>
       <div class="funnel-row"><span>Deferred</span><span class="n mono">1</span></div>
       <div class="funnel-row"><span>Failed</span><span class="n mono">0</span></div>
-      <div class="funnel-note">Demand = decisão do router neste ciclo. Calls = chamadas reais à API (model_analyses). Bridge em AUTH ERROR → calls ficam a 0 mesmo com demand &gt; 0.</div>
+      <div class="funnel-note">Demand = the router's decision in this cycle. Calls = real API calls (model_analyses). With the bridge in AUTH ERROR, calls stay at 0 even when demand &gt; 0.</div>
     </div>
 
     <div class="panel span3">
-      <h3>Alertas reais — mais recentes</h3>
+      <h3>Real alerts — most recent</h3>
       <table>
         <thead><tr>
-          <th>Hora</th><th>Asset</th><th>Setup</th><th>Dir</th><th>Opp.</th><th>Tradeability</th><th>Demand</th><th>Lifecycle</th><th>NTFY</th><th></th>
+          <th>Time</th><th>Asset</th><th>Setup</th><th>Dir</th><th>Opp.</th><th>Tradeability</th><th>Demand</th><th>Lifecycle</th><th>NTFY</th><th></th>
         </tr></thead>
         <tbody>
           <tr>
@@ -197,7 +197,7 @@
               <span class="step done"></span><span class="step done"></span><span class="step done"></span><span class="step done"></span><span class="step done"></span><span class="step cur"></span>
             </div></td>
             <td><span class="pill ok"><span class="dot"></span>SENT</span></td>
-            <td><button class="copy-btn">COPIAR PROMPT</button></td>
+            <td><button class="copy-btn">COPY PROMPT</button></td>
           </tr>
           <tr>
             <td class="mono">09:14:41</td><td class="asset">ARB</td><td>BREAKOUT</td><td class="dir-long">LONG</td>
@@ -206,7 +206,7 @@
               <span class="step done"></span><span class="step done"></span><span class="step done"></span><span class="step done"></span><span class="step cur"></span><span class="step"></span>
             </div></td>
             <td><span class="pill warn"><span class="dot"></span>PENDING</span></td>
-            <td><button class="copy-btn">COPIAR PROMPT</button></td>
+            <td><button class="copy-btn">COPY PROMPT</button></td>
           </tr>
           <tr>
             <td class="mono">08:58:12</td><td class="asset">PUMP</td><td>REVERSAL</td><td class="dir-short">SHORT</td>
@@ -215,7 +215,7 @@
               <span class="step done"></span><span class="step done"></span><span class="step done"></span><span class="step done"></span><span class="step done"></span><span class="step"></span>
             </div></td>
             <td><span class="pill err"><span class="dot"></span>FAILED</span></td>
-            <td><button class="copy-btn">COPIAR PROMPT</button></td>
+            <td><button class="copy-btn">COPY PROMPT</button></td>
           </tr>
         </tbody>
       </table>

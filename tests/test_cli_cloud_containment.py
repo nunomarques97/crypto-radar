@@ -10,6 +10,11 @@ from radar_v08.store import SnapshotStore
 
 class CliCloudContainmentTestCase(unittest.TestCase):
     def setUp(self):
+        # Loop mode starts the trend paper catch-up (Binance public data); stubbed so no test
+        # opens a network connection (the hook itself is covered by tests/test_trend_hook.py).
+        hook = mock.patch.object(cli, "_start_trend_paper_catch_up")
+        self.trend_paper_hook = hook.start()
+        self.addCleanup(hook.stop)
         self.temporary_directory = tempfile.TemporaryDirectory()
         self.original_sqlite_path = config.SQLITE_PATH
         self.original_events_log_path = config.EVENTS_LOG_PATH
@@ -73,6 +78,7 @@ class CliCloudContainmentTestCase(unittest.TestCase):
         ), mock.patch.object(cli.time, "sleep", side_effect=KeyboardInterrupt):
             self.assertEqual(cli.run_mode("loop"), 0)
 
+        self.trend_paper_hook.assert_called_once_with()
         self.assertFalse(create.called)
         self.assertFalse(notify.called)
         self.assertFalse(retry.called)

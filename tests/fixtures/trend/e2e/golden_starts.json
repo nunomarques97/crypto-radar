@@ -1,0 +1,767 @@
+[
+ {
+  "alert_lines": 4,
+  "binance": {
+   "booked": [
+    "2026-10-04"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "kraken": {
+   "booked": [
+    "2026-10-04"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "moment": "2026-10-04T07:30:00+00:00",
+  "note": "first paper day",
+  "requests": {
+   "binance": 8,
+   "binance_signals": 5,
+   "kraken": 2
+  },
+  "start": 1,
+  "toasts": 4
+ },
+ {
+  "alert_lines": 1,
+  "binance": {
+   "booked": [
+    "2026-10-05"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "kraken": {
+   "booked": [
+    "2026-10-05"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "moment": "2026-10-05T08:00:00+00:00",
+  "note": "",
+  "requests": {
+   "binance": 8,
+   "binance_signals": 5,
+   "kraken": 2
+  },
+  "start": 2,
+  "toasts": 1
+ },
+ {
+  "alert_lines": 0,
+  "binance": {
+   "booked": [
+    "2026-10-06",
+    "2026-10-07"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "kraken": {
+   "booked": [
+    "2026-10-06",
+    "2026-10-07"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "moment": "2026-10-07T08:00:00+00:00",
+  "note": "",
+  "requests": {
+   "binance": 8,
+   "binance_signals": 5,
+   "kraken": 2
+  },
+  "start": 3,
+  "toasts": 0
+ },
+ {
+  "alert_lines": 0,
+  "binance": {
+   "booked": [
+    "2026-10-08",
+    "2026-10-09",
+    "2026-10-10"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "kraken": {
+   "booked": [
+    "2026-10-08",
+    "2026-10-09",
+    "2026-10-10"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "moment": "2026-10-10T09:15:00+00:00",
+  "note": "after BTCEUR 2026-10-09 went missing for good",
+  "requests": {
+   "binance": 9,
+   "binance_signals": 5,
+   "kraken": 2
+  },
+  "start": 4,
+  "toasts": 0
+ },
+ {
+  "alert_lines": 2,
+  "binance": {
+   "booked": [
+    "2026-10-11",
+    "2026-10-12"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "kraken": {
+   "booked": [
+    "2026-10-11",
+    "2026-10-12"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "moment": "2026-10-12T08:00:00+00:00",
+  "note": "",
+  "requests": {
+   "binance": 8,
+   "binance_signals": 5,
+   "kraken": 2
+  },
+  "start": 5,
+  "toasts": 2
+ },
+ {
+  "alert_lines": 2,
+  "binance": {
+   "booked": [
+    "2026-10-13"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "kraken": {
+   "booked": [
+    "2026-10-13"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "moment": "2026-10-13T08:00:00+00:00",
+  "note": "",
+  "requests": {
+   "binance": 8,
+   "binance_signals": 5,
+   "kraken": 2
+  },
+  "start": 6,
+  "toasts": 2
+ },
+ {
+  "alert_lines": 2,
+  "binance": {
+   "booked": [
+    "2026-10-14"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "kraken": {
+   "booked": [
+    "2026-10-14"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "moment": "2026-10-14T08:00:00+00:00",
+  "note": "",
+  "requests": {
+   "binance": 8,
+   "binance_signals": 5,
+   "kraken": 2
+  },
+  "start": 7,
+  "toasts": 2
+ },
+ {
+  "alert_lines": 2,
+  "binance": {
+   "booked": [
+    "2026-10-15"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "kraken": {
+   "booked": [
+    "2026-10-15"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "moment": "2026-10-15T08:00:00+00:00",
+  "note": "",
+  "requests": {
+   "binance": 8,
+   "binance_signals": 5,
+   "kraken": 2
+  },
+  "start": 8,
+  "toasts": 2
+ },
+ {
+  "alert_lines": 2,
+  "binance": {
+   "booked": [
+    "2026-10-16"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "kraken": {
+   "booked": [
+    "2026-10-16"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "moment": "2026-10-16T08:00:00+00:00",
+  "note": "",
+  "requests": {
+   "binance": 8,
+   "binance_signals": 5,
+   "kraken": 2
+  },
+  "start": 9,
+  "toasts": 2
+ },
+ {
+  "alert_lines": 0,
+  "binance": {
+   "booked": [],
+   "skipped": [],
+   "status": "FAILED"
+  },
+  "kraken": {
+   "booked": [],
+   "skipped": [],
+   "status": "FAILED"
+  },
+  "moment": "2026-10-17T08:00:00+00:00",
+  "note": "Binance unreachable",
+  "requests": {
+   "binance": 3,
+   "binance_signals": 3,
+   "kraken": 0
+  },
+  "start": 10,
+  "toasts": 0
+ },
+ {
+  "alert_lines": 4,
+  "binance": {
+   "booked": [
+    "2026-10-17",
+    "2026-10-18"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "kraken": {
+   "booked": [
+    "2026-10-17",
+    "2026-10-18"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "moment": "2026-10-18T08:00:00+00:00",
+  "note": "books the day the failed start missed",
+  "requests": {
+   "binance": 8,
+   "binance_signals": 5,
+   "kraken": 2
+  },
+  "start": 11,
+  "toasts": 4
+ },
+ {
+  "alert_lines": 0,
+  "binance": {
+   "booked": [],
+   "skipped": [],
+   "status": "UP_TO_DATE"
+  },
+  "kraken": {
+   "booked": [],
+   "skipped": [],
+   "status": "UP_TO_DATE"
+  },
+  "moment": "2026-10-18T19:45:00+00:00",
+  "note": "duplicate start on the same UTC day",
+  "requests": {
+   "binance": 0,
+   "binance_signals": 0,
+   "kraken": 0
+  },
+  "start": 12,
+  "toasts": 0
+ },
+ {
+  "alert_lines": 2,
+  "binance": {
+   "booked": [
+    "2026-10-19"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "kraken": {
+   "booked": [
+    "2026-10-19"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "moment": "2026-10-19T08:00:00+00:00",
+  "note": "",
+  "requests": {
+   "binance": 8,
+   "binance_signals": 5,
+   "kraken": 2
+  },
+  "start": 13,
+  "toasts": 2
+ },
+ {
+  "alert_lines": 0,
+  "binance": {
+   "booked": [
+    "2026-10-20"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "kraken": {
+   "booked": [
+    "2026-10-20"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "moment": "2026-10-20T08:00:00+00:00",
+  "note": "",
+  "requests": {
+   "binance": 8,
+   "binance_signals": 5,
+   "kraken": 2
+  },
+  "start": 14,
+  "toasts": 0
+ },
+ {
+  "alert_lines": 0,
+  "binance": {
+   "booked": [
+    "2026-10-21",
+    "2026-10-22",
+    "2026-10-23"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "kraken": {
+   "booked": [
+    "2026-10-21",
+    "2026-10-22",
+    "2026-10-23"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "moment": "2026-10-23T08:00:00+00:00",
+  "note": "",
+  "requests": {
+   "binance": 8,
+   "binance_signals": 5,
+   "kraken": 2
+  },
+  "start": 15,
+  "toasts": 0
+ },
+ {
+  "alert_lines": 0,
+  "binance": {
+   "booked": [
+    "2026-10-24",
+    "2026-10-25",
+    "2026-10-26"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "kraken": {
+   "booked": [
+    "2026-10-24",
+    "2026-10-26"
+   ],
+   "skipped": [
+    "2026-10-25"
+   ],
+   "status": "BOOKED"
+  },
+  "moment": "2026-10-26T08:00:00+00:00",
+  "note": "after Kraken XBTEUR 2026-10-25 went missing for good",
+  "requests": {
+   "binance": 8,
+   "binance_signals": 5,
+   "kraken": 3
+  },
+  "start": 16,
+  "toasts": 0
+ },
+ {
+  "alert_lines": 0,
+  "binance": {
+   "booked": [
+    "2026-10-27",
+    "2026-10-28",
+    "2026-10-29",
+    "2026-10-30"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "kraken": {
+   "booked": [
+    "2026-10-27",
+    "2026-10-28",
+    "2026-10-29",
+    "2026-10-30"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "moment": "2026-10-30T08:00:00+00:00",
+  "note": "",
+  "requests": {
+   "binance": 8,
+   "binance_signals": 5,
+   "kraken": 2
+  },
+  "start": 17,
+  "toasts": 0
+ },
+ {
+  "alert_lines": 0,
+  "binance": {
+   "booked": [
+    "2026-10-31",
+    "2026-11-01",
+    "2026-11-02",
+    "2026-11-03"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "kraken": {
+   "booked": [
+    "2026-10-31",
+    "2026-11-01",
+    "2026-11-02",
+    "2026-11-03"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "moment": "2026-11-03T08:00:00+00:00",
+  "note": "",
+  "requests": {
+   "binance": 8,
+   "binance_signals": 5,
+   "kraken": 2
+  },
+  "start": 18,
+  "toasts": 0
+ },
+ {
+  "alert_lines": 2,
+  "binance": {
+   "booked": [
+    "2026-11-04",
+    "2026-11-05",
+    "2026-11-06"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "kraken": {
+   "booked": [
+    "2026-11-04",
+    "2026-11-05",
+    "2026-11-06"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "moment": "2026-11-06T08:00:00+00:00",
+  "note": "",
+  "requests": {
+   "binance": 8,
+   "binance_signals": 5,
+   "kraken": 2
+  },
+  "start": 19,
+  "toasts": 2
+ },
+ {
+  "alert_lines": 0,
+  "binance": {
+   "booked": [
+    "2026-11-07",
+    "2026-11-08"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "kraken": {
+   "booked": [
+    "2026-11-07",
+    "2026-11-08"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "moment": "2026-11-08T22:10:00+00:00",
+  "note": "last start before the PC is off for 5 days",
+  "requests": {
+   "binance": 8,
+   "binance_signals": 5,
+   "kraken": 2
+  },
+  "start": 20,
+  "toasts": 0
+ },
+ {
+  "alert_lines": 12,
+  "binance": {
+   "booked": [
+    "2026-11-09",
+    "2026-11-10",
+    "2026-11-11",
+    "2026-11-12",
+    "2026-11-13",
+    "2026-11-14"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "kraken": {
+   "booked": [
+    "2026-11-09",
+    "2026-11-10",
+    "2026-11-11",
+    "2026-11-12",
+    "2026-11-13",
+    "2026-11-14"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "moment": "2026-11-14T06:05:00+00:00",
+  "note": "PC back on: backfills the missed days",
+  "requests": {
+   "binance": 8,
+   "binance_signals": 5,
+   "kraken": 2
+  },
+  "start": 21,
+  "toasts": 4
+ },
+ {
+  "alert_lines": 1,
+  "binance": {
+   "booked": [
+    "2026-11-15",
+    "2026-11-16",
+    "2026-11-17"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "kraken": {
+   "booked": [
+    "2026-11-15",
+    "2026-11-16",
+    "2026-11-17"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "moment": "2026-11-17T08:00:00+00:00",
+  "note": "",
+  "requests": {
+   "binance": 8,
+   "binance_signals": 5,
+   "kraken": 2
+  },
+  "start": 22,
+  "toasts": 1
+ },
+ {
+  "alert_lines": 2,
+  "binance": {
+   "booked": [
+    "2026-11-18",
+    "2026-11-19",
+    "2026-11-20"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "kraken": {
+   "booked": [
+    "2026-11-18",
+    "2026-11-19",
+    "2026-11-20"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "moment": "2026-11-20T08:00:00+00:00",
+  "note": "",
+  "requests": {
+   "binance": 8,
+   "binance_signals": 5,
+   "kraken": 2
+  },
+  "start": 23,
+  "toasts": 2
+ },
+ {
+  "alert_lines": 1,
+  "binance": {
+   "booked": [
+    "2026-11-21",
+    "2026-11-22"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "kraken": {
+   "booked": [
+    "2026-11-21",
+    "2026-11-22"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "moment": "2026-11-22T08:00:00+00:00",
+  "note": "",
+  "requests": {
+   "binance": 8,
+   "binance_signals": 5,
+   "kraken": 2
+  },
+  "start": 24,
+  "toasts": 1
+ },
+ {
+  "alert_lines": 0,
+  "binance": {
+   "booked": [
+    "2026-11-23",
+    "2026-11-24",
+    "2026-11-25"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "kraken": {
+   "booked": [
+    "2026-11-23",
+    "2026-11-24",
+    "2026-11-25"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "moment": "2026-11-25T08:00:00+00:00",
+  "note": "",
+  "requests": {
+   "binance": 8,
+   "binance_signals": 5,
+   "kraken": 2
+  },
+  "start": 25,
+  "toasts": 0
+ },
+ {
+  "alert_lines": 1,
+  "binance": {
+   "booked": [
+    "2026-11-26",
+    "2026-11-27",
+    "2026-11-28",
+    "2026-11-29",
+    "2026-11-30"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "kraken": {
+   "booked": [
+    "2026-11-26",
+    "2026-11-27",
+    "2026-11-28",
+    "2026-11-29",
+    "2026-11-30"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "moment": "2026-11-30T08:00:00+00:00",
+  "note": "",
+  "requests": {
+   "binance": 8,
+   "binance_signals": 5,
+   "kraken": 2
+  },
+  "start": 26,
+  "toasts": 1
+ },
+ {
+  "alert_lines": 0,
+  "binance": {
+   "booked": [
+    "2026-12-01",
+    "2026-12-02"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "kraken": {
+   "booked": [
+    "2026-12-01",
+    "2026-12-02"
+   ],
+   "skipped": [],
+   "status": "BOOKED"
+  },
+  "moment": "2026-12-02T08:00:00+00:00",
+  "note": "final start",
+  "requests": {
+   "binance": 8,
+   "binance_signals": 5,
+   "kraken": 2
+  },
+  "start": 27,
+  "toasts": 0
+ }
+]

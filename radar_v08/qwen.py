@@ -1,4 +1,4 @@
-"""Qwen 3:14b review, via a local Ollama server only (task section 6).
+"""Qwen 3:14b review, via a local Ollama server only.
 
 Qwen does NOT calculate anomaly_score, opportunity_score or tradeability_score
 - those are already deterministic. Its job, over <= config.L3_MAX_FINALISTS
@@ -7,7 +7,7 @@ or correct setup_type/direction within closed enums, recommend call_sonnet /
 call_fable, flag data quality. `think=false`, temperature 0, structured
 output via Ollama's `format` JSON schema (not the bare string "json"), one
 retry on invalid JSON or timeout while time remains, then UNAVAILABLE/TIMEOUT - the radar must keep
-running on the deterministic gate alone if Qwen is down (task section 6/16).
+running on the deterministic gate alone if Qwen is down.
 
 Model, endpoint, timeout, context/output limits, temperature and think come from config.QWEN_RUNTIME,
 the default profile of radar_v08/model_profiles.toml plus validated overrides.

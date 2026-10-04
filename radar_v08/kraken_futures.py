@@ -67,7 +67,7 @@ def fetch_tickers_with_server_time(session: GuardedSession) -> tuple[list[dict[s
 def fetch_orderbook(session: GuardedSession, symbol: str) -> tuple[list[tuple[float, float]], list[tuple[float, float]]]:
     """Public Futures order book for one perpetual - FINALIST ONLY, and only
     when a matching perpetual exists (architecture doc section 3: "Futures:
-    ... obter order book público do contrato"). Returns (bids, asks) as
+    ... fetch the contract's public order book"). Returns (bids, asks) as
     (price, volume) tuples, best price first.
     """
     bids, asks, _server_time_raw = fetch_orderbook_with_server_time(session, symbol)

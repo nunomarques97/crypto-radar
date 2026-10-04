@@ -2,14 +2,14 @@
  * can be unit tested identically under Node (tests/ui_tests/js/test_agent_room.mjs)
  * and in the browser, the same pattern test_mode.js already uses.
  *
- * Two concepts stay independent on purpose (see the task spec's section 12):
+ * Two concepts stay independent on purpose:
  *   - STATE  (poseFor/pillClass): what a single agent's own backend status is.
  *   - COMMUNICATION (triggerCommunication/processCommunications): a
  *     transient pulse on the connection BETWEEN two agents. Phase 2 wires
  *     this to a clean event contract (get_state().agent_communications, see
  *     bridge.py) but nothing in this file or in app.js fabricates an entry -
  *     the list is always empty until a real backend emitter exists. The two
- *     callers today are the TEST MODE "TESTAR COMUNICAÇÃO" demo button
+ *     callers today are the TEST MODE "ANIMATE SIMULATED HANDOFF" demo button
  *     (direct triggerCommunication call, never enters seenIds/history) and
  *     app.js's tick() loop (processCommunications, dedup'd by comm id).
  */
@@ -188,8 +188,8 @@
     var cls = pillClass(agent.status);
     var accentVar = "--" + cls;
     var metaParts = [];
-    metaParts.push("evento " + (agent.current_event ? '<span class="mono">' + escapeHtml(agent.current_event) + "</span>" : "—"));
-    metaParts.push("ativ. " + (agent.last_activity ? '<span class="mono">' + escapeHtml(agent.last_activity.replace(/^.*T/, "").replace(/Z$/, "")) + "</span>" : "—"));
+    metaParts.push("event " + (agent.current_event ? '<span class="mono">' + escapeHtml(agent.current_event) + "</span>" : "—"));
+    metaParts.push("last activity " + (agent.last_activity ? '<span class="mono">' + escapeHtml(agent.last_activity.replace(/^.*T/, "").replace(/Z$/, "")) + "</span>" : "—"));
     if (agent.last_error) metaParts.push('<span style="color:var(--err)">' + escapeHtml(agent.last_error) + "</span>");
     var meta = metaParts.join(" · ");
 
@@ -228,11 +228,11 @@
   // that are ALSO visually adjacent in `agents` (fromIndex + 1 === toIndex).
   // Every connection currently defined is between adjacent agents, so this
   // covers Phase 1 fully; a future non-adjacent connection would need real
-  // routing (out of scope here - see the "events travel between agents"
-  // phase in the task spec) and is simply not drawn rather than guessed at.
+  // routing (out of scope here - a later "events travel between agents"
+  // phase) and is simply not drawn rather than guessed at.
   function buildRoomHTML(agents, topology) {
     if (!agents || agents.length === 0) {
-      return '<div class="room-empty">Sem agentes registados.</div>';
+      return '<div class="room-empty">No agents registered.</div>';
     }
     var connections = buildConnections(agents, topology);
     function connectionBetween(i, j) {
@@ -251,10 +251,10 @@
 
   // -- Phase 2: agent-to-agent communication animation -----------------------
   // A pulse on a connection's beam is a TRANSIENT event, never a function of
-  // agent STATE (see the task spec's section 12 - Qwen being WORKING does not
+  // agent STATE (Qwen being WORKING does not
   // imply a Qwen -> Red Team communication, and Qwen being IDLE does not rule
   // one out). The only two callers are:
-  //   - the TEST MODE "TESTAR COMUNICAÇÃO" button (app.js), which calls
+  //   - the TEST MODE "ANIMATE SIMULATED HANDOFF" button (app.js), which calls
   //     triggerCommunication() directly with a synthetic pair;
   //   - processCommunications(), the future real-event path, which resolves
   //     `state.agent_communications` entries (see bridge.py's get_state()
@@ -263,7 +263,7 @@
   //     file fabricates a communication that didn't come from that list.
   // Per connection element, at most one pulse animates at a time; a second
   // trigger for a connection that's already mid-pulse is queued rather than
-  // restarting/corrupting the in-flight one (task spec section 8).
+  // restarting/corrupting the in-flight one.
   var pulseQueues = typeof WeakMap !== "undefined" ? new WeakMap() : null;
 
   function findConnectionElement(roomEl, fromId, toId) {
@@ -287,7 +287,7 @@
       el.classList.remove("communicating");
       dispatchArrived(el, fromId, toId);
       // The receiver's wake-up starts exactly here - when the pulse actually
-      // reaches `to` - never earlier (task spec section 7). `opts.resolveAgent`
+      // reaches `to` - never earlier. `opts.resolveAgent`
       // is how the caller (app.js) hands us the CURRENT backend agent list
       // without this file ever importing/caching state of its own.
       if (opts && typeof opts.resolveAgent === "function") {
@@ -314,7 +314,7 @@
   //     does) and the pulse plays with no receiver reaction at all - this is
   //     how the old Phase 2 unit tests below still pass unmodified.
   //   force: true - bypass the "only wake a genuinely sleeping receiver" gate
-  //     (task spec section 14/15). Only the TEST MODE demo button sets this.
+  //     Only the TEST MODE demo button sets this.
   function triggerCommunication(roomEl, fromId, toId, durationMs, opts) {
     var el = findConnectionElement(roomEl, fromId, toId);
     if (!el) return false;
@@ -335,7 +335,7 @@
   // connection and pulses it exactly once, ever - `seenIds` is a Set the
   // caller keeps across polling ticks (app.js), so the same communication_id
   // reappearing on the next tick is a no-op rather than a replayed animation
-  // (task spec section 10). An entry naming an unknown/unrendered from/to
+  // An entry naming an unknown/unrendered from/to
   // pair is marked seen and otherwise ignored, never thrown on. Returns the
   // list of communication ids actually seen for the first time this call.
   //
@@ -356,7 +356,7 @@
   }
 
   // -- Phase 3: receiver wake-up reaction -------------------------------------
-  // IMPORTANT - state separation (task spec section 2/13): this ONLY ever
+  // IMPORTANT - state separation: this ONLY ever
   // touches the DOM. It never writes to `state.agents`/get_state() and never
   // invents a backend status. "WAKING" is a presentation-only stage; the
   // stage the workstation settles on afterwards is always re-derived from
@@ -382,7 +382,7 @@
 
   // Re-renders one workstation element in place with backend-authoritative
   // markup (via the same `workstation()` builder buildRoomHTML uses) - a
-  // single-element swap, not a room rebuild (task spec section 16).
+  // single-element swap, not a room rebuild.
   function settleWorkstation(el, agent) {
     var html = workstation(agent);
     if (typeof el.outerHTML === "string" || "outerHTML" in el) {
@@ -396,7 +396,7 @@
   //     guessed at, same rule as triggerCommunication's connection lookup);
   //   - resolveAgent(toId) has nothing for it (no agent to reconcile to);
   //   - the receiver isn't actually in the SLEEPING pose right now and
-  //     `opts.force` wasn't set (task spec 14/15 - a NOT_CONFIGURED or ERROR
+  //     `opts.force` wasn't set (a NOT_CONFIGURED or ERROR
   //     agent does not visibly wake just because a communication arrived).
   // `opts.force` (TEST MODE only) skips that last guard so the demo can show
   // the full SLEEPING -> WAKING -> WORKING sequence even against a receiver

@@ -72,8 +72,8 @@ def _squeeze_release_confirmed(l1: L1Features, l2: L2Features) -> bool:
     """Compressed a moment ago (`range_compression`, evaluated on the PRIOR
     bar - see l2_features.compute_l2_features), expanding right now, with
     volume backing the release. Compression alone is never enough (doc
-    explicit: "não considerar o simples estado de compressão como
-    oportunidade por si só").
+    explicit: "do not treat the mere state of compression as an
+    opportunity in itself").
     """
     return bool(l2.range_compression and l2.range_expansion and _volume_confirmed(l1))
 

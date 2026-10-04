@@ -37,6 +37,21 @@
     };
   }
 
+  /** The sidebar tab ids, in order. index.html's data-tab values and tab-* sections use them. */
+  var TAB_IDS = ["dashboard", "agents", "alerts", "history", "game", "system"];
+  var DEFAULT_TAB = "dashboard";
+
+  /**
+   * The tab to show for a requested or saved id. Anything that is not a current
+   * tab id (an id saved by an older version, a typo, a non-string) falls back to
+   * the dashboard, so selecting it never hides every panel.
+   * @param {unknown} tabName
+   * @returns {string}
+   */
+  function resolveTab(tabName) {
+    return TAB_IDS.indexOf(tabName) >= 0 ? tabName : DEFAULT_TAB;
+  }
+
   /**
    * Create a fresh browser-memory simulation session. A page reload creates
    * a new instance, so TEST MODE always starts OFF and simulations have no
@@ -69,5 +84,11 @@
     };
   }
 
-  return { computeTestModeView: computeTestModeView, createTestModeSession: createTestModeSession };
+  return {
+    computeTestModeView: computeTestModeView,
+    createTestModeSession: createTestModeSession,
+    TAB_IDS: TAB_IDS.slice(),
+    DEFAULT_TAB: DEFAULT_TAB,
+    resolveTab: resolveTab,
+  };
 });

@@ -1,4 +1,4 @@
-"""Pure tests for radar_v08.workflow.scheduler (task T032a, policy part of T032).
+"""Pure tests for radar_v08.workflow.scheduler.
 
 No SQLite, no files, no network, no wall clock, no model: a fake clock is injected and
 every rule of OC-1 sections 1 to 3 is asserted one by one, with a perturbation test
@@ -614,7 +614,7 @@ ONE_US = timedelta(microseconds=1)
 
 
 class TestNoExceptionAfterCommit(unittest.TestCase):
-    """Security Reviewer T5-a2 blocker, closed as a class: every public entry point that
+    """A security review finding, closed as a class: every public entry point that
     raises does so before its commit point. For each one, a raising call leaves the queue,
     the running slot, the slot counter and the clock watermark unchanged, and the expired
     queued item still gets its ABORT_STALE from the next sweep."""
@@ -725,7 +725,7 @@ class TestNoExceptionAfterCommit(unittest.TestCase):
         self._assert_raises_and_changes_nothing(scheduler, clock, lambda: scheduler.admit(tampered), SchedulerFailure.INVALID_FIELD)
 
     def test_security_reviewer_probe_seal_near_datetime_max_is_refused_at_construction(self):
-        # (a) The T5-a2 attack: a is queued, the clock moves 20 s, a version sealed at
+        # (a) The review's attack: a is queued, the clock moves 20 s, a version sealed at
         # datetime.max - 1 s is offered. It can no longer be built, so admit never runs.
         scheduler, clock = make()
         scheduler.admit(version("a"))
@@ -837,7 +837,7 @@ class TestNoExceptionAfterCommit(unittest.TestCase):
             TokenBound(type("Count", (int,), {})(5), TokenBasis.TOKENIZER_COUNT)
 
     def test_replay_of_an_aborted_running_identity_reports_abort_stale(self):
-        # Nit from T5-a2-security: the duplicate reports the recorded state, not RUNNING.
+        # From a security review: the duplicate reports the recorded state, not RUNNING.
         scheduler, clock = make()
         run_to_dispatch(scheduler, version("a"))
         clock.at_seconds(60)

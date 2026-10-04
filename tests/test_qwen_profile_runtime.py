@@ -1,4 +1,4 @@
-"""T050c2b: the Qwen runtime (radar_v08/qwen.py + config.QWEN_*) is resolved by the T050a loader.
+"""The Qwen runtime (radar_v08/qwen.py + config.QWEN_*) is resolved by the model profile loader.
 
 What is proven here:
 
@@ -11,7 +11,7 @@ What is proven here:
   wins). Every refusal is a typed ``ModelProfileError`` code, never a default.
 * With a missing/invalid file, a disabled default or an invalid override, importing
   ``radar_v08.config``, ``radar_v08.qwen``, ``radar_v08.heartbeat`` and ``ui.agents`` does not
-  raise (fresh child process, every ``RADAR_*`` stripped, state in a temporary directory, D31);
+  raise (fresh child process, every ``RADAR_*`` stripped, state in a temporary directory);
   ``review_finalists`` answers ``UNAVAILABLE`` with the typed code and a warning log, and
   ``requests.post`` / an injected ``post_fn`` is called zero times; ``config.QWEN_MODEL`` and the
   UI's Qwen agent show no model.
@@ -224,7 +224,7 @@ class TestApplyOverridesKeepsTheProfile(_ProfilesDir):
 
 
 # --------------------------------------------------------------------------------------------
-# Child processes: import-time behaviour with state in a temporary directory (D31).
+# Child processes: import-time behaviour with state in a temporary directory.
 # --------------------------------------------------------------------------------------------
 
 CHILD_SCRIPT = r'''
@@ -447,7 +447,7 @@ class TestFailClosedInAChild(_ProfilesDir):
         self.assertEqual(out["config_url"], "http://127.0.0.1:11434")
 
     def test_refused_url_override_keeps_todays_runtime_error(self) -> None:
-        # Frozen in tests/test_qwen_profile_equivalence.py (T050c2a): the guard still raises
+        # Frozen in tests/test_qwen_profile_equivalence.py: the guard still raises
         # before any call; here the import side is checked too.
         out = run_child(None, {"RADAR_OLLAMA_URL": "http://evil.example.com:11434"})
         self.assertEqual(out["imported"], EXPECTED_IMPORTED)

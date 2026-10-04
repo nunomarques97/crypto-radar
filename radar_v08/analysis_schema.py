@@ -1,11 +1,11 @@
-"""Structured output schema for Sonnet/Fable analysis responses (task section 9).
+"""Structured output schema for Sonnet/Fable analysis responses.
 
 The LLM only ever produces the analysis fields; `event_id`, `model`,
 `model_version` and `timestamp` are metadata the Bridge already knows and
 attaches itself after the call - never asked of (or trusted from) the model,
 so it can't invent its own event_id or claim a different model ran it.
 
-`recommendation` is a closed enum (task section 9: "É uma PROPOSTA DE ANÁLISE"
+`recommendation` is a closed enum (an ANALYSIS PROPOSAL
 - never an execution authorization) and deliberately includes weak/negative
 outcomes so the model is never forced to manufacture a trade idea.
 """

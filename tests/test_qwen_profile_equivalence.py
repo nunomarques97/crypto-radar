@@ -1,17 +1,17 @@
-"""T050c2a compatibility probe, extended by the profile context/output limits.
+"""Compatibility probe of the Qwen profile wiring, extended by the profile context/output limits.
 
 The limits add num_ctx/num_predict to EXPECTED_OPTIONS. Its static clock
 preserves exact first-call timeout literals here; advancing-clock and blocked
-transport cases live in test_qwen_deadline.py. The original T050c history below
+transport cases live in test_qwen_deadline.py. The original history below
 describes the earlier wiring task, not a prohibition on this later change.
 
-This test is the prerequisite of the T050c wiring (linking `qwen.py`/`config.py` to the
-T050a profile loader, D55): it captures TODAY's runtime behaviour as LITERAL constants
+This test is the prerequisite of the profile wiring (linking `qwen.py`/`config.py` to the
+model profile loader): it captures TODAY's runtime behaviour as LITERAL constants
 (payload shape, URL, timeout, retry count, the local-host guard and the OK/TIMEOUT/UNAVAILABLE
 states) and asserts the current code against them. It changes nothing in `radar_v08/qwen.py`,
-`radar_v08/config.py`, `radar_v08/adapters/` or `radar_v08/model_profiles.toml` (D53 scope: only
+`radar_v08/config.py`, `radar_v08/adapters/` or `radar_v08/model_profiles.toml` (only
 tests are touched). The follow-up wiring task must keep this file green without changing any
-of the frozen literals below (D55(2)).
+of the frozen literals below.
 
 **Why this is not tautological.** Every expected value below (`EXPECTED_*`) is a constant
 written by hand from one offline run of the real code, inspected and copied in before this
@@ -23,7 +23,7 @@ change to `qwen.py` or `config.py` alters the payload, the URL, the timeout, the
 the guard or a state's error text, this test fails — it is not `assertEqual(actual, actual)`
 in disguise; the constants exist independently of the code under test.
 
-**Isolation (D31).** Every scenario runs the real `radar_v08.qwen.review_finalists` in a
+**Isolation.** Every scenario runs the real `radar_v08.qwen.review_finalists` in a
 FRESH CHILD PROCESS (never in this test process), with every inherited `RADAR_*` variable
 removed and `RADAR_STATE_DIR` plus every `RADAR_*_PATH` found by scanning `radar_v08/config.py`
 (same AST-scan technique as `tests/test_benchmark_harness.py::test_benchmark_import_loads_no_network_module`)
@@ -97,7 +97,7 @@ EXPECTED_FORMAT = {
 # keep_alive or a top-level num_ctx/num_predict fails the test just like a missing one).
 EXPECTED_PAYLOAD_KEYS = ["format", "messages", "model", "options", "stream", "think"]
 
-# The profile context/output limits intentionally extend the frozen T050c options contract.
+# The profile context/output limits intentionally extend the frozen options contract.
 EXPECTED_OPTIONS = {"temperature": 0.0, "num_ctx": 4096, "num_predict": 768}
 EXPECTED_THINK = False
 EXPECTED_STREAM = False
@@ -114,7 +114,7 @@ EXPECTED_TIMEOUT_TYPE = "float"
 # on every failure path below.
 EXPECTED_CALLS_ON_RETRY = 2
 
-# Today's valid overrides (D55(4)): RADAR_QWEN_MODEL, RADAR_QWEN_TIMEOUT_SECONDS, RADAR_OLLAMA_URL.
+# Today's valid overrides: RADAR_QWEN_MODEL, RADAR_QWEN_TIMEOUT_SECONDS, RADAR_OLLAMA_URL.
 OVERRIDE_ENV = {
     "RADAR_QWEN_MODEL": "qwen3:8b",
     "RADAR_QWEN_TIMEOUT_SECONDS": "20",
@@ -290,7 +290,7 @@ print(json.dumps(output))
 def _radar_path_env_vars() -> set[str]:
     """AST-scan radar_v08/config.py (read as text, never imported) for RADAR_*_PATH getenv
     calls, exactly like tests/test_benchmark_harness.py::test_benchmark_import_loads_no_network_module,
-    so the child's environment isolates every state path, not just RADAR_STATE_DIR (D31).
+    so the child's environment isolates every state path, not just RADAR_STATE_DIR.
     """
     config_source = (REPOSITORY_ROOT / "radar_v08" / "config.py").read_text(encoding="utf-8")
     tree = ast.parse(config_source, filename="radar_v08/config.py")
@@ -313,7 +313,7 @@ def _radar_path_env_vars() -> set[str]:
 
 def _run_scenario(scenario: str, extra_env: dict[str, str] | None = None) -> dict[str, object]:
     """Run one scenario of CHILD_SCRIPT in a fresh, RADAR_*-clean child process, RADAR_STATE_DIR
-    and every discovered RADAR_*_PATH pointed at a fresh temporary directory (D31). Returns the
+    and every discovered RADAR_*_PATH pointed at a fresh temporary directory. Returns the
     parsed JSON the child printed.
     """
     path_vars = _radar_path_env_vars()
@@ -440,7 +440,7 @@ class TestQwenLocalHostGuard(unittest.TestCase):
 
 
 class TestQwenValidOverridesEquivalence(unittest.TestCase):
-    """D55(4): RADAR_QWEN_MODEL, RADAR_QWEN_TIMEOUT_SECONDS, RADAR_OLLAMA_URL (all valid per
+    """RADAR_QWEN_MODEL, RADAR_QWEN_TIMEOUT_SECONDS, RADAR_OLLAMA_URL (all valid per
     the loader's own rules: explicit tag, no cloud tag, timeout within the role limit, loopback
     endpoint) must give today's exact overridden model/URL/timeout, everything else unchanged.
     """

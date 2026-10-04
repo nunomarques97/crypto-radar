@@ -14,7 +14,7 @@ the phone push. Toasts ride PowerShell's own registered AUMID so they land in
 the real Action Center / notification history, not just a console line or a
 tray balloon.
 
-Categories (task section 4/13):
+Categories:
   LOW    -> terminal only, no toast, no ntfy push (this module never sends
             either for LOW)
   MEDIUM -> SONNET result: toast (no sound) + ntfy at default priority
@@ -126,7 +126,7 @@ def send_windows_notification(
 ) -> bool:
     """Best-effort: True if the notification command ran without error. Never
     raises - a notification failure must never take the radar down with it
-    (task section 13/16: the radar keeps working regardless).
+    (the radar keeps working regardless).
 
     `notification_id`, when given, becomes the toast's Tag/Group so a
     resend of the same event (same outbox delivery ID, see
@@ -163,7 +163,7 @@ def notification_level_for_model(model_demand: str | None) -> str:
 
 
 def build_notification_text(event: dict[str, Any]) -> tuple[str, str]:
-    """Short title + body (task section 13: never the full analysis - the
+    """Short title + body (never the full analysis - the
     terminal shows detail)."""
     asset = event.get("asset", "?")
     setup = event.get("setup_type", "NONE")
@@ -181,7 +181,7 @@ def build_notification_text(event: dict[str, Any]) -> tuple[str, str]:
 
 
 def build_mobile_notification_text(event: dict[str, Any]) -> tuple[str, str]:
-    """Short title + one-line body for the ntfy push (task section 3) -
+    """Short title + one-line body for the ntfy push -
     shorter than the Windows toast text, and never the full analysis; the
     detail stays in the terminal/log/event as before.
 
@@ -258,12 +258,12 @@ def send_mobile_notification(
 ) -> str:
     """Sends (or skips) the ntfy push for one event.
 
-    Dedup (task section 5): if `store` is given and this event_id already has
+    Dedup: if `store` is given and this event_id already has
     `ntfy_status == "SENT"`, nothing is sent again - the same event_id can
     never produce two ntfy notifications, including across reruns/reexecutions.
     A FAILED send never touches the event's analysis status; it only ever
     updates `ntfy_status`/`ntfy_last_error` so `retry_pending_ntfy` can pick
-    it up later (task section 7).
+    it up later.
 
     `notification_id`: the caller may pass a precomputed stable ID
     (e.g. `notify_for_event` reuses the one it already looked up); when
@@ -273,7 +273,7 @@ def send_mobile_notification(
     moves.
     """
     if level == "LOW":
-        return ntfy.RESULT_DISABLED  # never sent to the phone, task section 4
+        return ntfy.RESULT_DISABLED  # never sent to the phone
 
     event_id = event.get("event_id")
     if store is not None and event_id:
@@ -357,7 +357,7 @@ def notify_for_event(event: dict[str, Any], store: "SnapshotStore | None" = None
     dedup/retry state and the COPIAR PROMPT context lookup.
 
     A failure sending either notification is best-effort and never raises -
-    the radar keeps running regardless (task section 7/16).
+    the radar keeps running regardless.
     """
     level = notification_level_for_model(event.get("model"))
     result: dict[str, Any] = {
@@ -365,7 +365,7 @@ def notify_for_event(event: dict[str, Any], store: "SnapshotStore | None" = None
         "prompt_copied": False, "popup_opened": False, "notification_id": None,
     }
     if level == "LOW":
-        return result  # terminal only, task section 4/13
+        return result  # terminal only
 
     # Derived once and reused for both channels, so a single call sends
     # the Windows toast and the ntfy push under the same stable ID.
@@ -385,7 +385,7 @@ def notify_for_event(event: dict[str, Any], store: "SnapshotStore | None" = None
 
 def retry_pending_ntfy(store: "SnapshotStore", now: datetime | None = None) -> list[dict[str, Any]]:
     """Bounded, spaced-out cross-cycle retry for events whose ntfy push
-    previously FAILED (task section 5/7) - never a tight retry loop, capped
+    previously FAILED - never a tight retry loop, capped
     by `config.NTFY_MAX_RETRY_ATTEMPTS` and spaced at least
     `config.NTFY_RETRY_MIN_INTERVAL_SECONDS` apart. Never touches the event's
     own analysis status. A no-op (empty list) when ntfy isn't configured.

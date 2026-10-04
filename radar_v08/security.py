@@ -13,7 +13,9 @@ from urllib.parse import urlsplit
 
 from . import config
 
-PRIVATE_ENV_VARS = ("KRAKEN_API_KEY", "KRAKEN_SECRET")
+#: Every name a Kraken credential may use, including the private read adapter's
+#: ``KRAKEN_API_SECRET``: the radar never runs with any of them set.
+PRIVATE_ENV_VARS = ("KRAKEN_API_KEY", "KRAKEN_SECRET", "KRAKEN_API_SECRET")
 
 
 class SecurityViolation(RuntimeError):
@@ -23,8 +25,8 @@ class SecurityViolation(RuntimeError):
 def assert_no_private_credentials(env: dict | None = None) -> None:
     """Abort if any private Kraken credential is present in the environment.
 
-    Guard #1 and #2 from the task spec: if KRAKEN_API_KEY or KRAKEN_SECRET
-    exist, abort immediately. This radar only ever needs public endpoints;
+    Guards #1 and #2: if KRAKEN_API_KEY, KRAKEN_SECRET or
+    KRAKEN_API_SECRET exist, abort immediately. This radar only ever needs public endpoints;
     the mere presence of credentials in-process is treated as a hazard.
     """
     source = env if env is not None else os.environ
@@ -39,7 +41,7 @@ def assert_no_private_credentials(env: dict | None = None) -> None:
 def assert_public_get(method: str, url: str) -> None:
     """Abort if a request is not a GET, or targets a private endpoint.
 
-    Guard #3 and #4 from the task spec.
+    Guards #3 and #4.
     """
     if str(method).upper() != "GET":
         raise SecurityViolation(

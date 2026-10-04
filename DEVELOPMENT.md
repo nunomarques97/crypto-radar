@@ -25,7 +25,7 @@ The frozen UI still needs the source project and a real Python executable. Set `
 
 ## 2. Never put secrets in prompts or commits
 
-No API key, token or `.env` content belongs in the repository, in a task description or in a log. The radar reads public market data only and needs no credentials.
+No API key, token or environment-file content belongs in the repository, in a task description or in a log. The radar reads public market data only and needs no credentials. The optional read-only account check keeps its key in the gitignored `.kraken/` folder of the state directory, never in the repository: see [docs/KRAKEN_READ_ONLY_API_KEY.md](docs/KRAKEN_READ_ONLY_API_KEY.md).
 
 ## 3. Work on isolated changes
 

@@ -1,4 +1,4 @@
-"""Versioned prompts for the Claude Bridge (task section 8).
+"""Versioned prompts for the Claude Bridge.
 
 Kept in one place, not spread across functions. `BRIDGE_SYSTEM_PROMPT_V1` is
 shared by both models; `SONNET_TASK_INSTRUCTIONS_V1` / `FABLE_TASK_INSTRUCTIONS_V1`

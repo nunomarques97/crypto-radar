@@ -68,7 +68,7 @@ class TestResample(unittest.TestCase):
         self.assertEqual(hourly[0].volume, sum(b.volume for b in bars[:12]))
 
     def test_resample_groups_start_on_a_full_hour_and_span_exactly_60_minutes(self):
-        # T024 (follow-up T021c): assert the alignment the old test never
+        # Assert the alignment the old test never
         # checked - each output bar must start on a whole UTC hour and the
         # source bars it merges must cover exactly 60 minutes of wall clock,
         # not just "12 bars" by count. Each source bar's open and close carry
@@ -98,7 +98,7 @@ class TestResample(unittest.TestCase):
 
     def test_resample_skips_an_off_the_hour_window_a_count_only_check_would_accept(self):
         # Bars start at :05, not on the hour. A naive 12-bar slice
-        # (bars[0:12], exactly what TestResample checked before T024) is
+        # (bars[0:12], exactly what TestResample checked before) is
         # internally contiguous and would satisfy a count/extremes-only
         # assertion, but it does not start on a whole UTC hour - resample_bars
         # must skip it rather than emit it as an hourly bar.
@@ -119,7 +119,7 @@ class TestResample(unittest.TestCase):
         # 12 bars, hour-aligned start, but with a 10-minute gap where a
         # 5-minute bar should be (index 6 is skipped): wall-clock coverage is
         # 65 minutes, not 60. A check that only compares merged OHLC/volume
-        # values (as TestResample did before T024) would accept this window;
+        # values (as TestResample did before) would accept this window;
         # resample_bars must not turn it into an hourly bar.
         offsets = [0, 1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12]
         bars = [make_bar(i, 100, 100 + i, 100 - i, 100, volume=10) for i in offsets]

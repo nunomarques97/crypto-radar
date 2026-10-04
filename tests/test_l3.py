@@ -104,7 +104,7 @@ class TestRunL3(unittest.TestCase):
 
 
 class TestCostScenariosExposure(unittest.TestCase):
-    """T3/T042(e): L3Result.cost_scenarios carries the exact cost_domain.CostScenario
+    """L3Result.cost_scenarios carries the exact cost_domain.CostScenario
     objects cost_preview is priced from, indexed by venue and by cost_domain.Side,
     without recalculating anything and without changing cost_preview, the score or the
     finalist ranking. The field is never serialized: the Qwen payload, the output-file

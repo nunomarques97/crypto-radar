@@ -10,9 +10,12 @@ from __future__ import annotations
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 from types import MappingProxyType
 
 from .adapters import model_profiles as _model_profiles
+from .domain import paper as _paper_policy
+from .domain import risk as _risk_policy
 
 # --------------------------------------------------------------------------
 # Endpoints (public only - see security.py for the enforcement of this)
@@ -239,6 +242,31 @@ FORWARD_RETURN_LOOKUP_TOLERANCE_SECONDS = float(os.getenv("RADAR_FWD_RETURN_TOLE
 FORWARD_RETURN_LABEL_BATCH_LIMIT = int(os.getenv("RADAR_FWD_RETURN_LABEL_BATCH_LIMIT", "500"))
 
 # --------------------------------------------------------------------------
+# Forward-return gap marking - a due row
+# with no snapshot of its pair within +/- FORWARD_RETURN_LOOKUP_TOLERANCE_SECONDS
+# of its target is marked target_in_snapshot_gap once a spot snapshot of any
+# pair exists after target + tolerance + FORWARD_RETURN_GAP_MARGIN_SECONDS:
+# snapshots are only written at the current cycle stamp, so that window can no
+# longer fill. No return is written and no row is deleted; without such a
+# later snapshot the row stays pending and is retried. With the switch on, one
+# labeling pass also keeps requesting batches while the previous batch was
+# full and moved at least one row out of pending, bounded by the batch cap and
+# the wall-time budget below. Off means: retention marking only and one batch
+# per pass, as before. Default on, same on/off pattern as
+# RADAR_OUTCOME_TRACKING_ENABLED (below).
+# --------------------------------------------------------------------------
+FORWARD_RETURN_MARK_GAPS_ENABLED = os.getenv("RADAR_FWD_RETURN_MARK_GAPS", "1") not in ("0", "false", "False")
+# Covers the corrected clock's residual error and small backward
+# steps between cycles, so a snapshot just past the window never proves it.
+FORWARD_RETURN_GAP_MARGIN_SECONDS = 5.0
+# At most this many batches of FORWARD_RETURN_LABEL_BATCH_LIMIT rows per pass
+# (20 x 500 = 10,000 rows), so a backlog drains over a few cycles.
+FORWARD_RETURN_MAX_BATCHES_PER_PASS = 20
+# No new batch starts once a pass has run this long (monotonic seconds); the
+# batch already running finishes, so a pass lasts at most this plus one batch.
+FORWARD_RETURN_PASS_BUDGET_SECONDS = 2.0
+
+# --------------------------------------------------------------------------
 # Phase 3: L3 order book + trades (finalists only, UNCALIBRATED)
 # --------------------------------------------------------------------------
 L3_MAX_FINALISTS = int(os.getenv("RADAR_L3_MAX_FINALISTS", "8"))
@@ -397,7 +425,7 @@ ROUTER_SONNET_MIN_OPPORTUNITY = float(os.getenv("RADAR_ROUTER_SONNET_MIN_OPPORTU
 ROUTER_FABLE_MIN_OPPORTUNITY = float(os.getenv("RADAR_ROUTER_FABLE_MIN_OPPORTUNITY", "70.0"))
 ROUTER_FABLE_MIN_CONFIRMATIONS = int(os.getenv("RADAR_ROUTER_FABLE_MIN_CONFIRMATIONS", "2"))
 # When Qwen is UNAVAILABLE, Fable needs one extra confirmation (architecture
-# doc section 6/16-I: "exigir uma confirmação extra").
+# doc section 6/16-I: "require one extra confirmation").
 ROUTER_FABLE_MIN_CONFIRMATIONS_NO_QWEN = ROUTER_FABLE_MIN_CONFIRMATIONS + 1
 ROUTER_TAKER_IMBALANCE_CONFIRM_RATIO = float(os.getenv("RADAR_ROUTER_TAKER_IMBALANCE_RATIO", "0.65"))
 
@@ -451,23 +479,23 @@ CLAUDE_BRIDGE_FABLE_MAX_TOKENS = int(os.getenv("RADAR_CLAUDE_BRIDGE_FABLE_MAX_TO
 # a cap, not a target, so one noisy cycle can't burn the whole hourly budget.
 CLAUDE_BRIDGE_MAX_EVENTS_PER_CYCLE = int(os.getenv("RADAR_CLAUDE_BRIDGE_MAX_EVENTS_PER_CYCLE", "5"))
 # A PROCESSING row older than this (process died mid-call) is recovered back
-# to PENDING rather than stuck forever (task section 2: recovery after timeout).
+# to PENDING rather than stuck forever (recovery after timeout).
 CLAUDE_BRIDGE_PROCESSING_STALE_SECONDS = float(os.getenv("RADAR_CLAUDE_BRIDGE_PROCESSING_STALE_SECONDS", "600.0"))
 # Backoff schedule (seconds) indexed by attempt number - never an aggressive
-# tight retry loop (task section 11). Clamped to the last entry past its length.
+# tight retry loop. Clamped to the last entry past its length.
 CLAUDE_BRIDGE_RETRY_BACKOFF_SECONDS = [60, 300, 900, 1800, 3600]
 # After this many attempts a still-failing event is escalated PENDING/DEFERRED
 # -> FAILED, so a permanently broken provider/schema issue doesn't retry forever.
 CLAUDE_BRIDGE_MAX_ATTEMPTS_BEFORE_FAILED = int(os.getenv("RADAR_CLAUDE_BRIDGE_MAX_ATTEMPTS", "6"))
 
 # --------------------------------------------------------------------------
-# Loop mode cadence (task section 16) - never a tight/aggressive poll.
+# Loop mode cadence - never a tight/aggressive poll.
 # --------------------------------------------------------------------------
 LOOP_HEARTBEAT_INTERVAL_SECONDS = float(os.getenv("RADAR_LOOP_HEARTBEAT_INTERVAL_SECONDS", "60.0"))
 LOOP_FULL_INTERVAL_SECONDS = float(os.getenv("RADAR_LOOP_FULL_INTERVAL_SECONDS", "300.0"))
 
 # --------------------------------------------------------------------------
-# Windows notifications (task section 13). LOW = terminal only (no toast).
+# Windows notifications. LOW = terminal only (no toast).
 # MEDIUM (Sonnet) = toast. HIGH (Fable) = toast + sound where supported.
 # --------------------------------------------------------------------------
 NOTIFICATIONS_ENABLED = os.getenv("RADAR_NOTIFICATIONS_ENABLED", "1") not in ("0", "false", "False")
@@ -523,6 +551,31 @@ ALERTS_HISTORY_LIMIT = int(os.getenv("RADAR_ALERTS_HISTORY_LIMIT", "20"))
 RADAR_OUTCOME_TRACKING_ENABLED = os.getenv("RADAR_OUTCOME_TRACKING_ENABLED", "1") not in ("0", "false", "False")
 
 # --------------------------------------------------------------------------
+# Outcome label window - which spot quote closes an outcome horizon.
+# symmetric = the valid quote of the subject's own pair nearest to the target
+# within +/- FORWARD_RETURN_LOOKUP_TOLERANCE_SECONDS, strictly after the
+# decision; forward = the first valid quote in [target, target + tolerance],
+# the original behaviour. Only labels written from then on are affected.
+# An unknown value refuses to load instead of falling back, same pattern as
+# RADAR_QWEN_MODE (above).
+# --------------------------------------------------------------------------
+OUTCOME_LABEL_WINDOWS = ("symmetric", "forward")
+OUTCOME_LABEL_WINDOW_DEFAULT = "symmetric"
+
+
+def parse_outcome_label_window(raw: str | None) -> str:
+    """``RADAR_OUTCOME_LABEL_WINDOW`` trimmed and case-folded; unset means the default, set-but-blank is invalid."""
+    if raw is None:
+        return OUTCOME_LABEL_WINDOW_DEFAULT
+    window = raw.strip().lower()
+    if window not in OUTCOME_LABEL_WINDOWS:
+        raise ValueError(f"RADAR_OUTCOME_LABEL_WINDOW must be one of {', '.join(OUTCOME_LABEL_WINDOWS)}; got {raw!r}")
+    return window
+
+
+RADAR_OUTCOME_LABEL_WINDOW = parse_outcome_label_window(os.getenv("RADAR_OUTCOME_LABEL_WINDOW"))
+
+# --------------------------------------------------------------------------
 # Seal ticker refresh -
 # on a full cycle, when the cycle-start spot ticker is older than the OC-1
 # ticker_max_age at the evidence seal, make at most one extra public Ticker
@@ -543,3 +596,219 @@ RADAR_SEAL_TICKER_REFRESH_ENABLED = os.getenv("RADAR_SEAL_TICKER_REFRESH_ENABLED
 # RADAR_SEAL_TICKER_REFRESH_ENABLED (above).
 # --------------------------------------------------------------------------
 RADAR_CLOCK_CORRECTION_ENABLED = os.getenv("RADAR_CLOCK_CORRECTION_ENABLED", "1") not in ("0", "false", "False")
+
+# --------------------------------------------------------------------------
+# Paper game ("Jogo da IA", DESIGN.md) - pretend money only: no real order, no
+# private API. Each new radar event with a LONG/SHORT direction may open one
+# pretend play of PAPER_STAKE_EUR at the real spot bid/ask
+# (radar_v08/paper_game.py). It closes under the EX-1 initial paper exit policy
+# fixed in radar_v08/domain/paper.py (stop 2 x ATR14 of closed 5-minute bars,
+# target 2R, at most 24 h): not configurable here, and RADAR_PAPER_HOLD_MINUTES
+# is no longer read. The fee per leg is UNCALIBRATED_FEES["spot_taker_bps"]
+# (above), not a copy of it. The start balance is recorded once in the database
+# and each play freezes its own stake, fee, hold and levels, so a later change
+# here never rewrites history. Off means: no
+# paper step runs and nothing is written. Default on, same on/off pattern as
+# RADAR_OUTCOME_TRACKING_ENABLED (above). An invalid amount or count refuses to
+# load instead of falling back, same pattern as RADAR_QWEN_MODE (above).
+# --------------------------------------------------------------------------
+RADAR_PAPER_ENABLED = os.getenv("RADAR_PAPER_ENABLED", "1") not in ("0", "false", "False")
+_CENT = Decimal("0.01")
+_MAX_PAPER_AMOUNT = Decimal("1000000000")
+
+
+def parse_paper_money(name: str, raw: str | None, default: str) -> Decimal:
+    """A positive euro amount (at most 1e9) with at most two decimals; unset means ``default``."""
+    text = default if raw is None else raw.strip()
+    try:
+        value = Decimal(text)
+        whole_cents = value.is_finite() and 0 < value <= _MAX_PAPER_AMOUNT and value == value.quantize(_CENT)
+    except InvalidOperation:
+        raise ValueError(f"{name} must be a positive euro amount; got {raw!r}") from None
+    if not whole_cents:
+        raise ValueError(f"{name} must be a positive euro amount with at most two decimals; got {raw!r}")
+    return value
+
+
+def parse_paper_count(name: str, raw: str | None, default: int) -> int:
+    """A positive whole number; unset means ``default``."""
+    if raw is None:
+        return default
+    text = raw.strip()
+    if not (text.isascii() and text.isdigit()) or int(text) <= 0:
+        raise ValueError(f"{name} must be a positive whole number; got {raw!r}")
+    return int(text)
+
+
+PAPER_START_BALANCE_EUR = parse_paper_money(
+    "RADAR_PAPER_START_BALANCE_EUR", os.getenv("RADAR_PAPER_START_BALANCE_EUR"), "1000"
+)
+PAPER_STAKE_EUR = parse_paper_money("RADAR_PAPER_STAKE_EUR", os.getenv("RADAR_PAPER_STAKE_EUR"), "100")
+PAPER_MAX_OPEN = parse_paper_count("RADAR_PAPER_MAX_OPEN", os.getenv("RADAR_PAPER_MAX_OPEN"), 3)
+# The maximum hold of a new play, fixed by the EX-1 policy (read-only mirror for display).
+PAPER_HOLD_MINUTES = _paper_policy.EX1_MAX_HOLD_MINUTES
+PAPER_CURRENCY = "EUR"
+
+# --------------------------------------------------------------------------
+# Paper position monitor (radar_v08/paper_monitor.py) - a light daemon thread
+# started only by `radar.py --mode loop`, separate from the heartbeat. Every
+# RADAR_PAPER_MONITOR_SECONDS it makes at most one public Ticker request,
+# filtered to the pairs of the open plays with EX-1 levels (none open: no
+# request), and closes a play whose stop, target or 24 h limit that quote
+# touches. Pretend money only: no order, no private API. It needs
+# RADAR_PAPER_ENABLED too; with either off no thread starts and nothing is
+# requested. Default on, same on/off pattern as RADAR_PAPER_ENABLED (above).
+# The interval is whole seconds, at least PAPER_MONITOR_MIN_SECONDS; an
+# invalid value refuses to load instead of falling back (same pattern as the
+# paper counts above).
+# --------------------------------------------------------------------------
+RADAR_PAPER_MONITOR_ENABLED = os.getenv("RADAR_PAPER_MONITOR_ENABLED", "1") not in ("0", "false", "False")
+PAPER_MONITOR_MIN_SECONDS = 2
+
+
+def parse_paper_monitor_seconds(raw: str | None, default: int = 5) -> int:
+    """``RADAR_PAPER_MONITOR_SECONDS``: whole seconds, at least ``PAPER_MONITOR_MIN_SECONDS``."""
+    seconds = parse_paper_count("RADAR_PAPER_MONITOR_SECONDS", raw, default)
+    if seconds < PAPER_MONITOR_MIN_SECONDS:
+        raise ValueError(
+            f"RADAR_PAPER_MONITOR_SECONDS must be at least {PAPER_MONITOR_MIN_SECONDS}; got {raw!r}"
+        )
+    return seconds
+
+
+PAPER_MONITOR_SECONDS = parse_paper_monitor_seconds(os.getenv("RADAR_PAPER_MONITOR_SECONDS"))
+# The monitor's own HTTP budget: one attempt, no retry backoff, so a tick stays near
+# its interval (the heartbeat keeps RADAR_HTTP_TIMEOUT / RADAR_HTTP_MAX_RETRIES).
+PAPER_MONITOR_HTTP_TIMEOUT_SECONDS = 3.0
+# The monitor's SQLite busy timeout: short, so a tick that meets the heartbeat's
+# write lock is skipped rather than queued behind it.
+PAPER_MONITOR_BUSY_TIMEOUT_SECONDS = 0.5
+
+# --------------------------------------------------------------------------
+# Pilot shadow (radar_v08/pilot_shadow.py) - a second
+# pretend account next to the paper game, LONG only, sized by the Risk Engine
+# of radar_v08/domain/risk.py under the EX-1 envelope. Pretend money only: no
+# order, no private API, no model. Each cycle the heartbeat settles its
+# positions, evaluates its loss locks and offers it the same new events as the
+# paper game; the paper monitor also watches its open position. Off means: no
+# pilot step runs, the monitor ignores the pilot and nothing is written. Default
+# on, same on/off pattern as RADAR_PAPER_ENABLED (above).
+#
+# The envelope: RADAR_PILOT_EQUITY_EUR (whole cents, default 240.00) and the
+# optional limit percentages below, each defaulting to its EX-1 value. A value
+# may only be stricter than EX-1: a looser one (or a malformed one) refuses to
+# load instead of falling back. The currency (EUR) and the maximum of one
+# simultaneous position are fixed. The envelope is recorded once in the
+# database; a later different value here blocks new entries (envelope_changed)
+# instead of rewriting history.
+# --------------------------------------------------------------------------
+RADAR_PILOT_ENABLED = os.getenv("RADAR_PILOT_ENABLED", "1") not in ("0", "false", "False")
+PILOT_CURRENCY = "EUR"
+PILOT_MAX_POSITIONS = _risk_policy.EX1_MAX_POSITIONS
+
+
+def parse_pilot_percent(name: str, raw: str | None, default: Decimal) -> Decimal:
+    """A finite positive percentage; unset means ``default``. A value equal to ``default``
+    is ``default`` itself and any other is kept without trailing zeros, so the recorded
+    envelope text does not change with how the number was written."""
+    if raw is None:
+        return default
+    text = raw.strip()
+    try:
+        value = Decimal(text)
+        valid = value.is_finite() and value > 0
+    except InvalidOperation:
+        valid = False
+    if not valid:
+        raise ValueError(f"{name} must be a positive percentage; got {raw!r}")
+    if value == default:
+        return default
+    return Decimal(format(value.normalize(), "f"))
+
+
+def parse_pilot_cap(raw: str | None) -> Decimal | None:
+    """``RADAR_PILOT_PER_ENTRY_CAP_EUR``: an optional absolute per-entry loss cap in whole cents."""
+    if raw is None or not raw.strip():
+        return None
+    return parse_paper_money("RADAR_PILOT_PER_ENTRY_CAP_EUR", raw, "0.01").quantize(_CENT)
+
+
+_PILOT_ENVELOPE_VARIABLES = {
+    "equity": "RADAR_PILOT_EQUITY_EUR",
+    "per_entry_loss_pct": "RADAR_PILOT_PER_ENTRY_LOSS_PCT",
+    "aggregate_loss_pct": "RADAR_PILOT_AGGREGATE_LOSS_PCT",
+    "gross_notional_pct": "RADAR_PILOT_GROSS_NOTIONAL_PCT",
+    "cash_buffer_pct": "RADAR_PILOT_CASH_BUFFER_PCT",
+    "daily_loss_pct": "RADAR_PILOT_DAILY_LOSS_PCT",
+    "drawdown_pct": "RADAR_PILOT_DRAWDOWN_PCT",
+    "per_entry_abs_cap": "RADAR_PILOT_PER_ENTRY_CAP_EUR",
+}
+
+
+def build_pilot_envelope(environ: Mapping[str, str]) -> _risk_policy.Envelope:
+    """The pilot envelope from ``environ``; raises ``ValueError`` (``EnvelopeError`` for a
+    value looser than an EX-1 ceiling) instead of falling back."""
+    try:
+        return _build_pilot_envelope(environ)
+    except _risk_policy.EnvelopeError as error:
+        variable = _PILOT_ENVELOPE_VARIABLES.get(error.field, error.field)
+        raise _risk_policy.EnvelopeError(variable, error.detail) from None
+
+
+def _build_pilot_envelope(environ: Mapping[str, str]) -> _risk_policy.Envelope:
+    return _risk_policy.Envelope(
+        equity=parse_paper_money(
+            "RADAR_PILOT_EQUITY_EUR", environ.get("RADAR_PILOT_EQUITY_EUR"), "240.00"
+        ).quantize(_CENT),
+        currency=PILOT_CURRENCY,
+        per_entry_loss_pct=parse_pilot_percent(
+            "RADAR_PILOT_PER_ENTRY_LOSS_PCT",
+            environ.get("RADAR_PILOT_PER_ENTRY_LOSS_PCT"),
+            _risk_policy.EX1_PER_ENTRY_LOSS_PCT,
+        ),
+        aggregate_loss_pct=parse_pilot_percent(
+            "RADAR_PILOT_AGGREGATE_LOSS_PCT",
+            environ.get("RADAR_PILOT_AGGREGATE_LOSS_PCT"),
+            _risk_policy.EX1_AGGREGATE_LOSS_PCT,
+        ),
+        gross_notional_pct=parse_pilot_percent(
+            "RADAR_PILOT_GROSS_NOTIONAL_PCT",
+            environ.get("RADAR_PILOT_GROSS_NOTIONAL_PCT"),
+            _risk_policy.EX1_GROSS_NOTIONAL_PCT,
+        ),
+        cash_buffer_pct=parse_pilot_percent(
+            "RADAR_PILOT_CASH_BUFFER_PCT",
+            environ.get("RADAR_PILOT_CASH_BUFFER_PCT"),
+            _risk_policy.EX1_MIN_CASH_BUFFER_PCT,
+        ),
+        daily_loss_pct=parse_pilot_percent(
+            "RADAR_PILOT_DAILY_LOSS_PCT",
+            environ.get("RADAR_PILOT_DAILY_LOSS_PCT"),
+            _risk_policy.EX1_DAILY_LOSS_PCT,
+        ),
+        drawdown_pct=parse_pilot_percent(
+            "RADAR_PILOT_DRAWDOWN_PCT",
+            environ.get("RADAR_PILOT_DRAWDOWN_PCT"),
+            _risk_policy.EX1_DRAWDOWN_PCT,
+        ),
+        per_entry_abs_cap=parse_pilot_cap(environ.get("RADAR_PILOT_PER_ENTRY_CAP_EUR")),
+        max_positions=PILOT_MAX_POSITIONS,
+    )
+
+
+PILOT_ENVELOPE = build_pilot_envelope(os.environ)
+
+# --------------------------------------------------------------------------
+# Trend paper catch-up (radar_v08/trend_paper_hook.py) - research only, paper books, no order, no
+# account, no credential. When `radar.py --mode loop` starts, one daemon thread
+# books the trend paper days missed since the last start and ends: first the
+# Binance books into <STATE_DIR>/trend_paper/ledger.jsonl (Binance public daily
+# klines), then the Kraken EUR books into
+# <STATE_DIR>/trend_paper/kraken_ledger.jsonl (Binance public klines for the
+# signals, Kraken public daily OHLC for the fills). Each ledger has its own hash
+# chain and lock, and both use public market data only. It never blocks the
+# loop and any failure is logged and swallowed. Off means: no thread, no
+# request, nothing written. Default on, same on/off pattern as
+# RADAR_PAPER_ENABLED (above).
+# --------------------------------------------------------------------------
+RADAR_TREND_PAPER_ENABLED = os.getenv("RADAR_TREND_PAPER_ENABLED", "1") not in ("0", "false", "False")

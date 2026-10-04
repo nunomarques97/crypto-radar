@@ -37,6 +37,8 @@ google-services.json
 credentials.json
 *token*
 *secret*
+# Kraken private read adapter: API key file and nonce store
+/.kraken/
 
 # Local planning notes and tool state (never part of the product)
 docs/forja/
@@ -50,3 +52,7 @@ radar_v08_output.json
 radar_v08_asset_pairs_cache.json
 exe_launch*.log
 .forja/
+.playwright-mcp/
+
+# Trend paper ledger: runtime state under the radar state dir
+/trend_paper/

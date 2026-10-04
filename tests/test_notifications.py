@@ -38,7 +38,7 @@ class TestBuildNotificationText(unittest.TestCase):
 
 
 class TestNotificationBodyNeverCarriesRejectionOrError(unittest.TestCase):
-    """T033b: a rejection/error message must never reach a notification body,
+    """A rejection/error message must never reach a notification body,
     even when the event dict handed to these builders happens to carry one
     (e.g. a caller reusing a row that also has `last_error`/`reason` set)."""
 
@@ -117,7 +117,7 @@ class TestBuildMobileNotificationText(unittest.TestCase):
 
 
 class TestStableNotificationId(unittest.TestCase):
-    """Pure derivation (T033b): same delivery_id in, same id out, always."""
+    """Pure derivation: same delivery_id in, same id out, always."""
 
     def test_same_delivery_id_yields_the_same_notification_id(self):
         first = notifications.stable_notification_id("event:abc-1:2")
@@ -262,7 +262,7 @@ class TestRetryPendingNtfy(_StoreTestCase):
 
 
 class TestNotificationIdForEvent(_StoreTestCase):
-    """T033b: the stable id is derived from a real EVENT outbox row - never invented."""
+    """The stable id is derived from a real EVENT outbox row - never invented."""
 
     def test_none_without_a_store(self):
         self.assertIsNone(notifications.notification_id_for_event({"event_id": "e1"}, None))
@@ -289,7 +289,7 @@ class TestNotificationIdForEvent(_StoreTestCase):
         self.assertEqual(first, second)
 
     def test_the_id_does_not_move_when_later_writes_add_outbox_rows(self):
-        # The reviewer's reproduction of attempt 1: the bridge calls
+        # Regression: the bridge calls
         # mark_event_notified right after the send, which appends a new EVENT
         # outbox row. The id must be the same before and after that row.
         event_id = self._make_event_row()
@@ -308,7 +308,7 @@ class TestNotificationIdForEvent(_StoreTestCase):
 
 
 class TestResendAfterRestartUsesTheSameNotificationId(_StoreTestCase):
-    """T033b's required test: a resend of the same event (the ntfy cross-cycle
+    """Required test: a resend of the same event (the ntfy cross-cycle
     retry, which is entirely SQLite-driven and therefore survives a restart)
     carries the same notification id as the original attempt."""
 
@@ -339,7 +339,7 @@ class TestResendAfterRestartUsesTheSameNotificationId(_StoreTestCase):
         self.assertEqual(retry_id, first_id)
 
     def test_real_bridge_sequence_then_restart_resends_under_the_same_id(self):
-        """The reviewer's required flow for attempt 2, end to end on a
+        """The full flow, end to end on a
         disposable SQLite file: claim -> PROCESSED -> notify_for_event (toast
         ok, ntfy push fails) -> mark_event_notified (exactly what
         claude_bridge does right after notify_fn, adding an outbox row) ->

@@ -1,7 +1,7 @@
-"""T030b: additive schema-version ledger, idempotent migration and the SQLite evidence adapter.
+"""Additive schema-version ledger, idempotent migration and the SQLite evidence adapter.
 
 Every database here is a fixture created in a fresh temporary directory. The "old"
-database is built the way the pre-T030b store built it (``store.SCHEMA`` plus the legacy
+database is built the way the store built it before the ledger existed (``store.SCHEMA`` plus the legacy
 ``ALTER TABLE`` columns), with rows in it, and without the ledger. Nothing reads or copies
 ``radar_state.sqlite`` or any other root state file.
 """
@@ -67,7 +67,7 @@ NEW_OBJECTS = {
     ("table", "event_evidence"),
     ("index", "idx_event_evidence_evidence"),
     ("trigger", "event_evidence_immutable"),
-    # T031a, ledger version 3
+    # Ledger version 3 (invocations)
     ("table", "invocations"),
     ("index", "uq_invocations_active_identity"),
     ("index", "idx_invocations_state_lease"),
@@ -78,7 +78,7 @@ NEW_OBJECTS = {
     ("trigger", "invocation_budget_never_decreases"),
     ("table", "invocation_demand"),
     ("trigger", "invocation_demand_never_decreases"),
-    # T033a, ledger version 4
+    # Ledger version 4 (lifecycle/outbox)
     ("table", "lifecycle_items"),
     ("trigger", "lifecycle_items_identity_immutable"),
     ("trigger", "lifecycle_items_terminal_is_final"),
@@ -90,7 +90,7 @@ NEW_OBJECTS = {
     ("table", "outbox_cursors"),
     ("trigger", "outbox_cursors_never_move_back"),
     ("trigger", "outbox_cursors_no_delete"),
-    # T041, ledger version 5
+    # Ledger version 5 (outcomes)
     ("table", "outcome_subjects"),
     ("index", "idx_outcome_subjects_pair_asof"),
     ("trigger", "outcome_subjects_immutable"),
@@ -126,7 +126,7 @@ def sealed_evidence(run_id="run-1", instrument=BTC_USD, bid="100.10"):
 
 
 def build_legacy_db(path):
-    """A pre-T030b database: the old schema and old rows, no ledger, no evidence tables."""
+    """A database from before the ledger: the old schema and old rows, no ledger, no evidence tables."""
     conn = sqlite3.connect(path)
     try:
         conn.execute("PRAGMA journal_mode=WAL;")
@@ -355,7 +355,7 @@ class TestForwardReturnsColumnMigration(TempDbCase):
 
 class TestInjectedFailure(TempDbCase):
     BAD = Migration(3, "injected_failure", ("CREATE TABLE injected_ok (x INTEGER)", "INSERT INTO no_such_table VALUES (1)"))
-    # T031a: the next version after the real plan (now 6, T041), for failures on a migrated db.
+    # The next version after the real plan (now 6), for failures on a migrated db.
     BAD_NEXT = Migration(len(SCHEMA_MIGRATIONS) + 1, "injected_failure", BAD.statements)
 
     def test_failure_in_the_middle_of_first_migration_leaves_old_db_untouched(self):

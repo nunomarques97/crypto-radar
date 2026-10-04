@@ -13,17 +13,30 @@ window tolerance are always passed in.
 Maturity and availability
 -------------------------
 
-* ``target_at = decision_as_of + horizon``.
-* The exit quote is the first valid quote observed in ``[target_at, target_at + tolerance]``
-  (and not after ``now``). Only quotes at or after the target count: nothing from before
-  the horizon is used, and nothing past the window is looked at.
-* A valid exit quote makes the label ``AVAILABLE`` and ``label_available_at`` is the time
-  that quote was observed: the earliest moment the outcome could have been known.
+* ``target_at = decision_as_of + horizon``. Before it, every horizon is ``NotMature``.
+* The quote window is chosen by ``LabelWindow``:
+
+  - ``FORWARD``: the exit quote is the first valid quote observed in
+    ``[target_at, target_at + tolerance]`` (and not after ``now``). Only quotes at or after
+    the target count: nothing from before the horizon is used, and nothing past the window
+    is looked at. ``label_available_at`` is the time that quote was observed.
+  - ``SYMMETRIC``: the candidates are the quotes observed in
+    ``[target_at - tolerance, target_at + tolerance]``, not after ``now`` and strictly
+    after ``decision_as_of`` (so never the entry quote or anything before it). The exit
+    quote is the valid candidate nearest to the target; on equal distance the later one,
+    then the smaller source. A pick at distance ``d`` is final only once no closer quote
+    can still arrive: ``label_available_at = target_at + d``, which is the pick's own time
+    when it is at or after the target, and ``NotMature(target_at + d)`` until then when it
+    is before the target. Limitation: a price up to ``tolerance`` before the target
+    slightly shortens the horizon it measures.
+
+* In both windows ``label_available_at = target_at + |exit_observed_at - target_at|`` for
+  an ``AVAILABLE`` label (``OutcomeLabel.exit_offset`` is the signed deviation).
 * No valid quote once the whole window has passed makes the label ``UNAVAILABLE`` with a
   typed reason (``QUOTE_MISSING_AT_HORIZON`` or ``QUOTE_INVALID_AT_HORIZON``) and
   ``label_available_at = target_at + tolerance``: the moment the missingness is final.
 * An instrument with no price source gives ``PRICE_SOURCE_UNSUPPORTED`` at ``target_at``.
-* Before that, the horizon is ``NotMature`` and nothing may be written.
+* Otherwise the horizon is ``NotMature`` and nothing may be written.
 
 Joins against labels use ``label_available_at <= decision_as_of`` of the *consumer*
 (``visible_outcomes``, OPERATING_CONTRACTS.md §4), never the subject's own timestamp.
@@ -194,6 +207,13 @@ class Availability(Enum):
 
 class PriceBasis(Enum):
     MID = "mid"
+
+
+class LabelWindow(Enum):
+    """Which quotes may be the exit of a horizon (see module docstring)."""
+
+    FORWARD = "forward"  # first valid quote in [target, target + tolerance]
+    SYMMETRIC = "symmetric"  # nearest valid quote in [target - tolerance, target + tolerance]
 
 
 class MissingReason(Enum):
@@ -493,9 +513,12 @@ class OutcomeLabel:
             if any(value is None for value in exit_fields) or self.market_return is None:
                 raise OutcomeInputError(OutcomeErrorCode.INCONSISTENT, "exit", "an available label needs its exit quote")
             _require_decimal(self.exit_mid, "exit_mid", positive=True)
-            if require_aware(self.exit_observed_at, "exit_observed_at") != self.label_available_at:
+            exit_at = require_aware(self.exit_observed_at, "exit_observed_at")
+            if self.label_available_at != self.target_at + abs(exit_at - self.target_at):
                 raise OutcomeInputError(
-                    OutcomeErrorCode.INCONSISTENT, "label_available_at", "must be the exit quote's observation time"
+                    OutcomeErrorCode.INCONSISTENT,
+                    "label_available_at",
+                    "must be target_at + |exit_observed_at - target_at|",
                 )
             _require_text(self.exit_source, "exit_source")
         elif any(value is not None for value in exit_fields) or self.market_return is not None:
@@ -509,6 +532,13 @@ class OutcomeLabel:
     @property
     def net_available(self) -> bool:
         return self.net_markout is not None
+
+    @property
+    def exit_offset(self) -> timedelta | None:
+        """Signed deviation of the exit quote from the target (negative: before it); ``None`` if unavailable."""
+        if self.exit_observed_at is None:
+            return None
+        return self.exit_observed_at - self.target_at
 
 
 @dataclass(frozen=True, slots=True)
@@ -540,6 +570,51 @@ def _require_tolerance(tolerance: object) -> timedelta:
     return tolerance
 
 
+def _nearest_exit(
+    subject: OutcomeSubject,
+    target: datetime,
+    quotes: Sequence[QuoteObservation],
+    *,
+    now: datetime,
+    tolerance: timedelta,
+) -> tuple[QuoteObservation | None, Decimal | None, MissingReason | None, datetime] | datetime:
+    """The ``SYMMETRIC`` exit: ``(quote, mid, missing reason, label_available_at)`` once final.
+
+    Returns the ``not_before`` time instead while a quote that could still arrive inside
+    the window (observed after ``now``) would change the choice.
+    """
+    window_start, window_end = target - tolerance, target + tolerance
+    candidates = sorted(
+        (
+            q
+            for q in quotes
+            if window_start <= q.observed_at <= window_end
+            and q.observed_at <= now
+            and q.observed_at > subject.decision_as_of
+        ),
+        key=lambda q: (q.observed_at, q.source),
+    )
+    best: QuoteObservation | None = None
+    best_mid: Decimal | None = None
+    best_distance = tolerance
+    for quote in candidates:
+        mid = quote.mid
+        if mid is None:
+            continue
+        distance = abs(quote.observed_at - target)
+        if best is None or distance < best_distance or (distance == best_distance and quote.observed_at > best.observed_at):
+            best, best_mid, best_distance = quote, mid, distance
+    if best is None:
+        if now < window_end:
+            return window_end
+        reason = MissingReason.QUOTE_INVALID_AT_HORIZON if candidates else MissingReason.QUOTE_MISSING_AT_HORIZON
+        return None, None, reason, window_end
+    available_at = target + best_distance
+    if now < available_at:
+        return available_at
+    return best, best_mid, None, available_at
+
+
 def label_horizon(
     subject: OutcomeSubject,
     horizon: Horizon,
@@ -547,17 +622,20 @@ def label_horizon(
     *,
     now: datetime,
     tolerance: timedelta,
+    window_kind: LabelWindow = LabelWindow.FORWARD,
 ) -> OutcomeLabel | NotMature:
     """Label ``subject`` at ``horizon`` as of ``now``, or say it is not mature yet.
 
     ``quotes`` are observations of the subject's own price source (any range; only the
-    window is read). ``None`` means the instrument has no price source.
+    window is read). ``None`` means the instrument has no price source. ``window_kind``
+    selects the quote window (module docstring); the default is the forward window.
     """
     if not isinstance(subject, OutcomeSubject):
         raise OutcomeInputError(OutcomeErrorCode.INVALID_FIELD, "subject", "must be OutcomeSubject")
     _require_enum(horizon, Horizon, "horizon")
     require_aware(now, "now")
     window = _require_tolerance(tolerance)
+    _require_enum(window_kind, LabelWindow, "window_kind")
     subject_id = subject.subject_id
     target = subject.target_at(horizon)
     if now < target:
@@ -572,25 +650,31 @@ def label_horizon(
     else:
         if any(not isinstance(q, QuoteObservation) for q in quotes):
             raise OutcomeInputError(OutcomeErrorCode.INVALID_FIELD, "quotes", "must be QuoteObservation")
-        window_end = target + window
-        in_window = sorted(
-            (q for q in quotes if target <= q.observed_at <= window_end and q.observed_at <= now),
-            key=lambda q: (q.observed_at, q.source),
-        )
-        for quote in in_window:
-            mid = quote.mid
-            if mid is not None:
-                exit_quote, exit_mid = quote, mid
-                break
-        if exit_quote is None:
-            if now < window_end:
-                return NotMature(subject_id, horizon, window_end)
-            market_missing = (
-                MissingReason.QUOTE_INVALID_AT_HORIZON if in_window else MissingReason.QUOTE_MISSING_AT_HORIZON
-            )
-            available_at = window_end
+        if window_kind is LabelWindow.SYMMETRIC:
+            nearest = _nearest_exit(subject, target, quotes, now=now, tolerance=window)
+            if isinstance(nearest, datetime):
+                return NotMature(subject_id, horizon, nearest)
+            exit_quote, exit_mid, market_missing, available_at = nearest
         else:
-            available_at = exit_quote.observed_at
+            window_end = target + window
+            in_window = sorted(
+                (q for q in quotes if target <= q.observed_at <= window_end and q.observed_at <= now),
+                key=lambda q: (q.observed_at, q.source),
+            )
+            for quote in in_window:
+                mid = quote.mid
+                if mid is not None:
+                    exit_quote, exit_mid = quote, mid
+                    break
+            if exit_quote is None:
+                if now < window_end:
+                    return NotMature(subject_id, horizon, window_end)
+                market_missing = (
+                    MissingReason.QUOTE_INVALID_AT_HORIZON if in_window else MissingReason.QUOTE_MISSING_AT_HORIZON
+                )
+                available_at = window_end
+            else:
+                available_at = exit_quote.observed_at
 
     market_return: Decimal | None = None
     gross: Decimal | None = None

@@ -1,6 +1,6 @@
-"""T050a: versioned local model profiles loader (radar_v08/adapters/model_profiles.py).
+"""Versioned local model profiles loader (radar_v08/adapters/model_profiles.py).
 
-D31/D33: every rejection is a TOML file written in a temporary directory; the only
+Every rejection is a TOML file written in a temporary directory; the only
 repository file read is the versioned ``radar_v08/model_profiles.toml``. No model is
 run or downloaded, no request reaches Ollama, and the loader is shown to open its file
 once in ``"rb"`` mode, write nothing and open no socket. The default-profile test reads
@@ -521,7 +521,7 @@ class TestRealVersionedFile(unittest.TestCase):
             )
         self.assertEqual(completed.returncode, 0, completed.stderr)
         today = json.loads(completed.stdout)
-        # The code defaults are what the radar runs today (D33); pin them so a drift shows here.
+        # The code defaults are what the radar runs today; pin them so a drift shows here.
         self.assertEqual(today, {
             "model": "qwen3:14b",
             "timeout": 30.0,

@@ -1,8 +1,8 @@
-"""T4/T042 - the heartbeat registers one outcome subject per L2/L3 candidate.
+"""The heartbeat registers one outcome subject per L2/L3 candidate.
 
 Wires `radar_v08.adapters.outcome_store.register_subject` into `run_heartbeat`
 (step 11, after the `if full:` block resolves), behind
-`config.RADAR_OUTCOME_TRACKING_ENABLED` (D2). These tests run the real
+`config.RADAR_OUTCOME_TRACKING_ENABLED`. These tests run the real
 heartbeat over the fake Kraken harness of `test_integrity_wiring` (no socket,
 fake Qwen, temporary SQLite and log paths, deterministic clock) - the same
 pattern `test_invocation_wiring.py` and `test_outbox.py` already use.
@@ -41,7 +41,7 @@ PAIR_OF_ASSET = {"BTC": "XXBTZUSD", "ETH": "XETHZUSD"}
 def _finalists_excluding(asset):
     """Wrap the real `select_finalists` (radar_v08/l3.py) and drop one asset from
     its result, so a candidate can be forced through l2_results/l3_inputs
-    without ever becoming a finalist - the D3 "screener-only, not escalated"
+    without ever becoming a finalist - the "screener-only, not escalated"
     case on a `full` cycle. The real selection/ranking still runs first."""
 
     def wrapped(candidates):
@@ -80,7 +80,7 @@ class TestSubjectsRegisteredPerCandidate(OutcomeWiringBase):
         rows = self.subject_rows()
         # N = the number of non-warmup L2/L3 candidates this cycle (both BTC and
         # ETH reach the model in this fixture, per test_integrity_wiring's own
-        # "valid case" test) - D3 scope, whether or not they are escalated.
+        # "valid case" test) - every candidate, whether or not they are escalated.
         self.assertEqual(len(rows), 2, f"expected 2 subjects (BTC, ETH), got {len(rows)}: {rows}")
         self.assertEqual(sorted(r["pair"] for r in rows), ["XETHZUSD", "XXBTZUSD"])
         for row in rows:
@@ -89,7 +89,7 @@ class TestSubjectsRegisteredPerCandidate(OutcomeWiringBase):
             self.assertIsNotNone(row["entry_mid"])
             # Domain rule (outcomes.py:342-345): entry_observed_at can never be
             # *after* decision_as_of. The wiring reuses the same `now` for both
-            # (T042_WIRING_DESIGN.md (b)), so this is the real, non-tautological
+            # (see the guard in heartbeat.py), so this is the real, non-tautological
             # check - it would fail if a future change made the quote's own
             # timestamp flow through instead and drift later than decision_as_of.
             entry_observed_at = datetime.fromisoformat(row["entry_observed_at"])
@@ -102,7 +102,7 @@ class TestSubjectsRegisteredPerCandidate(OutcomeWiringBase):
             # Both candidates are escalated and get a real RADAR_ALERT event in
             # this fixture, but `decision` still must be NOT_RECORDED: no
             # DecisionKind.INVOCATION is obtainable from the heartbeat under
-            # today's architecture (T042_WIRING_DESIGN.md section (c) - invocation
+            # today's architecture (invocation
             # claiming only happens in the disabled Claude Bridge dispatch path
             # and the separate worker.py process), and the acceptance criterion
             # requires exactly that before `decision` can be anything else.
@@ -111,7 +111,7 @@ class TestSubjectsRegisteredPerCandidate(OutcomeWiringBase):
             self.assertIsNone(row["decision_kind"])
         self.assertEqual(output["funnel"]["events_created"], 2, "both still get a real event - just not linked back")
 
-        # Both finalists cleared the book, so T3's cost_scenarios has a real
+        # Both finalists cleared the book, so the cost_scenarios step has a real
         # COST_COMPLETE spot/LONG scenario for each - costs=() is never used
         # here; every subject gets its 4 horizons, and no partial sum leaks in.
         self.assertEqual(self.cost_count(), 8, "2 subjects x 4 horizons, all with a real cost scenario")
@@ -123,7 +123,7 @@ class TestSubjectsRegisteredPerCandidate(OutcomeWiringBase):
         self.assertEqual(sides, {"long"})
 
     def test_screener_only_non_full_cycle_still_registers_every_candidate(self):
-        """D3: on a non-`full` cycle there is no L3 stage at all, so every
+        """On a non-`full` cycle there is no L3 stage at all, so every
         candidate that cycle is, definitionally, screener-only - it still gets
         a subject with L2-only fields (no cost, no decision, no evidence)."""
         kraken = wiring.FakeKraken(assets=("BTC", "ETH"))
@@ -144,7 +144,7 @@ class TestSubjectsRegisteredPerCandidate(OutcomeWiringBase):
         )
 
     def test_full_cycle_candidate_not_selected_as_finalist_still_gets_a_subject(self):
-        """D3's central case (flagged as untested by T4-a1-review, nit 1): on a
+        """The central screener-only case: on a
         `full` cycle, a candidate that reaches l2_results/l3_inputs but that
         `select_finalists` does NOT pick still gets an outcome subject. This
         distinguishes "one subject per candidate" (N=2) from "one subject per
@@ -162,7 +162,7 @@ class TestSubjectsRegisteredPerCandidate(OutcomeWiringBase):
         for row in rows:
             # decision is NOT_RECORDED either way (see the test above); the
             # distinguishing signal here is the cost link, which only a real
-            # finalist with a T3 cost scenario can carry.
+            # finalist with a cost scenario can carry.
             self.assertEqual(row["decision_missing"], "not_recorded")
         self.assertEqual(
             self.cost_count(), 4, "1 finalist (BTC) x 4 horizons; the non-finalist (ETH) has costs=()"
@@ -209,7 +209,7 @@ class TestDedupEventReuseNeverLeaksIntoDecision(OutcomeWiringBase):
         self.addCleanup(patcher.stop)
 
     def test_second_full_cycle_reuses_the_open_event_but_the_new_subject_stays_not_recorded(self):
-        """Production scenario this task's blocker 1 fixes (T4-a1-review): the
+        """Production scenario of a reused open event: the
         heartbeat never calls `cooldown.record_send` (only the disabled Claude
         Bridge does - radar_v08/cooldown.py's own module docstring), so
         `check_cooldown` always allows, and with `CLAUDE_BRIDGE_DISPATCH_ENABLED
@@ -286,7 +286,7 @@ class TestSwitchOff(OutcomeWiringBase):
 class TestRobustnessToARegistrationFailure(OutcomeWiringBase):
     def test_an_injected_registration_error_is_a_warning_and_the_cycle_still_completes(self):
         kraken = wiring.FakeKraken(assets=("BTC", "ETH"))
-        boom = OutcomeStoreError(OutcomeStoreFailure.SQLITE_ERROR, "injected failure for T4 robustness test")
+        boom = OutcomeStoreError(OutcomeStoreFailure.SQLITE_ERROR, "injected failure for the outcome robustness test")
 
         with mock.patch.object(self.store, "register_subject", side_effect=boom) as registered:
             output = self.run_full_cycle(kraken, wiring.StepClock())

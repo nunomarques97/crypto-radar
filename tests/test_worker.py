@@ -1,12 +1,12 @@
-"""T032b: local inference worker with a fake clock, a fake model and a disposable ledger.
+"""Local inference worker with a fake clock, a fake model and a disposable ledger.
 
-D21: no Ollama, no worker process against a real model, no production database. The
+No Ollama, no worker process against a real model, no production database. The
 worker runs over ``radar_v08.workflow.worker`` with:
 
 * a fake clock (wall and monotonic time move only when a test says so);
 * a fake local inference that returns scripted results after scripted latency, or
   blocks in a thread until released (cancellation, watchdog, collection independence);
-* the real T031a store (``adapters.invocation_store``) on a throwaway SQLite file in a
+* the real invocation store (``adapters.invocation_store``) on a throwaway SQLite file in a
   temporary folder, through the wiring ``radar_v08.worker.SqliteInvocationLedger``.
 """
 

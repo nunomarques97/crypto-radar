@@ -1,6 +1,6 @@
-"""T032b: local Ollama adapter against a fake server on 127.0.0.1 (ephemeral port).
+"""Local Ollama adapter against a fake server on 127.0.0.1 (ephemeral port).
 
-D21: no request ever reaches a real Ollama. Every test talks to an ``http.server`` bound
+No request ever reaches a real Ollama. Every test talks to an ``http.server`` bound
 to 127.0.0.1 on a port the OS picks, or to a fake session that records calls. Covered:
 fake latency and load, timeout, malformed replies (rejected without free-text parsing),
 oversized bodies, HTTP errors, redirects (refused, never followed), non-loopback hosts

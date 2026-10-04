@@ -170,7 +170,7 @@ FEES = {"spot_taker_bps": 26.0, "spot_maker_bps": 16.0, "futures_taker_bps": 5.0
 
 @mock.patch.dict(config.UNCALIBRATED_FEES, FEES)
 class TestCostPreviewDomainAdapter(unittest.TestCase):
-    """T040: build_cost_preview priced by radar_v08.domain.costs (two legs, both sides)."""
+    """build_cost_preview priced by radar_v08.domain.costs (two legs, both sides)."""
 
     def preview(self, depth, futures_depth=None, futures=False, funding=None):
         return build_cost_preview(
@@ -285,8 +285,8 @@ class TestCostPreviewDomainAdapter(unittest.TestCase):
 
     def test_cost_preview_stays_compact_for_the_qwen_payload(self):
         # cost_preview reaches every finalist of the live local Qwen payload
-        # (heartbeat._build_qwen_payload). HEAD before T040: 237 bytes spot, 479 spot+futures;
-        # T040 attempt 1 with the itemised scenario inside: 3332 / 6678 bytes.
+        # (heartbeat._build_qwen_payload). Before the itemised scenarios: 237 bytes spot, 479 spot+futures;
+        # A first attempt with the itemised scenario inside: 3332 / 6678 bytes.
         awkward = DepthMetrics(
             mid=1.2345, spread_bps=7.123456789, bid_depth_usd_0_5pct=1.0, ask_depth_usd_0_5pct=1.0,
             bid_depth_usd_1pct=1.0, ask_depth_usd_1pct=1.0, imbalance=0.0,
@@ -341,7 +341,7 @@ class TestCostPreviewDomainAdapter(unittest.TestCase):
 
 @mock.patch.dict(config.UNCALIBRATED_FEES, FEES)
 class TestVenueCostScenariosExposure(unittest.TestCase):
-    """T3/T042(e): venue_cost_scenarios is the public accessor to the exact
+    """venue_cost_scenarios is the public accessor to the exact
     cost_domain.CostScenario objects _venue_scenarios builds for build_cost_preview -
     same values, nothing recalculated, and no change to build_cost_preview's own
     signature or dict shape."""

@@ -1,4 +1,4 @@
-"""OC-1 model benchmark harness (T050b, OPERATING_CONTRACTS.md section 6, D33/D38).
+"""OC-1 model benchmark harness (OPERATING_CONTRACTS.md section 6).
 
 Pure orchestration over injected ports: the ``LocalInference`` port (``workflow.worker``)
 answers each call and a ``ResourceReporter`` port reports what the adapter measured for
@@ -136,7 +136,7 @@ class GoldSource(Enum):
     """Closed: deterministic fixture labels only. There is no LLM source."""
 
     DETERMINISTIC_FIXTURE = "deterministic_fixture"
-    # Corpus schema v2 (T051a, D64), members added only: gold computed from recorded data by
+    # Corpus schema v2, members added only: gold computed from recorded data by
     # a documented deterministic rule (never an LLM, a future return or an opportunity
     # score), and the explicit absence of gold. A GOLD_UNAVAILABLE case carries
     # ``abstain_expected`` None and is left out of every abstention denominator.
@@ -311,7 +311,7 @@ _RISK_KEY_FRAGMENTS = (
 # is flagged ``rationale_unverified`` and that blocks promotion (``_block_reasons``).
 MAX_SCANNED_TEXT_CHARS = 4096  # the rationale cap is 600; anything this long is refused unread
 
-# T050c (D54 b; docs/forja/reports/T2-a1-security.md nits 1 and 2): budget for the WHOLE reply,
+# Budget for the WHOLE reply,
 # checked before the risk gate reads a single string. MAX_SCANNED_TEXT_CHARS bounds one string,
 # not how many there are: 16 strings of 4096 x U+2152 took 6.79 s through invades_risk_domain.
 # Why this value. The OC-1 Screener may emit at most 768 output tokens (profile
@@ -400,17 +400,17 @@ _LEET_VARIANTS = (
 _INTRA_WORD_MARKS = re.compile(r"(?<=[a-z0-9])[^\sa-z0-9]+(?=[a-z0-9])")
 _LETTERS = re.compile(r"[a-z]+")
 _ALNUM_RUN = re.compile(r"[a-z0-9$@]+")
-# T050c (docs/forja/reports/T2-a1-security.md): the old form wrapped the mandatory "[a-z]"
+# The old form wrapped the mandatory "[a-z]"
 # in two "*" over the SAME class, so a run with no letter at all (a folded fraction glyph,
 # a bare number) made findall back off one character at a time from every position that
-# could start a run, O(run^2) (Security Reviewer: 0.435 s / 4096 x U+2152, 0.046 s / 4096 x
+# could start a run, O(run^2) (a security review measured 0.435 s / 4096 x U+2152, 0.046 s / 4096 x
 # "1"). One "+" with no inner choice cannot backtrack; the "contains a letter" condition
 # that used to sit inside the pattern now runs once per matched run, outside the regex,
 # alongside the digit/"$"/"@" check the loop already made (see the loop at _ALNUM_RUN.findall).
 # Number words. The pattern is ONE unit (a stem plus an optional suffix) and has no repeater:
 # the old form repeated the unit with "+", and because "four"+"th" and "fourth" (also
 # "ten"+"th" / "tenth", "six"+"th" / "sixth", ...) spell the same letters, a token such as
-# "fourth"*n + "q" made fullmatch try 2^n splits (T4 attempt 3 REJECT, ReDoS). Tokens made of
+# "fourth"*n + "q" made fullmatch try 2^n splits (ReDoS). Tokens made of
 # several units ("ninetyseven", "fourthfourth") are read by _is_number_word, a left-to-right
 # pass that marks which positions a unit can end at: O(len(token)) work, no backtracking.
 _NUMBER_WORD = re.compile(
@@ -1023,11 +1023,11 @@ def report_sha256(report: BenchmarkReport) -> str:
 
 
 def gold_unavailable() -> DeterministicGold:
-    """The gold of a corpus schema v2 case that has none (T051a, D64): ``GOLD_UNAVAILABLE``.
+    """The gold of a corpus schema v2 case that has none: ``GOLD_UNAVAILABLE``.
 
     ``abstain_expected`` is None: such a case is outside both abstention denominators
     (``_abstention_recall`` counts only true labels, ``_false_abstention`` skips None) and
     its result reports ``abstain_expected`` as null. The v1 annotation of
-    ``DeterministicGold`` is left as it is because this module only gains lines (D64).
+    ``DeterministicGold`` is left as it is because this module only gains lines.
     """
     return DeterministicGold(source=GoldSource.GOLD_UNAVAILABLE, abstain_expected=None)  # type: ignore[arg-type]

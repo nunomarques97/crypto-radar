@@ -1,5 +1,9 @@
 # Architecture
 
+Current implementation correction (2026-09-30): statements below that no account model, risk engine, paper ledger or private adapter exists predate these additions. Now in code: the paper game with the EX-1 paper exit policy ([docs/EXECUTION_ARCHITECTURE.md](docs/EXECUTION_ARCHITECTURE.md)) and `radar_v08/paper_monitor.py`; the pure Risk Engine `radar_v08/domain/risk.py`, the append-only `pilot_*` tables and the pilot shadow service for a 240 EUR pretend account (mode **PAPER**, not SHADOW_LIVE); and `radar_v08/adapters/kraken_private_read.py`, which reads accounts only, refuses write endpoints and is imported by no radar, loop, paper, pilot or UI module (only by the separate command `scripts/kraken_account_check.py`). No live order path, Order Planner, Execution Engine or reconciliation exists, and no strategy has qualified. The F0-F7 gates and all permission boundaries are unchanged. See [Paper wallet reporting](#current-paper-wallet-reporting-2026-09-30) for the wallet valuation.
+
+Current implementation addition (2026-10-04): the research-only trend paper module keeps paper books from public Binance and Kraken daily candles in its own ledgers under the state dir, with a start hook, local alerts, CLIs and a read-only Game tab panel. It adds no order path, account access or qualification. See [Trend paper module](#current-trend-paper-module-research-paper-only-2026-10-04).
+
 Audited 2026-09-14. Sections marked CURRENT describe code. TARGET sections are accepted design, not deployed functionality. `docs/TAKEOVER_AUDIT.md` records defects and evidence; `ROADMAP.md` controls implementation order.
 
 ## CURRENT: entry points and flow
@@ -65,6 +69,83 @@ Current statuses: `PENDING`, `PROCESSING`, `PROCESSED`, `DEFERRED`, `FAILED`. Co
 Qwen is the only actual local LLM integration. Red Team is NOT_CONFIGURED. Sonnet/Fable registry entries are projections over the cloud bridge. “Orchestrator” in a UI label does not implement orchestration. `collect_real_agent_communications()` intentionally returns `[]`.
 
 The room has a reusable SVG worker renderer, explicit topology, communication-ID deduplication, arrival reactions, and Node tests. Its source is a good base for richer spatial visualization. Current status inference is imperfect: queued legacy work may display PROCESSING; cached old output can still imply health; Qwen COMPLETED can describe a cycle with candidates but no successful review. New telemetry should correct those semantics without fabricating activity.
+
+## CURRENT: paper wallet reporting (2026-09-30)
+
+Reporting only: no trading decision, fee default (`UNCALIBRATED_FEES`), exit rule, historical row or schema changes. Both read-only readers (`ui/paper_reader.py` for the paper game, `ui/pilot_reader.py` for the pilot shadow) add a `valuation` object at `as_of`, with the legacy fields kept for compatibility. Money is a cent string; an unavailable value is `null`, never `0`.
+
+| Field | Paper game (`wallet.valuation`) | Pilot shadow (`valuation`, pretend EUR, PAPER) |
+|---|---|---|
+| `realized_balance` / `realized_pnl` | start + recorded close nets / minus start | assigned + recorded close nets / the nets |
+| `open_cost_basis` | open stakes (no fee is taken at the open; `paper.settle` charges both legs at the close) | recorded position cost basis, entry fee included (`risk.entry_cost_basis`) |
+| `free_cash` | realized balance - open cost basis | same (`risk.available_cash`) |
+| `liquidation_value` | stake + `paper.settle(direction, stake, stored fee_bps, entry, mark).net` | quantity x mark bid - exit fee rounded up to the cent |
+| `open_net_pnl` | the settle net (spread and both assumed fees once) | liquidation - cost basis (`risk.unrealized_mark`) |
+| `total_equity` | free cash + liquidation | free cash + liquidation |
+
+Identity: `total_equity = free_cash + liquidation_value = realized_balance + open_net_pnl`. Neither the entry consideration nor a fee is counted twice. **Freshness rule** (`paper_reader.reporting_mark`): a mark is the latest quote of exactly the position's pair recorded in `[entry, as_of]`, at most `NOW_PRICE_MAX_AGE` (10 minutes) old, that `paper.validate_quote` accepts (finite, positive, not crossed, online). Without one the position is `missing_quote`, `stale_quote` or `invalid_quote`; its liquidation and open net and the totals that depend on them are `null` with `stale` true and the pair listed in `unmarked`, while cash, cost basis and realized P&L stay available. The pilot's runtime `account.equity` (entry-quote fallback used by its locks and sizing) is unchanged and not used for the headline. Each play or position carries its stored `fee_bps` per leg with `fee_source: ASSUMED` and `account_tier_verified: false`; a paper play on a pair not quoted in the wallet currency carries `fx_excluded: true` (EUR-scaled price moves, no exchange rate: a hypothetical simulation, not EUR inventory).
+
+`scripts/audit_paper.py --db PATH [--format json|text]` is a separate read-only boundary: explicit path only, existence check before a `file:` URI `mode=ro` connection with `PRAGMA query_only = ON`, closed before printing to stdout; it imports only the standard library and `radar_v08.domain.paper`. It aggregates paper cashflow, counts, groups (policy, direction, setup, entry spread bucket, entry UTC hour), hold durations by exit reason, open/closed counts and pilot refusals, with `as_of` and units. Missing tables or columns are typed unavailable entries, never zero. It takes no mark, so open plays count at their stake.
+
+## CURRENT: trend paper module (research, paper only, 2026-10-04)
+
+Operator guide: [docs/guides/TREND-PAPER.md](docs/guides/TREND-PAPER.md). Paper books of four registered trend rules (ENS, ENS_VT, `btc_trend5`, `btc_trend5_vt`) and their buy-and-hold comparators: 24 Binance books ({EUR, USDT} x six rules x 0.1%/0.4% per leg) and 12 Kraken EUR books (six rules x 0.4%/0.8% per leg), 7000 of the quote currency each from 2026-10-04 UTC. No order, account, credential or private endpoint; results are pre-tax and every rule is NOT QUALIFIED. The paper-only guarantees and remaining risks are in [RISK.md](RISK.md#trend-paper-research-paper-only). The module touches no radar table and never opens `radar_state.sqlite`.
+
+### Layering
+
+| Layer | Modules | Responsibility |
+|---|---|---|
+| Domain (pure) | `radar_v08/domain/trend_engine.py`, `trend_metrics.py`, `trend_registry.py`, `trend_strategies.py`, `trend_paper.py`, `trend_paper_kraken.py` | Spot engine port, metrics, registry rules, the four typed rules bound by sha256 to their registered sources, the Binance books (signals, fills, records, hash chain, verification, report text) and the Kraken EUR books. Candles, dates, the clock reading and ledger bytes are arguments; no I/O or configuration |
+| Adapters | `radar_v08/adapters/binance_public_klines.py`, `kraken_public_ohlc.py`, `trend_registry_store.py`, `trend_paper_store.py`, `trend_alert_store.py` | Binance public klines (own GET-only `requests` session, fixed host/path/symbol allowlist), Kraken public OHLC (over the existing `GuardedSession`), the imported research records in `docs/audit/2026-10-03-trend-feasibility/`, ledger read/lock/append, alert dedupe file |
+| Service | `radar_v08/trend_paper_hook.py` | `catch_up` (Binance books), `kraken_catch_up`, the alert step `alert_exposure_changes`, `run_guarded` and `start_catch_up_thread` |
+| Alert plan (pure) | `radar_v08/trend_paper_alerts.py` | Exposure changes of each rule's reference book (USDT, 0.1%), the burst plan and the toast text; no I/O, clock or configuration |
+| Wiring | `radar_v08/cli.py` (`_start_trend_paper_catch_up`, called by `_run_loop` before the cycles), `radar_v08/config.py` (`RADAR_TREND_PAPER_ENABLED`, default on; `"0"`, `"false"`, `"False"` turn it off) | Start hook only; no other radar mode runs it |
+| Scripts | `scripts/run_trend_paper.py` (`run`, `report [--offline]`, `catch-up`), `scripts/run_trend_paper_kraken.py` (`run`, `report`, `catch-up`), both with `--state-dir`; `scripts/replay_trend_paper.py` | Manual catch-up and text reports; offline deterministic replay of the end-to-end scenario |
+| UI | `ui/trend_reader.py`, `ui/bridge.py` (`get_trend_paper_state`, `trend_paper_catch_up`), `ui/web/trend_paper.js`, `ui/web/index.html`, `ui/web/style.css` | Read-only view of `ledger.jsonl` in the Game tab panel "Trend paper (research)"; "Catch up now" is the only control |
+
+Import boundary: `radar_v08/domain` and `radar_v08/adapters` are critical package roots in `scripts/run_quality.py` (strict mypy and the import-boundary check, never covered by the baseline). The domain rule forbids imports of adapters, `radar_v08.config`, `ui`, `os`, `pathlib`, network modules and `sqlite3`, so the trend domain modules receive everything as arguments. `trend_paper_hook.py` and `trend_paper_alerts.py` sit at the package top level, outside the critical roots, next to the other wiring modules. The Kraken private read adapter is not imported by any trend module.
+
+### Data flow
+
+```mermaid
+flowchart TD
+  LOOP[radar.py --mode loop start] --> TH[trend-paper-catch-up daemon thread]
+  TH --> CB[Binance catch-up]
+  BTN[Panel: Catch up now] --> CB
+  CLI1[run_trend_paper.py] --> CB
+  BK[Binance public daily klines] --> CB
+  CB --> L[trend_paper/ledger.jsonl]
+  CB -->|start hook only, days booked| AL[Alert step]
+  AL --> AF[trend_paper/alerts.jsonl]
+  AL --> TOAST[Local Windows toast]
+  TH -->|after the Binance step and alerts| CK[Kraken catch-up]
+  CLI2[run_trend_paper_kraken.py] --> CK
+  BK -->|USDT closes: same signals| CK
+  KO[Kraken public daily OHLC] -->|XBTEUR / ETHEUR open| CK
+  CK --> KL[trend_paper/kraken_ledger.jsonl]
+  L --> RD[ui/trend_reader.py] --> P[Game tab panel]
+  L --> REP[CLI text reports]
+  KL --> REP
+```
+
+1. **Start.** `_run_loop` calls `_start_trend_paper_catch_up()`. With the flag on, it imports the hook and `start_catch_up_thread(config.STATE_DIR)` starts one daemon thread named `trend-paper-catch-up` and returns; the loop never waits for it. Import, thread-start and thread failures are logged and swallowed. The thread runs `run_guarded`: the Binance step, then (if days were booked) the alert step, then the Kraken step in its own try/except.
+2. **Catch-up.** Under the ledger's exclusive lock, the catch-up reads and verifies the ledger, fetches only the candles the missed days and the signal need, settles every due day up to today's UTC date, and only then appends, day by day, each day whole (24 records per booked Binance day, 12 per Kraken day, or one chained skip line). Signals use the USDT closes before the fill day; fills use the day's open. Outcomes are `BOOKED`, `UP_TO_DATE`, `BEFORE_START` or `WAITING_FOR_DATA` (nothing written); a market, ledger or lock failure writes nothing. Missed days are backfilled from 2026-10-04 in date sequence.
+3. **Alerts.** `trend_paper_alerts` plans at most one toast per rule per catch-up; the hook claims each (rule, day) key in `alerts.jsonl` under its lock before calling `notifications.send_windows_notification`. Days booked by the panel or the CLIs never alert, and Kraken books never alert.
+4. **Kraken.** `kraken_catch_up` uses its own Binance client for the signals and `KrakenPublicOhlc` for the fills, with no substitute price. It never writes `ledger.jsonl` or `alerts.jsonl`. Its report reads `ledger.jsonl` only to show the Kraken minus Binance EUR fill difference.
+5. **Read side.** `TrendReader.read` uses `read_ledger_settled`: no lock, no file or directory created, no network; a refused read while a writer holds the lock is reported as transient. The bridge polls it only while the Game tab is visible. `TrendReader.catch_up` (the "Catch up now" button) runs the Binance `catch_up` only, one at a time per process; the radar's lock gives `BUSY`.
+
+### State files
+
+The state dir is `config.STATE_DIR`: `RADAR_STATE_DIR` if set, else the repository folder; the CLIs accept `--state-dir`. Everything lives in `<state dir>/trend_paper/`, which `.gitignore` excludes (`/trend_paper/`).
+
+| File | Written by | Content |
+|---|---|---|
+| `ledger.jsonl` | Binance catch-up only (start thread, "Catch up now", `run_trend_paper.py`) | 24 book records per booked day plus one skip line per skipped day, canonical JSON, hash-chained from 2026-10-04, append-only |
+| `ledger.jsonl.lock` | the same writers | Exclusive non-blocking OS lock (`msvcrt.locking` on Windows, `flock` elsewhere); the lock is the open handle, so a leftover file never blocks and is never deleted |
+| `kraken_ledger.jsonl`, `kraken_ledger.jsonl.lock` | Kraken catch-up only (start thread, `run_trend_paper_kraken.py`) | 12 book records per booked day plus skip lines, own hash chain and lock, same canonical format |
+| `alerts.jsonl`, `alerts.jsonl.lock` | Alert step only | One line per handled (rule, day): `claimed` or `superseded`; append-only, never rewritten |
+
+A torn, edited or invalid ledger is refused on every read and never rewritten; recovery is the manual rename in the operator guide. Rollback: `RADAR_TREND_PAPER_ENABLED=0`, then delete `<state dir>/trend_paper/` if wanted.
 
 ## TARGET: deterministic local analysis workflow
 

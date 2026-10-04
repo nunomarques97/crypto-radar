@@ -248,7 +248,7 @@ CREATE TABLE IF NOT EXISTS model_analyses (
 CREATE INDEX IF NOT EXISTS idx_model_analyses_event ON model_analyses(event_id);
 
 -- Single-row table: the Claude Bridge's last-known health state, so the
--- terminal can show it even across process restarts (task section 15).
+-- terminal can show it even across process restarts.
 CREATE TABLE IF NOT EXISTS bridge_health (
     id INTEGER PRIMARY KEY CHECK (id = 1),
     state TEXT NOT NULL,
@@ -280,6 +280,11 @@ class ForwardReturnUnlabelable(Enum):
     # whole window lies before the snapshot retention boundary: no matching
     # snapshot is retained and none can ever be written there again.
     TARGET_OUTSIDE_SNAPSHOT_RETENTION = "target_outside_snapshot_retention"
+    # No snapshot of its pair within +/- tolerance of the target, and a spot
+    # snapshot of any pair already exists after target + tolerance + margin
+    # snapshots are only written at the current
+    # cycle stamp, so that window can no longer fill.
+    TARGET_IN_SNAPSHOT_GAP = "target_in_snapshot_gap"
 
 # Phase 4 adds these to `events` in place, so a Phase 1-3 radar_state.sqlite
 # upgrades rather than being replaced (same pattern as forward_returns above).
@@ -868,6 +873,18 @@ class SnapshotStore:
             row = cur.fetchone()
         return row[0] if row else None
 
+    def latest_spot_snapshot_ts(self, pair: str | None = None) -> str | None:
+        """Latest spot snapshot ts, for one pair (index-backed) or, with no
+        pair, across every pair (a full scan: call sparingly).
+        """
+        with self._cursor() as cur:
+            if pair is None:
+                cur.execute("SELECT MAX(ts) FROM spot_snapshots")
+            else:
+                cur.execute("SELECT MAX(ts) FROM spot_snapshots WHERE pair = ?", (pair,))
+            row = cur.fetchone()
+        return row[0] if row else None
+
     def spot_snapshots_between_pair(self, pair: str, start_ts: str, end_ts: str) -> list[sqlite3.Row]:
         with self._cursor() as cur:
             cur.execute(
@@ -1012,6 +1029,29 @@ class SnapshotStore:
                 (reason.value, marked_at, row_id),
             )
             return cur.rowcount == 1
+
+    def mark_forward_returns_unlabelable(
+        self, row_ids: list[int], reason: ForwardReturnUnlabelable, marked_at: str
+    ) -> int:
+        """`mark_forward_return_unlabelable` for many rows in one transaction
+        (one commit), with the same guard: never deletes a row, never writes a
+        return, never overwrites a labeled or marked row. Returns how many
+        rows were actually marked.
+        """
+        if not isinstance(reason, ForwardReturnUnlabelable):
+            raise ValueError(f"unknown forward-return unlabelable reason: {reason!r}")
+        if not row_ids:
+            return 0
+        marked = 0
+        with self._cursor() as cur:
+            for row_id in row_ids:
+                cur.execute(
+                    "UPDATE forward_returns SET unlabelable_reason = ?, unlabelable_at = ? "
+                    "WHERE id = ? AND return_pct IS NULL AND unlabelable_reason IS NULL",
+                    (reason.value, marked_at, row_id),
+                )
+                marked += cur.rowcount
+        return marked
 
     def label_forward_return(
         self, row_id: int, return_pct: float, mfe_pct: float | None, mae_pct: float | None, labeled_at: str
@@ -1262,7 +1302,7 @@ class SnapshotStore:
 
     def recover_stale_processing(self, cutoff_iso: str, now_iso: str) -> list[str]:
         """A PROCESSING row whose claim predates `cutoff_iso` means the
-        process died mid-call (task section 2: recovery after timeout).
+        process died mid-call (recovery after timeout).
         Goes back to PENDING, not DEFERRED - it never actually failed a call.
         Returns the recovered event_ids so the caller can audit-log each one.
         """

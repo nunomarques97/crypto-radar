@@ -2,11 +2,11 @@
 
 Pure functions over already-fetched Depth/Trades rows - no network calls here
 (kraken_spot.py owns fetching). Only ever called for L3 finalists (architecture
-doc + task section 1/2: "O order book só deve ser consultado para finalistas").
+doc: "the order book is only queried for finalists").
 
 Nothing here invents the aggressor side: Kraken's Trades `side` field is used
 as-is and the resulting ratio is always labeled APPROXIMATE, never VERIFIED
-fact (task section 2: "Não inventar o lado agressor").
+fact ("never invent the aggressor side").
 """
 
 from __future__ import annotations

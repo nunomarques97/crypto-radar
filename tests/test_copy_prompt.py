@@ -174,17 +174,17 @@ class TestSyntheticTestEventEndToEnd(_StoreTestCase):
         self.assertTrue(result["copied"])  # 3. prompt copiado
         copy_fn.assert_called_once()
         prompt_text = copy_fn.call_args[0][0]
-        self.assertIn(event_id, prompt_text)  # 2. prompt gerado, específico deste evento
+        self.assertIn(event_id, prompt_text)  # 2. generated prompt, specific to this event
         self.assertIn("TESTCOIN", prompt_text)
         self.assertIn("TEST_EVENT=true", prompt_text)
 
         output = buf.getvalue()
-        self.assertIn("Prompt copied to clipboard ✅", output)  # 4. terminal confirma
+        self.assertIn("Prompt copied to clipboard ✅", output)  # 4. the terminal confirms
         self.assertIn(f"Event: {event_id}", output)
 
-        anthropic_check.assert_not_called()  # 6. nenhum Qwen/7. Claude real necessário
+        anthropic_check.assert_not_called()  # 6. no Qwen / 7. no real Claude needed
         qwen_check.assert_not_called()
-        # 5/8. nenhuma chamada privada à Kraken / nenhuma operação de trading:
+        # 5/8. no private Kraken call / no trading operation:
         # this module never imports kraken_spot/kraken_futures at all.
         import radar_v08.notifications as notifications_module
         self.assertNotIn("kraken_spot", dir(notifications_module))

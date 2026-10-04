@@ -9,7 +9,7 @@ task: the UI is not the orchestrator).
 
 Every returned dict must be JSON-serializable (pywebview marshals it to JS)
 and must never include a secret (NTFY topic, API keys) - see `_serialize_*`
-helpers, which project only the fields DESIGN.md/the task spec allow onto
+helpers, which project only the fields DESIGN.md allows onto
 the wire.
 """
 
@@ -31,7 +31,14 @@ from radar_v08 import (
 )
 from radar_v08.cli import _run_notify_test
 from radar_v08.store import SnapshotStore
-from ui import paths, process_manager, ui_state
+from ui import (
+    paper_reader,
+    paths,
+    pilot_reader,
+    process_manager,
+    trend_reader,
+    ui_state,
+)
 from ui.agents import (
     AGENT_REGISTRY,
     Agent,
@@ -76,6 +83,14 @@ class Api:
         # Static architecture data (who can hand off to whom) - never changes
         # at runtime, so it's computed once here rather than every tick().
         self._agent_connections = build_connections(AGENT_REGISTRY)
+        # The paper game reads through its own read-only connection (mode=ro), never
+        # through self._store, so opening the Game tab cannot write the radar database.
+        self._paper = paper_reader.from_config()
+        # The pilot shadow likewise: its own mode=ro connection, no control action.
+        self._pilot = pilot_reader.from_config()
+        # The trend paper books: read through trend_paper_store.read_ledger only (no lock, no
+        # file created); the network is touched only by trend_paper_catch_up.
+        self._trend = trend_reader.from_config()
 
     # -- lifecycle -------------------------------------------------------------
 
@@ -133,6 +148,34 @@ class Api:
                 "log_lines": self._process.recent_log_lines(max_lines=20),
             }
 
+    # -- paper game (polled by app.js only while the Game tab is visible) -----------
+
+    def get_paper_state(self) -> dict[str, Any]:
+        """The pretend wallet, its plays and the agents' recorded activity (read-only).
+
+        Money is decimal strings in cents; see ui/paper_reader.py for every field."""
+        return self._paper.read()
+
+    def get_pilot_state(self) -> dict[str, Any]:
+        """The pilot shadow's envelope, equity, limits, locks, kill switch, open position,
+        last sizing and NO_TRADE reasons (read-only; polled only while the Game tab is
+        visible). Money is decimal strings in cents; see ui/pilot_reader.py for every field."""
+        return self._pilot.read()
+
+    def get_trend_paper_state(self) -> dict[str, Any]:
+        """The trend paper books (research only, pre-tax, no real orders), read-only; polled
+        only while the Game tab is visible. Never raises; see ui/trend_reader.py for every field."""
+        try:
+            return self._trend.read()
+        except Exception:
+            return trend_reader.unavailable_payload()
+
+    def trend_paper_catch_up(self) -> dict[str, Any]:
+        """Run the existing trend paper catch-up now (public Binance klines only, paper books
+        only): ``{ok, status, days_booked, detail}``. One at a time; the radar's ledger lock gives
+        BUSY and nothing is written. The only Api method that writes the trend paper ledger."""
+        return self._trend.catch_up()
+
     # -- process control ---------------------------------------------------------
 
     def start_radar(self) -> dict[str, Any]:
@@ -147,7 +190,7 @@ class Api:
         self._process.restart()
         return {"state": self._process.snapshot().state}
 
-    # -- alerts / historico --------------------------------------------------------
+    # -- alerts / history -----------------------------------------------------------
 
     def list_alerts(self, limit: int | None = None) -> list[dict[str, Any]]:
         with self._lock:
@@ -221,7 +264,7 @@ class Api:
         """Explicitly refuse a guessed/new TEST MODE route as well."""
         return self._refused_test_mode_effect("mock-alert diagnostics")
 
-    # -- sistema / logs -----------------------------------------------------------
+    # -- system / logs ------------------------------------------------------------
 
     def system_info(self) -> dict[str, Any]:
         return {

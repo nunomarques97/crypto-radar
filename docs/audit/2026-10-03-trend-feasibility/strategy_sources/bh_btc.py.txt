@@ -1,0 +1,15 @@
+"""Buy and hold BTC (benchmark). Ported from robust.py bh()."""
+NAME = "bh_btc"
+IS_BENCHMARK = True
+RULE = "Hold 100% BTCUSDT spot from the first evaluated day. Starts at bar 201 like robust.py so every BTC rule " \
+       "is compared on the same days."
+PARAMS = {}
+UNIVERSE = ["BTCUSDT"]
+WARMUP_DAYS = 201
+BAND = 0.01
+MAX_GROSS = 1.0
+PASS_CRITERIA = []  # reference only, nothing to pass
+
+
+def weights(h):
+    return {"BTCUSDT": 1.0}

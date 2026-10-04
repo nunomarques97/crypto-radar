@@ -9,7 +9,15 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from . import alerts, claude_bridge, config, mock_alert, notifications, ntfy
+from . import (
+    alerts,
+    claude_bridge,
+    config,
+    mock_alert,
+    notifications,
+    ntfy,
+    paper_monitor,
+)
 from .heartbeat import run_and_write
 from .shadow import run_shadow
 from .store import SnapshotStore
@@ -180,10 +188,10 @@ def _parse_event_arg(argv: list[str]) -> str | None:
 
 
 def _run_alerts() -> int:
-    """`python radar.py --mode alerts` (task 'HISTÓRICO DE ALERTAS'): lists
+    """`python radar.py --mode alerts` (alert history): lists
     recoverable alerts, most recent first, then - only when actually
     interactive (never in a script/test) - offers to copy one alert's prompt
-    by number, reusing `alerts.recover_prompt` (task section 5: no separate
+    by number, reusing `alerts.recover_prompt` (no separate
     prompt/clipboard/popup path for the interactive picker either).
     """
     store = SnapshotStore(config.SQLITE_PATH)
@@ -227,15 +235,46 @@ def _run_prompt_recovery(argv: list[str]) -> int:
 
 
 def _run_loop() -> int:
-    """Continuous operation (task section 16): a light heartbeat cadence, a
+    """Continuous operation: a light heartbeat cadence, a
     full cycle (which creates events) on a slower cadence, and the Claude
     Bridge drained every cycle so the queue never sits idle for long. Every
     interval is config-driven and none of them is aggressive polling.
+
+    The paper position monitor (``paper_monitor``, behind RADAR_PAPER_ENABLED and
+    RADAR_PAPER_MONITOR_ENABLED) runs beside it on its own daemon thread, with
+    its own connection and session; it is stopped and joined when the loop ends.
+
+    The trend paper catch-up (``trend_paper_hook``, behind RADAR_TREND_PAPER_ENABLED)
+    starts once on its own daemon thread and is never waited for.
     """
     logger.info(
         "Starting loop mode: heartbeat every %.0fs, full cycle every %.0fs",
         config.LOOP_HEARTBEAT_INTERVAL_SECONDS, config.LOOP_FULL_INTERVAL_SECONDS,
     )
+    _start_trend_paper_catch_up()
+    monitor = paper_monitor.start_monitor(config.SQLITE_PATH)
+    try:
+        return _loop_cycles()
+    finally:
+        if monitor is not None and not monitor.stop():
+            logger.warning("Paper monitor thread did not stop in time; it is a daemon and ends with the process")
+
+
+def _start_trend_paper_catch_up() -> None:
+    """Start the research-only trend paper catch-up without ever affecting the loop: the import,
+    the thread start and everything the thread does are guarded, and nothing waits for it."""
+    if not config.RADAR_TREND_PAPER_ENABLED:
+        logger.info("Trend paper catch-up off (RADAR_TREND_PAPER_ENABLED)")
+        return
+    try:
+        from . import trend_paper_hook
+
+        trend_paper_hook.start_catch_up_thread(config.STATE_DIR)
+    except Exception:
+        logger.warning("Trend paper catch-up not started; the radar continues", exc_info=True)
+
+
+def _loop_cycles() -> int:
     last_full = 0.0
     try:
         while True:

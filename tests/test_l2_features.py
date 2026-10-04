@@ -208,7 +208,7 @@ class TestT021FeatureSemantics(unittest.TestCase):
 
 
 def _old_contiguous_suffix(bars, interval_minutes):
-    """T025: verbatim copy of the pre-refactor `_contiguous_suffix` from
+    """Verbatim copy of the pre-refactor `_contiguous_suffix` from
     radar_v08/l2_features.py (before it delegated to
     structure.contiguous_tail/_bar_datetime), kept here only as the
     equivalence oracle. Do not "clean up" or reuse this outside this test.
@@ -227,7 +227,7 @@ def _old_contiguous_suffix(bars, interval_minutes):
 
 
 class TestContiguousSuffixEquivalence(unittest.TestCase):
-    """T025: radar_v08.l2_features._contiguous_suffix now delegates to
+    """radar_v08.l2_features._contiguous_suffix now delegates to
     structure.contiguous_tail/_bar_datetime. Prove it returns the exact
     same bars as the original hand-rolled backward walk, on fixtures with
     gaps, out-of-order bars, duplicate timestamps, an exact interval

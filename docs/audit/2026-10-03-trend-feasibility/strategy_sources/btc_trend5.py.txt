@@ -1,0 +1,45 @@
+"""S1 BTC trend ensemble, long/flat vs cash (STRATEGY-SWEEP.md #1 / top-5 item 1). Pre-declared 2026-10-03."""
+NAME = "btc_trend5"
+RULE = ("Five votes on BTCUSDT daily closes known before today's open: close > SMA100, close > SMA200, and three "
+        "close-based Donchian channels (long after a close above the previous 20 closes' max, flat after a close "
+        "below the previous 10 closes' min; same with 50/25 and 100/50; the most recent event decides). Position = "
+        "share of long votes (0, 0.2, ..., 1.0) in BTC spot, rest cash, traded at today's open; the 0.15 band means "
+        "a one-vote change trades while price drift alone rarely does.")
+PARAMS = {"sma": [100, 200], "donchian": [[20, 10], [50, 25], [100, 50]], "band": 0.15}
+UNIVERSE = ["BTCUSDT"]
+WARMUP_DAYS = 201
+BAND = PARAMS["band"]
+MAX_GROSS = 1.0
+# Identical for all six candidates of the top-5 batch (declared 2026-10-03, before any run). Primary scenario: fee 0.1%
+# per leg plus 5 bps slippage (runs use --slippage-bps 5). Each criterion carries the split it decides; the harness
+# evaluates every entry on every split, and the verdict for a split is the AND of the entries tagged with that split.
+# Holdout "after-tax return > 0" is expressed as after_tax_cagr > 0 (same sign). The 0.4% fee results are secondary.
+PASS_CRITERIA = [
+    {"split": "dev", "metric": "sharpe", "op": ">=", "benchmark": "bh_btc", "fee": 0.001},
+    {"split": "dev", "metric": "max_dd", "op": "<=", "benchmark": "bh_btc", "factor": 0.6, "fee": 0.001},
+    {"split": "dev", "metric": "after_tax_cagr", "op": ">=", "value": 0.05, "fee": 0.001},
+    {"split": "holdout", "metric": "after_tax_cagr", "op": ">", "value": 0.0, "fee": 0.001},
+    {"split": "holdout", "metric": "max_dd", "op": "<=", "value": 0.35, "fee": 0.001},
+]
+
+
+def donchian_long(closes, entry, exit_):
+    """Long after a close above the previous `entry` closes, flat after a close below the previous `exit_` closes.
+    State is rebuilt from history: the most recent of the two events decides (flat if neither has happened)."""
+    for t in range(len(closes) - 1, max(entry, exit_) - 1, -1):
+        c = closes[t]
+        if c > max(closes[t - entry:t]):
+            return True
+        if c < min(closes[t - exit_:t]):
+            return False
+    return False
+
+
+def trend_votes(closes):
+    votes = [closes[-1] > sum(closes[-n:]) / n for n in PARAMS["sma"]]
+    votes += [donchian_long(closes, e, x) for e, x in PARAMS["donchian"]]
+    return sum(votes) / len(votes)
+
+
+def weights(h):
+    return {"BTCUSDT": trend_votes(h.closes("BTCUSDT"))}

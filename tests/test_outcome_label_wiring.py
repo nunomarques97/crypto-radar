@@ -1,10 +1,10 @@
-"""T5/T042 - the heartbeat labels matured outcome horizons each cycle.
+"""The heartbeat labels matured outcome horizons each cycle.
 
 Step 9b wires `radar_v08.adapters.outcome_store.label_due_outcomes` into
 `run_heartbeat`, right after the legacy `label_forward_returns` call and
-before this cycle's own new subjects are registered (step 11, T4). Both
+before this cycle's own new subjects are registered (step 11). Both
 calls sit behind the same `config.RADAR_OUTCOME_TRACKING_ENABLED` switch
-(D2). These tests reuse the fake-Kraken heartbeat harness of
+. These tests reuse the fake-Kraken heartbeat harness of
 `test_integrity_wiring` and the outcome-subject helpers of
 `test_outcome_wiring` (same pattern, no socket, deterministic clock,
 disposable SQLite).
@@ -23,18 +23,18 @@ sys.path.insert(0, os.path.dirname(TESTS_DIR))
 sys.path.insert(0, TESTS_DIR)
 
 import test_integrity_wiring as wiring  # noqa: E402  (fake Kraken heartbeat harness)
-import test_outcome_wiring as owiring  # noqa: E402  (T4's OutcomeWiringBase, FROZEN)
+import test_outcome_wiring as owiring  # noqa: E402  (OutcomeWiringBase, FROZEN)
 
 from radar_v08 import config, heartbeat  # noqa: E402
 from radar_v08.domain.outcomes import HORIZONS  # noqa: E402
-from radar_v08.store import SpotSnapshotInput  # noqa: E402
+from radar_v08.store import ForwardReturnUnlabelable, SpotSnapshotInput  # noqa: E402
 
 FROZEN = owiring.FROZEN  # == test_integrity_wiring.T0, the fake futures serverTime anchor
 D = Decimal
 
 
 class LabelWiringBase(owiring.OutcomeWiringBase):
-    """Adds outcome_labels helpers on top of T4's subject/cost helpers."""
+    """Adds outcome_labels helpers on top of the outcome-wiring subject/cost helpers."""
 
     def label_rows(self, horizon=None):
         with sqlite3.connect(self.db_path) as conn:
@@ -193,7 +193,7 @@ class TestRobustnessToALabelingFailure(LabelWiringBase):
     def test_an_injected_labeling_error_is_a_warning_and_the_cycle_still_completes(self):
         kraken = wiring.FakeKraken(assets=("BTC", "ETH"))
         self.run_full_cycle(kraken, wiring.StepClock(start=FROZEN))
-        boom = RuntimeError("injected failure for T5 robustness test")
+        boom = RuntimeError("injected failure for the label robustness test")
 
         with self.no_new_subjects(), mock.patch.object(heartbeat.outcome_store, "label_due_outcomes", side_effect=boom) as labeler:
             output = self.run_synced_cycle(kraken, FROZEN + timedelta(minutes=16))
@@ -216,8 +216,8 @@ class TestRobustnessToALabelingFailure(LabelWiringBase):
 class TestLegacyForwardReturnsLabelerIsUnaffected(LabelWiringBase):
     def test_forward_returns_labeled_is_identical_whether_the_switch_is_on_or_off(self):
         """Regression: step 9's legacy `label_forward_returns(store, now)` call
-        is untouched by this task - same call, same arguments, same position
-        before the new step 9b. Toggling D2's switch must never change its
+        is untouched by the outcome labeler - same call, same arguments, same position
+        before the new step 9b. Toggling the outcome-tracking switch must never change its
         count (a fresh store has nothing pending either way: 0)."""
         kraken = wiring.FakeKraken(assets=("BTC", "ETH"))
 
@@ -233,9 +233,96 @@ class TestLegacyForwardReturnsLabelerIsUnaffected(LabelWiringBase):
         )
 
 
+class TestForwardReturnMarksReachTheRunRecord(LabelWiringBase):
+    """Step 9 passes `marked_out` to the legacy
+    labeler, and the run record and funnel gain an additive
+    `forward_returns_marked` object keyed by every ForwardReturnUnlabelable
+    value, next to the unchanged `forward_returns_labeled`."""
+
+    RETENTION = ForwardReturnUnlabelable.TARGET_OUTSIDE_SNAPSHOT_RETENTION.value
+    GAP = ForwardReturnUnlabelable.TARGET_IN_SNAPSHOT_GAP.value
+    GAP_ROWS = 5
+
+    def seed_pending_rows(self):
+        """One row whose window lies before the 7-day retention cutoff and
+        GAP_ROWS in-retention rows whose 15m target (FROZEN - 2h45m onwards)
+        has no XXBTZUSD snapshot within the tolerance. A planted snapshot a
+        day back keeps them inside the pair's retained history; the cycle's
+        own snapshot at FROZEN is the later snapshot that closes their window."""
+        self.insert_future_snapshot("XXBTZUSD", "BTC", FROZEN - timedelta(days=1), 100.0)
+        self.store.create_forward_return_placeholders(
+            "BTC", "XXBTZUSD", (FROZEN - timedelta(days=30)).isoformat(), 100.0, [15]
+        )
+        for i in range(self.GAP_ROWS):
+            entry = FROZEN - timedelta(hours=3) + timedelta(minutes=i)
+            self.store.create_forward_return_placeholders("BTC", "XXBTZUSD", entry.isoformat(), 100.0, [15])
+
+    def marked_by_reason(self):
+        counts = {reason.value: 0 for reason in ForwardReturnUnlabelable}
+        with sqlite3.connect(self.db_path) as conn:
+            for reason, n in conn.execute(
+                "SELECT unlabelable_reason, COUNT(*) FROM forward_returns "
+                "WHERE unlabelable_reason IS NOT NULL GROUP BY unlabelable_reason"
+            ):
+                counts[reason] = n
+        return counts
+
+    def pending_gap_rows(self):
+        return self.count(
+            "SELECT COUNT(*) FROM forward_returns WHERE ts < ? AND ts > ? "
+            "AND return_pct IS NULL AND unlabelable_reason IS NULL",
+            FROZEN.isoformat(), (FROZEN - timedelta(days=1)).isoformat(),
+        )
+
+    def test_run_record_counts_match_the_rows_marked_in_each_cycle(self):
+        self.seed_pending_rows()
+        kraken = wiring.FakeKraken(assets=("BTC", "ETH"))
+        before = self.marked_by_reason()
+        self.assertEqual(before, {self.RETENTION: 0, self.GAP: 0})
+
+        # A 2-row batch makes the pass take several batches: the counts are
+        # per pass, not per batch.
+        with mock.patch.object(config, "FORWARD_RETURN_LABEL_BATCH_LIMIT", 2):
+            first = self.run_full_cycle(kraken, wiring.StepClock(start=FROZEN))
+        after_first = self.marked_by_reason()
+        self.assertEqual(after_first, {self.RETENTION: 1, self.GAP: self.GAP_ROWS})
+        record = self.run_records[-1]
+        self.assertEqual(record["forward_returns_marked"], after_first)
+        self.assertEqual(first["funnel"]["forward_returns_marked"], after_first)
+        self.assertEqual(record["forward_returns_labeled"], 0)
+        self.assertEqual(first["funnel"]["forward_returns_labeled"], 0)
+        self.assertEqual(self.pending_gap_rows(), 0)
+        self.assertEqual(
+            self.count("SELECT COUNT(*) FROM forward_returns WHERE unlabelable_reason IS NOT NULL AND return_pct IS NOT NULL"),
+            0,
+            "a marked row never gets a return",
+        )
+
+        # The next cycle marks nothing new, and says so.
+        with self.no_new_subjects():
+            second = self.run_synced_cycle(kraken, FROZEN + timedelta(minutes=1))
+        self.assertEqual(self.marked_by_reason(), after_first)
+        self.assertEqual(self.run_records[-1]["forward_returns_marked"], {self.RETENTION: 0, self.GAP: 0})
+        self.assertEqual(second["funnel"]["forward_returns_marked"], {self.RETENTION: 0, self.GAP: 0})
+
+    def test_switch_off_reports_zero_gap_marks_with_the_key_still_present(self):
+        self.seed_pending_rows()
+        kraken = wiring.FakeKraken(assets=("BTC", "ETH"))
+
+        with mock.patch.object(config, "FORWARD_RETURN_MARK_GAPS_ENABLED", False):
+            output = self.run_full_cycle(kraken, wiring.StepClock(start=FROZEN))
+
+        record = self.run_records[-1]
+        self.assertIn(self.GAP, record["forward_returns_marked"])
+        self.assertEqual(record["forward_returns_marked"], {self.RETENTION: 1, self.GAP: 0})
+        self.assertEqual(output["funnel"]["forward_returns_marked"], {self.RETENTION: 1, self.GAP: 0})
+        self.assertEqual(self.marked_by_reason(), {self.RETENTION: 1, self.GAP: 0})
+        self.assertEqual(self.pending_gap_rows(), self.GAP_ROWS, "gap rows stay pending, as at HEAD")
+
+
 class TestHonestyNoRecordedCostMeansNetUnavailable(LabelWiringBase):
     def test_a_screener_only_subject_matures_with_net_unavailable_typed_never_zero_or_gross(self):
-        """D3/screener-only (T4): a non-`full` cycle never has an L3 cost
+        """Screener-only: a non-`full` cycle never has an L3 cost
         scenario, so `costs=()` for every subject registered there. FakeKraken's
         price never moves, so the market itself really is flat (gross_markout a
         real, measured 0) - the honesty property under test is that net_markout

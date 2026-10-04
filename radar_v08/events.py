@@ -114,7 +114,7 @@ def snapshot_to_jsonl(store: SnapshotStore, event_id: str | None = None, path: s
 
     Called after every Phase 4 lifecycle transition (claim/processed/deferred/
     failed/recovered/notified) so the append-only log stays the full audit trail
-    of every change (architecture doc: "events.jsonl é o log/auditoria"). Each
+    of every change (architecture doc: "events.jsonl is the log/audit trail"). Each
     line is the event row as it was *committed with the change*, plus
     `delivery_id`, `outbox_seq`, `outbox_kind` and `outbox_schema`.
 

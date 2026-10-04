@@ -1,0 +1,24 @@
+"""ENS trend ensemble on BTC. Ported from robust.py run(vol_target=None). Rule pre-declared 2026-10-03."""
+NAME = "ens_btc"
+RULE = ("Position = fraction of SMA lookbacks {20,50,100,150,200} with previous close > SMA (0..1), executed at "
+        "the next open; rebalance only when |target - held| >= 0.2 or the target is 0. Lookbacks are a fixed even "
+        "spread, not tuned.")
+PARAMS = {"lookbacks": [20, 50, 100, 150, 200], "band": 0.2}
+UNIVERSE = ["BTCUSDT"]
+WARMUP_DAYS = 201
+BAND = PARAMS["band"]
+MAX_GROSS = 1.0
+PASS_CRITERIA = [  # same pass rule as analyze.py TREND, applied to the split being run
+    {"metric": "sharpe", "op": ">=", "benchmark": "bh_btc", "fee": 0.004},
+    {"metric": "max_dd", "op": "<=", "benchmark": "bh_btc", "factor": 0.6, "fee": 0.004},
+]
+
+
+def target(closes, lookbacks):
+    c = closes[-1]
+    return sum(c > sum(closes[-n:]) / n for n in lookbacks) / len(lookbacks)
+
+
+def weights(h):
+    closes = h.closes("BTCUSDT", max(PARAMS["lookbacks"]))
+    return {"BTCUSDT": target(closes, PARAMS["lookbacks"])}

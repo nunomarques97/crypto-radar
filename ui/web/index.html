@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <title>Crypto Radar — Control Room</title>
@@ -11,10 +11,10 @@
   <div class="topbar">
     <div class="brand"><span class="dot" id="brand-dot"></span> CRYPTO RADAR <span style="color:var(--muted-dim); font-weight:400;">— Control Room</span></div>
     <div class="topbar-status">
-      <span>Estado <b class="mono" id="proc-state">STOPPED</b></span>
+      <span>State <b class="mono" id="proc-state">STOPPED</b></span>
       <span>Uptime <b class="mono" id="proc-uptime">—</b></span>
-      <span>Último heartbeat <b class="mono" id="last-heartbeat">—</b></span>
-      <span>Próximo ciclo FULL <b class="mono" id="next-cycle">—</b></span>
+      <span>Last heartbeat <b class="mono" id="last-heartbeat">—</b></span>
+      <span>Next FULL cycle <b class="mono" id="next-cycle">—</b></span>
       <span id="test-mode-banner" class="test-mode-banner" hidden>🧪 TEST MODE ACTIVE</span>
     </div>
     <div class="btns">
@@ -27,10 +27,11 @@
 
   <div class="sidebar">
     <div class="nav-item active" data-tab="dashboard">Dashboard</div>
-    <div class="nav-item" data-tab="agentes">Agentes</div>
-    <div class="nav-item" data-tab="alertas">Alertas <span class="badge" id="alerts-badge">0</span></div>
-    <div class="nav-item" data-tab="historico">Histórico</div>
-    <div class="nav-item" data-tab="sistema">Sistema / Logs</div>
+    <div class="nav-item" data-tab="agents">Agents</div>
+    <div class="nav-item" data-tab="alerts">Alerts <span class="badge" id="alerts-badge">0</span></div>
+    <div class="nav-item" data-tab="history">History</div>
+    <div class="nav-item" data-tab="game">Game</div>
+    <div class="nav-item" data-tab="system">System / Logs</div>
   </div>
 
   <div class="content">
@@ -44,21 +45,21 @@
         </div>
 
         <div class="panel span2">
-          <h3>Agentes</h3>
+          <h3>Agents</h3>
           <div class="rail" id="agents-rail-mini"></div>
         </div>
 
         <div class="panel">
           <h3>Funnel</h3>
           <div id="funnel-rows"></div>
-          <div class="funnel-note">Demand = decisão do router neste ciclo. Calls = chamadas reais à API (model_analyses).</div>
+          <div class="funnel-note">Demand = the router's decision in this cycle. Calls = real API calls (model_analyses).</div>
         </div>
 
         <div class="panel span3">
-          <h3>Alertas reais — mais recentes</h3>
+          <h3>Real alerts — latest</h3>
           <table>
             <thead><tr>
-              <th>Hora</th><th>Asset</th><th>Setup</th><th>Dir</th><th>Opp.</th><th>Tradeability</th><th>Demand</th><th>Lifecycle</th><th>NTFY</th><th></th>
+              <th>Time</th><th>Asset</th><th>Setup</th><th>Dir</th><th>Opp.</th><th>Tradeability</th><th>Demand</th><th>Lifecycle</th><th>NTFY</th><th></th>
             </tr></thead>
             <tbody id="alerts-preview-body"></tbody>
           </table>
@@ -66,8 +67,8 @@
       </div>
     </section>
 
-    <!-- AGENTES -->
-    <section class="tab-panel" id="tab-agentes" hidden>
+    <!-- AGENTS -->
+    <section class="tab-panel" id="tab-agents" hidden>
       <div class="room-panel">
         <h3>Agent Control Room</h3>
         <div id="agent-room"></div>
@@ -81,73 +82,124 @@
       </div>
     </section>
 
-    <!-- ALERTAS -->
-    <section class="tab-panel" id="tab-alertas" hidden>
+    <!-- ALERTS -->
+    <section class="tab-panel" id="tab-alerts" hidden>
       <div class="panel">
-        <h3>Alertas reais</h3>
+        <h3>Real alerts</h3>
         <table>
           <thead><tr>
-            <th>Hora</th><th>Asset</th><th>Setup</th><th>Dir</th><th>Opp.</th><th>Tradeability</th><th>Demand</th><th>Lifecycle</th><th>NTFY</th><th></th>
+            <th>Time</th><th>Asset</th><th>Setup</th><th>Dir</th><th>Opp.</th><th>Tradeability</th><th>Demand</th><th>Lifecycle</th><th>NTFY</th><th></th>
           </tr></thead>
           <tbody id="alerts-body"></tbody>
         </table>
-        <div id="alerts-empty" class="empty" hidden>Sem alertas reais até ao momento.</div>
+        <div id="alerts-empty" class="empty" hidden>No real alerts so far.</div>
       </div>
     </section>
 
-    <!-- HISTORICO -->
-    <section class="tab-panel" id="tab-historico" hidden>
+    <!-- HISTORY -->
+    <section class="tab-panel" id="tab-history" hidden>
       <div class="panel">
-        <h3>Histórico</h3>
+        <h3>History</h3>
         <table>
           <thead><tr>
-            <th>Hora</th><th>Asset</th><th>Setup</th><th>Dir</th><th>Opp.</th><th>Tradeability</th><th>Demand</th><th>NTFY</th><th></th>
+            <th>Time</th><th>Asset</th><th>Setup</th><th>Dir</th><th>Opp.</th><th>Tradeability</th><th>Demand</th><th>NTFY</th><th></th>
           </tr></thead>
           <tbody id="history-body"></tbody>
         </table>
-        <div id="history-empty" class="empty" hidden>Sem histórico registado ainda.</div>
+        <div id="history-empty" class="empty" hidden>No history recorded yet.</div>
       </div>
     </section>
 
-    <!-- Legacy TEST MODE mock controls removed:
-    <section class="tab-panel" id="tab-mocks" data-test-only="1" hidden>
-      <div class="panel">
-        <h3>Mocks / Testes <span class="test-marker">[TESTE] — nunca toca Kraken/Qwen/Claude</span></h3>
-        <div class="toolbar">
-          <button class="btn" id="btn-notify-test">TESTAR NTFY</button>
-          <button class="btn" id="btn-mock-alert">EXECUTAR MOCK ALERT</button>
-          <button class="btn" id="btn-clipboard-test">TESTAR CLIPBOARD</button>
-          <button class="btn" id="btn-comm-test">TESTAR COMUNICAÇÃO (visual)</button>
+    <!-- AI GAME (paper game) - filled by paper_game.js from get_paper_state() -->
+    <section class="tab-panel" id="tab-game" hidden>
+      <header class="pg-header">
+        <div class="pg-title">The AI's game
+          <small>Five AI agents work together and play with pretend money. See who is doing what, what they decided and how it went.</small>
         </div>
-        <div id="mock-result" class="result-box" hidden></div>
-      </div>
-      <div class="panel" style="margin-top:16px;">
-        <h3>Eventos mock recentes</h3>
-        <table>
-          <thead><tr><th>Hora</th><th>Asset</th><th>Setup</th><th>Demand</th><th></th></tr></thead>
-          <tbody id="mocks-body"></tbody>
-        </table>
-        <div id="mocks-empty" class="empty" hidden>Sem eventos mock ainda — usa EXECUTAR MOCK ALERT acima.</div>
+        <div class="pg-header-pills"><span id="pg-game"></span><span id="pg-radar"><span class="pill idle"><span class="dot"></span>Radar state unknown</span></span></div>
+      </header>
+      <div class="pg-refresh" id="pg-refresh" role="status"></div>
+      <div class="pg-live" id="pg-live" aria-live="polite" aria-atomic="true"></div>
+
+      <div class="pg-grid">
+        <section class="pg-panel pg-span2 pg-office" aria-labelledby="pg-office-h">
+          <h3 class="pg-h" id="pg-office-h">The AI's office</h3>
+          <div id="pg-office"></div>
+        </section>
+
+        <section class="pg-panel" aria-labelledby="pg-wallet-h">
+          <h3 class="pg-h" id="pg-wallet-h">The AI's wallet <span class="pill idle">Pretend money</span></h3>
+          <div id="pg-wallet"></div>
+        </section>
+
+        <section class="pg-panel" aria-labelledby="pg-play-h">
+          <h3 class="pg-h" id="pg-play-h">The play right now <span id="pg-play-status"></span></h3>
+          <div id="pg-play"></div>
+        </section>
+
+        <section class="pg-panel pg-span2" aria-labelledby="pg-history-h">
+          <h3 class="pg-h" id="pg-history-h">What happened</h3>
+          <div id="pg-history"></div>
+        </section>
+
+        <!-- Pilot shadow - filled by pilot_shadow.js from get_pilot_state() (read-only) -->
+        <section class="pg-panel pg-span2 ps-panel" id="pilot-shadow" aria-labelledby="ps-h">
+          <h3 class="pg-h" id="ps-h">Pilot shadow <span class="pill idle">Pretend money - no orders - LONG only</span></h3>
+          <p class="ps-intro">A second pretend account that follows the same alerts with the limits planned for real trading. It only buys, holds one position at a time and sizes each entry so that a bad exit stays within its loss limit. It has no buttons: its kill switch and lock reviews are run from the command line.</p>
+          <div class="pg-refresh" id="ps-refresh" role="status"></div>
+          <div class="pg-live" id="ps-live" aria-live="polite" aria-atomic="true"></div>
+          <div id="ps-status"></div>
+          <div id="ps-body"></div>
+        </section>
+
+        <!-- Trend paper (research) - filled by trend_paper.js from get_trend_paper_state() (read-only) -->
+        <section class="pg-panel pg-span2 ps-panel tp-panel" id="trend-paper" aria-labelledby="tp-h">
+          <h3 class="pg-h" id="tp-h">Trend paper (research) <span class="pill idle">Paper only — research, not qualified, no real orders</span></h3>
+          <p class="ps-intro">Four daily trend-following strategies on BTC and ETH (ENS, ENS_VT, btc_trend5 and btc_trend5_vt), each kept as a paper book from 2026-10-04 in EUR and in USDT, at a 0.1% and a 0.4% fee per leg. Prices come from public daily candles; no order is sent and no account is read. A research observation, not a qualified strategy.</p>
+          <p class="tp-note">Results are pre-tax: fees are charged on traded notional, slippage is 0 and no tax is deducted.</p>
+          <div class="tp-actions">
+            <button type="button" class="btn" id="tp-catch-up" aria-describedby="tp-catch-up-help">Catch up now</button>
+            <span class="tp-help" id="tp-catch-up-help">Books any missed paper day from public market data. It places no order.</span>
+          </div>
+          <p class="tp-result" id="tp-result"></p>
+          <div class="pg-refresh" id="tp-refresh" role="status"></div>
+          <div class="pg-live" id="tp-live" aria-live="polite" aria-atomic="true"></div>
+          <div id="tp-summary"></div>
+          <div id="tp-body"></div>
+        </section>
+
+        <section class="pg-panel pg-span2" aria-labelledby="pg-glossary-h">
+          <h3 class="pg-h" id="pg-glossary-h">Words you will see</h3>
+          <div class="pg-glossary">
+            <div><b>Bets it goes up / down</b>The AI wins if the price moves the way it picked before the play closes.</div>
+            <div><b>Stop (loss limit)</b>A price fixed when the play opens, on the losing side, twice the coin's usual five-minute swing away. The play closes at the first real price that reaches it.</div>
+            <div><b>Target (profit goal)</b>A price fixed when the play opens, on the winning side, twice as far away as the stop. The play closes at the first real price that reaches it.</div>
+            <div><b>Time limit</b>A play that reaches neither the stop nor the target closes after a day at the latest. Nothing is moved or widened while it is open.</div>
+            <div><b>Commissions</b>What the exchange charges to buy and to sell. They are always paid, win or lose.</div>
+            <div><b>The gap between buying and selling price</b>The exchange always sells a little above the price it buys at. A play buys at one and sells at the other, so the gap costs a little every time.</div>
+            <div><b>Pretend money</b>No order ever goes to the exchange. The prices are real; the money is not.</div>
+            <div><b>Before costs</b>How the price moved for the play, before the spread and the commissions are taken off.</div>
+            <div><b>Waiting for a price</b>The closing time passed without a valid price; the play closes at the first valid one, and the delay is recorded.</div>
+          </div>
+        </section>
       </div>
     </section>
 
-    -->
-
-    <!-- SISTEMA -->
-    <section class="tab-panel" id="tab-sistema" hidden>
+    <!-- SYSTEM -->
+    <section class="tab-panel" id="tab-system" hidden>
       <div class="panel" style="max-width:640px;">
-        <h3>Sistema</h3>
+        <h3>System</h3>
         <div class="field-row"><span class="k">SQLite</span><span class="mono" id="sys-sqlite-path">—</span></div>
         <div class="field-row"><span class="k">Log</span><span class="mono" id="sys-log-path">—</span></div>
         <div class="field-row"><span class="k">PID</span><span class="mono" id="sys-pid">—</span></div>
-        <div class="field-row"><span class="k">Exit code (última paragem)</span><span class="mono" id="sys-exit-code">—</span></div>
+        <div class="field-row"><span class="k">Exit code (last stop)</span><span class="mono" id="sys-exit-code">—</span></div>
         <div class="toolbar" style="margin-top:14px;">
-          <button class="btn ghost" id="btn-open-log">ABRIR LOG</button>
-          <button class="btn ghost" id="btn-open-folder">ABRIR PASTA DO RADAR</button>
+          <button class="btn ghost" id="btn-open-log">OPEN LOG</button>
+          <button class="btn ghost" id="btn-open-folder">OPEN RADAR FOLDER</button>
         </div>
       </div>
       <div class="panel" style="margin-top:16px; max-width:640px;">
-        <h3>Últimas linhas de log</h3>
+        <h3>Latest log lines</h3>
         <div class="log-box mono" id="log-lines">—</div>
       </div>
       <div class="panel" id="operational-diagnostics" style="margin-top:16px;">
@@ -174,6 +226,11 @@
 </div>
 <script src="test_mode.js"></script>
 <script src="agent_room.js"></script>
+<script src="paper_game.js"></script>
+<script src="paper_office_engine.js"></script>
+<script src="paper_office.js"></script>
+<script src="pilot_shadow.js"></script>
+<script src="trend_paper.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

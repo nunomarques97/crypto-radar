@@ -1,0 +1,29 @@
+{
+  "format_version": 1,
+  "source": "Binance public REST GET /api/v3/klines, interval 1d, fetched 2026-10-03 for the feasibility study; rows are [openTimeMs, open, high, low, close] with exact values",
+  "partial_last_row": "The 2026-10-03 row was still open when fetched. Its close, high and low are not final and are never used: robust.py parity reads only its open (the last open-to-open return ends at it), and harness parity drops it (rows up to 2026-10-02).",
+  "robust_results": "robust_results.json is the unmodified output of robust.py on these rows",
+  "files": [
+    {
+      "path": "spot1d_BTCUSDT.json",
+      "bytes": 169759,
+      "sha256": "4f807f8d1426ef524d5c2f2dce32570f7a477904bd0c4c0c9e4ac6dad8876011",
+      "rows": 3335,
+      "first_day": "2017-08-17",
+      "last_day": "2026-10-03"
+    },
+    {
+      "path": "spot1d_ETHUSDT.json",
+      "bytes": 155495,
+      "sha256": "756cd420e44b32da82706c2993576ad811d76c52b6925aa1f40cc649440307d2",
+      "rows": 3335,
+      "first_day": "2017-08-17",
+      "last_day": "2026-10-03"
+    },
+    {
+      "path": "robust_results.json",
+      "bytes": 6595,
+      "sha256": "ac260aca62c45f7f325208b1cebfb3429122a6d1a9b196c60d87338bd60b7dde"
+    }
+  ]
+}

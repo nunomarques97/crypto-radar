@@ -13,10 +13,13 @@ floor differs wildly - 1% in 5m is nothing for a memecoin and a lot for BTC).
 
 from __future__ import annotations
 
+import math
 import sqlite3
 import statistics
+from bisect import bisect_left, bisect_right
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from typing import NamedTuple
 
 from . import config
 from .store import SnapshotStore, reset_aware_delta
@@ -202,12 +205,76 @@ def robust_z(value: float | None, historical: list[float]) -> float | None:
     return (value - median) / scaled_mad
 
 
+# The series below pair each row with the nearest row about one horizon earlier.
+# Rows further away than the tolerance can never be picked, so the search only
+# visits a window found by bisection instead of every earlier row. The window is
+# _SEARCH_SLACK_MICROS wider than the tolerance on each side and the unchanged
+# float test still decides every row inside it, so results, ties (earliest row
+# wins) and order stay exactly those of the full scan. Lists that are not in time
+# order, mix naive and aware times or hold non-numeric values keep the full scan.
+_MICROSECOND = timedelta(microseconds=1)
+_MINUTE_MICROS = 60_000_000
+_SEARCH_SLACK_MICROS = 1_000_000
+_NAIVE_EPOCH = datetime(1970, 1, 1)
+_AWARE_EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
+
+
+class _TimeIndex(NamedTuple):
+    epoch: datetime
+    micros: list[int]
+
+
+class _ReturnObservations(NamedTuple):
+    values: list[tuple[datetime, float]]
+    times: _TimeIndex | None
+
+
+# One cycle's BTC return observations, keyed by (btc_pair, lookback_start).
+# heartbeat creates one per cycle; it never outlives that cycle.
+BtcHistoryCache = dict[tuple[str, str], _ReturnObservations]
+
+
+def _epoch_for(times: list[datetime]) -> datetime | None:
+    if all(t.tzinfo is None for t in times):
+        return _NAIVE_EPOCH
+    if all(type(t.tzinfo) is timezone for t in times):
+        return _AWARE_EPOCH
+    return None
+
+
+def _time_index(times: list[datetime]) -> _TimeIndex | None:
+    """Microseconds since the epoch, or None unless ``times`` never goes back."""
+    epoch = _epoch_for(times)
+    if epoch is None:
+        return None
+    micros = [(t - epoch) // _MICROSECOND for t in times]
+    if any(later < earlier for earlier, later in zip(micros, micros[1:])):
+        return None
+    return _TimeIndex(epoch, micros)
+
+
+def _plain_numbers(values: list[object]) -> bool:
+    return all(v is None or type(v) is float or type(v) is int for v in values)
+
+
+def _nearby(index: _TimeIndex | None, target: int, tolerance: int, stop: int) -> range:
+    """Positions below ``stop`` that may lie within ``tolerance`` microseconds of ``target``."""
+    if index is None:
+        return range(stop)
+    slack = tolerance + _SEARCH_SLACK_MICROS
+    lo = bisect_left(index.micros, target - slack, 0, stop)
+    return range(lo, bisect_right(index.micros, target + slack, lo, stop))
+
+
 def historical_return_series(rows: list[sqlite3.Row], horizon_minutes: int) -> list[float]:
     """Build a return-of-length-horizon series from an ascending snapshot history,
     by pairing each row with the nearest earlier row ~horizon_minutes before it.
     """
     parsed = [(_row_dt(r), r["last"]) for r in rows]
     tolerance = timedelta(seconds=max(horizon_minutes * 60 * config.LOOKUP_TOLERANCE_FRACTION, 30))
+    index = _time_index([ts for ts, _ in parsed])
+    horizon_micros = horizon_minutes * _MINUTE_MICROS
+    tolerance_micros = tolerance // _MICROSECOND
     results: list[float] = []
 
     for i, (ts, price) in enumerate(parsed):
@@ -216,7 +283,9 @@ def historical_return_series(rows: list[sqlite3.Row], horizon_minutes: int) -> l
         target = ts - timedelta(minutes=horizon_minutes)
         best_diff: float | None = None
         best_price: float | None = None
-        for pt, pp in parsed[:i]:
+        target_micros = index.micros[i] - horizon_micros if index is not None else 0
+        for j in _nearby(index, target_micros, tolerance_micros, i):
+            pt, pp = parsed[j]
             diff = abs((pt - target).total_seconds())
             if diff <= tolerance.total_seconds() and (best_diff is None or diff < best_diff):
                 best_diff = diff
@@ -233,6 +302,9 @@ def _historical_return_observations(
     """Return timestamped, pair-pure returns for matching distributions."""
     parsed = [(_row_dt(r), r["last"]) for r in rows]
     tolerance = timedelta(seconds=max(horizon_minutes * 60 * config.LOOKUP_TOLERANCE_FRACTION, 30))
+    index = _time_index([ts for ts, _ in parsed]) if _plain_numbers([p for _, p in parsed]) else None
+    horizon_micros = horizon_minutes * _MINUTE_MICROS
+    tolerance_micros = tolerance // _MICROSECOND
     results: list[tuple[datetime, float]] = []
 
     for i, (ts, price) in enumerate(parsed):
@@ -241,7 +313,9 @@ def _historical_return_observations(
         target = ts - timedelta(minutes=horizon_minutes)
         best_diff: float | None = None
         best_price: float | None = None
-        for pt, pp in parsed[:i]:
+        target_micros = index.micros[i] - horizon_micros if index is not None else 0
+        for j in _nearby(index, target_micros, tolerance_micros, i):
+            pt, pp = parsed[j]
             if not pp or pp <= 0:
                 continue
             diff = abs((pt - target).total_seconds())
@@ -250,6 +324,40 @@ def _historical_return_observations(
                 best_price = pp
         if best_price is not None:
             results.append((ts, (price / best_price - 1.0) * 100.0))
+
+    return results
+
+
+def _indexed_observations(rows: list[sqlite3.Row], horizon_minutes: int) -> _ReturnObservations:
+    values = _historical_return_observations(rows, horizon_minutes)
+    return _ReturnObservations(values, _time_index([ts for ts, _ in values]))
+
+
+def _relative_residuals(
+    asset_returns: list[tuple[datetime, float]], btc: _ReturnObservations, horizon_minutes: int
+) -> list[float]:
+    tolerance_seconds = max(horizon_minutes * 60 * config.LOOKUP_TOLERANCE_FRACTION, 30)
+    btc_returns = btc.values
+    index = btc.times
+    if index is not None and (
+        not math.isfinite(tolerance_seconds) or _epoch_for([ts for ts, _ in asset_returns]) is not index.epoch
+    ):
+        index = None
+    tolerance_micros = int(tolerance_seconds * 1_000_000) if index is not None else 0
+    results: list[float] = []
+
+    for asset_ts, asset_return in asset_returns:
+        best_diff: float | None = None
+        best_btc_return: float | None = None
+        target_micros = (asset_ts - index.epoch) // _MICROSECOND if index is not None else 0
+        for j in _nearby(index, target_micros, tolerance_micros, len(btc_returns)):
+            btc_ts, btc_return = btc_returns[j]
+            diff = abs((btc_ts - asset_ts).total_seconds())
+            if diff <= tolerance_seconds and (best_diff is None or diff < best_diff):
+                best_diff = diff
+                best_btc_return = btc_return
+        if best_btc_return is not None:
+            results.append(asset_return - best_btc_return)
 
     return results
 
@@ -265,27 +373,16 @@ def historical_relative_btc_series(
     asset-return history.
     """
     asset_returns = _historical_return_observations(asset_rows, horizon_minutes)
-    btc_returns = _historical_return_observations(btc_rows, horizon_minutes)
-    tolerance_seconds = max(horizon_minutes * 60 * config.LOOKUP_TOLERANCE_FRACTION, 30)
-    results: list[float] = []
-
-    for asset_ts, asset_return in asset_returns:
-        best_diff: float | None = None
-        best_btc_return: float | None = None
-        for btc_ts, btc_return in btc_returns:
-            diff = abs((btc_ts - asset_ts).total_seconds())
-            if diff <= tolerance_seconds and (best_diff is None or diff < best_diff):
-                best_diff = diff
-                best_btc_return = btc_return
-        if best_btc_return is not None:
-            results.append(asset_return - best_btc_return)
-
-    return results
+    btc = _indexed_observations(btc_rows, horizon_minutes)
+    return _relative_residuals(asset_returns, btc, horizon_minutes)
 
 
 def historical_delta_series(rows: list[sqlite3.Row], field_name: str, horizon_minutes: int) -> list[float]:
     parsed = [(_row_dt(r), r[field_name]) for r in rows]
     tolerance = timedelta(seconds=max(horizon_minutes * 60 * config.LOOKUP_TOLERANCE_FRACTION, 30))
+    index = _time_index([ts for ts, _ in parsed]) if _plain_numbers([v for _, v in parsed]) else None
+    horizon_micros = horizon_minutes * _MINUTE_MICROS
+    tolerance_micros = tolerance // _MICROSECOND
     results: list[float] = []
 
     for i, (ts, value) in enumerate(parsed):
@@ -294,7 +391,9 @@ def historical_delta_series(rows: list[sqlite3.Row], field_name: str, horizon_mi
         target = ts - timedelta(minutes=horizon_minutes)
         best_diff: float | None = None
         best_value: float | None = None
-        for pt, pv in parsed[:i]:
+        target_micros = index.micros[i] - horizon_micros if index is not None else 0
+        for j in _nearby(index, target_micros, tolerance_micros, i):
+            pt, pv = parsed[j]
             if pv is None:
                 continue
             diff = abs((pt - target).total_seconds())
@@ -316,7 +415,13 @@ def compute_anomaly(
     now_dt: datetime,
     features: Features,
     btc_pair: str | None = None,
+    *,
+    btc_cache: BtcHistoryCache | None = None,
 ) -> AnomalyResult:
+    """``btc_cache`` (optional) keeps one cycle's BTC return observations, so the
+    BTC history is fetched and paired once per cycle instead of once per asset.
+    Pass a new dict each cycle; the store must not change while it is in use.
+    """
     lookback_start = (now_dt - timedelta(hours=config.ANOMALY_HISTORY_LOOKBACK_HOURS)).isoformat()
     history = store.spot_history_by_pair(pair, lookback_start)
 
@@ -353,8 +458,13 @@ def compute_anomaly(
     oi_z = None  # needs futures history series; left None unless futures present
     relative_btc_z = None
     if asset != config.BTC_ASSET and btc_pair is not None:
-        btc_history = store.spot_history_by_pair(btc_pair, lookback_start)
-        relative_history = historical_relative_btc_series(history, btc_history, 15)
+        asset_returns = _historical_return_observations(history, 15)
+        btc = btc_cache.get((btc_pair, lookback_start)) if btc_cache is not None else None
+        if btc is None:
+            btc = _indexed_observations(store.spot_history_by_pair(btc_pair, lookback_start), 15)
+            if btc_cache is not None:
+                btc_cache[(btc_pair, lookback_start)] = btc
+        relative_history = _relative_residuals(asset_returns, btc, 15)
         relative_btc_z = robust_z(features.relative_return_vs_btc_15m, relative_history)
 
     score = _combine_anomaly_score(

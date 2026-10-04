@@ -1,12 +1,12 @@
 """Demand Router: deterministic IGNORE | SONNET | FABLE decision.
 
-Never OPUS (task section 7/13/20). This module never touches the network,
+Never OPUS. This module never touches the network,
 SQLite, or an LLM - it is a pure function over already-computed scores plus
 the (optional) Qwen review, so it is fully unit-testable. Cooldown and
 budget are applied by the caller (`heartbeat.py` via `cooldown.py`/`budgets.py`)
 AFTER this decision, because they need `now` and the store.
 
-`model_demand_score` (task section 10) answers "how much value would we
+`model_demand_score` answers "how much value would we
 expect from a deeper analysis?" - it is explicitly NOT anomaly_score,
 opportunity_score, or tradeability_score, and is documented as such wherever
 it appears in the output.
@@ -74,7 +74,7 @@ def _direction_sign(direction: str) -> int:
 
 
 def count_confirmations(ctx: RouterContext) -> tuple[int, list[str]]:
-    """Independent confirmations (task section 7). Each is a distinct,
+    """Independent confirmations. Each is a distinct,
     already-computed signal - nothing here re-derives a number.
     """
     names: list[str] = []
@@ -131,7 +131,7 @@ def compute_confidence(data_quality_ok: bool, confirmations_count: int) -> str:
 def _model_demand_score(ctx: RouterContext, confirmations_count: int) -> float:
     """"How much value we expect from a deeper model" - deliberately built
     from confirmations + opportunity/tradeability quality, not a copy of
-    opportunity_score itself (task section 10: must not be confused with it).
+    opportunity_score itself (must not be confused with it).
     """
     opp = ctx.opportunity_score or 0.0
     tradeability_component = {"TRADEABLE": 1.0, "CONSTRAINED": 0.5, "UNTRADEABLE": 0.0}.get(ctx.tradeability_state, 0.0)

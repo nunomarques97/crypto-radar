@@ -1,4 +1,4 @@
-"""Local Ollama inference adapter (T032b, OC-1 §3): loopback only, bounded, no redirects.
+"""Local Ollama inference adapter (OC-1 §3): loopback only, bounded, no redirects.
 
 Implements ``workflow.worker.LocalInference`` with ``requests`` (already pinned), like
 ``radar_v08.qwen`` but stricter:

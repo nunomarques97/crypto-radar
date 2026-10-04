@@ -29,7 +29,7 @@ BAR = "=" * 40
 
 def is_mock_alert(event_row: Any) -> bool:
     """MOCK-* events (mock_alert.py / `--mode mock-alert`) must never be
-    confused with a real alert (task section 7)."""
+    confused with a real alert."""
     event_id = event_row["event_id"] if "event_id" in event_row.keys() else None
     event_type = event_row["type"] if "type" in event_row.keys() else None
     return bool(event_id and str(event_id).startswith("MOCK-")) or event_type == "MOCK_TEST_EVENT"
@@ -50,7 +50,7 @@ def _fmt_score(value: Any) -> str:
 
 
 def format_alert_history(alerts_rows: list[Any]) -> str:
-    """Just enough to identify and recover an alert (task section 1) - never
+    """Just enough to identify and recover an alert - never
     the full event/context dump; that lives behind `--mode prompt --event`.
     """
     lines = [BAR, "CRYPTO RADAR — ALERT HISTORY", BAR, ""]
@@ -82,11 +82,11 @@ def format_alert_history(alerts_rows: list[Any]) -> str:
 
 
 def recover_prompt(store: SnapshotStore, event_id: str) -> bool:
-    """`--mode prompt --event <id>` (task section 2): finds the persisted
+    """`--mode prompt --event <id>`: finds the persisted
     event, and - if found - hands off to `notifications.copy_prompt_for_event`,
     the SAME function a real MEDIUM/HIGH notification already calls, so the
     prompt is rebuilt with the same prompt_builder.py, copied with the same
-    clipboard code, and opens the same popup (task section 3/4: no second
+    clipboard code, and opens the same popup (no second
     prompt/clipboard/popup implementation). Prints "Event not found" and
     returns False, without raising, when the event_id does not exist.
     """

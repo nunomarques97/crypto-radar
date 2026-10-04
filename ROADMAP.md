@@ -1,5 +1,7 @@
 # Engineering roadmap
 
+Product continuation (2026-09-30 to 2026-10-04): beyond the R phases below, paper-only pieces were added, each with its own tests and none with an order path: the paper game with the EX-1 paper exits, the pilot shadow wallet (`PAPER`, pretend money) with its deterministic risk engine, the read-only Kraken account check, paper wallet reporting with a read-only records audit, and the research-only trend paper books. They are described in [ARCHITECTURE.md](ARCHITECTURE.md) and [RISK.md](RISK.md). Later trading milestones remain conditional on the F0–F7 gates in [docs/FUTURE_TRADING_ROADMAP.md](docs/FUTURE_TRADING_ROADMAP.md); the R contracts below remain in force.
+
 Baseline: 2026-09-14. This replaces inherited phase numbering; previous phase labels describe history only. The target is autonomous **analysis**, not execution.
 
 Every phase is delivered as small, separately reviewed changes. A phase completes only when its acceptance criteria and tests are evidenced. R0 to R3 are complete; R4 is implemented as domain code but not yet wired into the running pipeline; R5 has its profile configuration and a measured local-model benchmark, with no model promoted; R6 and R7 have not started.

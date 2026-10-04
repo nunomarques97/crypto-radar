@@ -1,6 +1,6 @@
-"""Deterministic builder of the OC-1 section 6 corpus from recorded Kraken OHLCVT zips (T051a).
+"""Deterministic builder of the OC-1 section 6 corpus from recorded Kraken OHLCVT zips.
 
-Decisions D59, D60 and D64 (docs/forja/DECISIONS.md). The builder reads the quarterly
+The builder reads the quarterly
 ``Kraken_OHLCVT_Q<n>_<year>.zip`` archives of a Sextant ``data`` directory and returns a
 corpus in schema v2 of ``adapters.benchmark_corpus`` (300 cases: 100 development, 20 per
 category, and 200 holdout, 40 per category), which ``write_corpus`` writes to a directory the
@@ -22,8 +22,8 @@ Reading the source (external input, fail closed with a typed ``BuildError``)
   than ``MAX_ZIP_MEMBERS`` entries, or a member over ``MAX_MEMBER_BYTES`` uncompressed (the
   header is checked, then the bytes actually read) is refused. Rows must be strict ASCII
   ``epoch,open,high,low,close,volume,trades`` on the 5-minute grid, strictly increasing.
-* No intermediate files are needed; if a later step ever needs one, D59 designates
-  ``C:/Users/User/crypto-radar-t051/work`` only.
+* No intermediate files are needed; if a later step ever needs one, it goes to
+  ``WORK_DIR`` (``~/crypto-radar-t051/work``) only.
 
 Episodes and separation
 -----------------------
@@ -36,7 +36,7 @@ pair + window is reused. The covered timeline, minus ``MIN_PARTITION_GAP_SECONDS
 split one third development, two thirds holdout: every development case ends before every
 holdout case starts, and the actual gap (at least 7 days) is written in the lock.
 
-Categories (D60), each built by a fixed rule; ``PASS`` below means ``integrity.evaluate_ohlc``
+Categories, each built by a fixed rule; ``PASS`` below means ``integrity.evaluate_ohlc``
 passes on the 24 bars with 24 bars required at the decision instant (a "clean" window):
 
 * ``invalid_or_stale`` (gold: abstain / reject input): a clean window with ONE recorded
@@ -136,8 +136,8 @@ from .benchmark_corpus import (
 
 REPOSITORY_ROOT = Path(__file__).resolve().parent.parent.parent
 SYNTHETIC_FIXTURE_CORPUS = REPOSITORY_ROOT / "tests" / "fixtures" / "benchmark_corpus"
-SEXTANT_ROOT = Path("C:/Users/User/Desktop/sextant")
-WORK_DIR = Path("C:/Users/User/crypto-radar-t051/work")  # D59: the only place for intermediate files
+SEXTANT_ROOT = Path.home() / "Desktop" / "sextant"
+WORK_DIR = Path.home() / "crypto-radar-t051" / "work"  # the only place for intermediate files
 
 CORPUS_ID = "oc1-sec6-kraken-ohlcvt-v1"
 RULES_VERSION = "oc1-corpus-rules-1"
@@ -505,7 +505,7 @@ def fee_input() -> FeeInput:
 
 
 def cost_lower_bound(pair: str) -> CostLowerBound:
-    """Known minimum round-trip cost of a spot pair whose book was not observed (costs.py, D64)."""
+    """Known minimum round-trip cost of a spot pair whose book was not observed (costs.py)."""
     fee = fee_input()
     not_observed = Missing(MissingReason.NOT_OBSERVED, "OHLCVT bars carry no order book")
     scenario = CostScenarioInput(

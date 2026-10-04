@@ -70,7 +70,7 @@ class TestRouterDecisions(unittest.TestCase):
     def test_qwen_unavailable_requires_extra_confirmation_for_fable(self):
         # Exactly at the normal (qwen-available) confirmation threshold but
         # qwen is unavailable this cycle - should NOT reach FABLE without one
-        # more independent confirmation (task section 6/16).
+        # more independent confirmation.
         base_kwargs = dict(
             setup_type="BREAKOUT", direction="LONG", opportunity_score=80.0,
             tradeability_state="TRADEABLE", momentum_1h_atr=2.5, momentum_coherence=1.0,

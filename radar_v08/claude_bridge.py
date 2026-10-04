@@ -75,7 +75,7 @@ CALL_STATUSES = (
 HEALTH_STATES = ("DISABLED", "ONLINE", "OFFLINE", "RATE_LIMITED", "QUOTA_EXHAUSTED", "AUTH_ERROR", "DEGRADED")
 
 # Higher = worse. Used to pick the single health state a cycle reports when
-# several events land on different outcomes (task section 15).
+# several events land on different outcomes.
 _HEALTH_SEVERITY = {
     "DISABLED": 6,
     "ONLINE": 0,
@@ -199,7 +199,7 @@ def call_model(
 ) -> CallResult:
     """Dispatches ONE event's context to the model the Demand Router already
     chose. `model_demand` must be SONNET or FABLE - the router's output is the
-    sole authority for model selection (task section 5); this function never
+    sole authority for model selection; this function never
     picks a model itself and never accepts OPUS.
     """
     if model_demand not in ("SONNET", "FABLE"):
@@ -282,7 +282,7 @@ def _apply_outcome(store: SnapshotStore, event_row: Any, result: CallResult, now
 
     # Auth problems are a configuration issue, not a transient outage -
     # retrying without fixing the credential just wastes attempts, so this
-    # is the one status that goes straight to FAILED (task section 11).
+    # is the one status that goes straight to FAILED.
     if result.status == "AUTH_ERROR":
         store.mark_event_failed(event_id, now_iso, f"auth_error: {result.error}")
         events.snapshot_to_jsonl(store, event_id)
@@ -601,6 +601,6 @@ def run_bridge_cycle(
 
 
 def bridge_health_label(store: SnapshotStore) -> str:
-    """Last-known health, surviving process restarts (task section 15)."""
+    """Last-known health, surviving process restarts."""
     row = store.get_bridge_health()
     return row["state"] if row is not None else "UNKNOWN"

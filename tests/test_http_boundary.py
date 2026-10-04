@@ -427,8 +427,19 @@ class TestGuardNotWidened(unittest.TestCase):
         # The benchmark-only Ollama adapter: host 127.0.0.1 only (through
         # loopback_base_url), five allowlisted routes, no redirects; the radar runtime never
         # imports it (see tests/test_t051_runner.py).
+        # F3a adds the Kraken private READ-ONLY adapter: POST to https://api.kraken.com/0/private/
+        # plus one of six allowlisted read endpoints only, no redirects, bounded timeout, built
+        # only in SHADOW_LIVE or above; the radar runtime never imports it (see
+        # tests/test_kraken_private_read.py). The public GET allowlist is unchanged.
+        # The trend paper module adds the research-only Binance public klines adapter:
+        # GET https://api.binance.com/api/v3/klines only, five fixed symbols, interval 1d, no redirects,
+        # no auth and no environment (trust_env off), bounded timeout, retries and deadline; only the
+        # trend paper module and its start hook use it (see tests/test_trend_paper.py). The Kraken
+        # public allowlist (config.HTTP_PUBLIC_ALLOWLIST) and GuardedSession are unchanged.
         self.assertEqual(importers, {"radar_v08/http_client.py", "radar_v08/ntfy.py", "radar_v08/qwen.py",
-                                     "radar_v08/adapters/local_inference.py", "radar_v08/adapters/t051_ollama.py"})
+                                     "radar_v08/adapters/local_inference.py", "radar_v08/adapters/t051_ollama.py",
+                                     "radar_v08/adapters/kraken_private_read.py",
+                                     "radar_v08/adapters/binance_public_klines.py"})
 
 
 if __name__ == "__main__":

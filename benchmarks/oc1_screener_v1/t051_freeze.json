@@ -14,17 +14,17 @@
   "freeze_schema_version": 1,
   "hashes": {
     "candidate_profiles_toml": "f9734715b8515a06565e28ee83ddc210b17bcb592791eea66cf8ce3daa4af533",
-    "chat_request_and_reply_parser_local_inference_py": "27225481d3d7c93a850114b9a9f60512fdae0a94577b256eb76608f2696dc0ce",
-    "corpus_loader_benchmark_corpus_py": "3ae00753aa8ff963881500170cbea2daf4cd338ee316664e86c82f837c7df69e",
-    "harness_and_parser_benchmark_py": "e546fc8e65568655ce63eebf2ffb054cd9e8c008951d45da2b0d4634ed02c449",
-    "model_profiles_loader_py": "53d307ecea2ecae422585484893723f4cb2ca9a4e8754b8be04a1a8a8b10a924",
-    "model_profiles_toml": "49ba59ae5fb62a5b429bc1a2716101543edb980d670954f77ef79cfa06c3cc59",
-    "runner_adapter_t051_ollama_py": "3d0edbca324b1d4588ed60cb968fd61dd9749feb1fec34b9c6d719465ba17491",
-    "runner_cli_run_t051_block_py": "05555256e0668225029d7295c173bcd23e2ebca0d049e9f8de283fb55c6ddc90",
-    "runner_sequence_t051_sequence_py": "85e84dd63753c302eaaab9591e968590faa3d9b0b836a2918dc7797a946cd2c6",
+    "chat_request_and_reply_parser_local_inference_py": "10934629377d2473e28b01e8749931c09f139aab14a84813c3209a6f32df8d82",
+    "corpus_loader_benchmark_corpus_py": "a5ba6591e0f8009bebcfc44d3075ddf66f7f405109c00fa2a1c33a97abc451c5",
+    "harness_and_parser_benchmark_py": "43db392e7b802f1915cd977334196cde051921d997d646d70e80d2bfa6f3ce5b",
+    "model_profiles_loader_py": "a1a2cfff87c25be9e295f892a17856031632b1d96f33e48f1ee5674658c04f0e",
+    "model_profiles_toml": "690355066dd20f7c990a62e2cd550011df4ea4c6ef202d6ca8e5371058ca8313",
+    "runner_adapter_t051_ollama_py": "5f06917b4671b9c1579855b4f6e96fc285a53d3b46006a13a2adac91801aedaf",
+    "runner_cli_run_t051_block_py": "0325a3c0b6cee68d139e66be544c729a6e64451c5b8c3e4c0bdf7be382daba89",
+    "runner_sequence_t051_sequence_py": "83ddf460db8232611f3b597586d045031e30adc9a8f945bb11fcec90d7cace72",
     "screener_output_schema": "a0818f405d37c7664c44cd28c3109a4659a18b4c7ee9424eb86ab22886417755",
     "screener_system_prompt": "f084edd200fc2497beb5b8ce1ddd64af4e444d7df817d0ee9c2adb266dc669f6",
-    "screener_view_builder_oc1_corpus_builder_py": "ee707719a51fd2ce0ee7c28ea999f7ece561836dd4f4be2fe76d5e1060721f24"
+    "screener_view_builder_oc1_corpus_builder_py": "99e10b264ca83ca1b16d090823bd741b5f8299fa30c47eae5435afb44ce66a32"
   },
   "lists": {
     "cold_development": [

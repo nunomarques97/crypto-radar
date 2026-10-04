@@ -1,0 +1,910 @@
+{
+ "capital": "7000.00",
+ "days_booked": 60,
+ "days_skipped": 0,
+ "error": null,
+ "first_day": "2026-10-04",
+ "generated_at": "2026-12-02T12:00:00+00:00",
+ "honesty_label": "Paper only \u2014 research, not qualified, no real orders",
+ "last_day": "2026-12-02",
+ "last_record_ts": "2026-12-02T08:00:00+00:00",
+ "paper_start": "2026-10-04",
+ "pre_tax_note": "Results are pre-tax: fees are charged on traded notional, slippage is 0 and no tax is deducted.",
+ "quotes": [
+  {
+   "currency": "EUR",
+   "quote": "EUR",
+   "rows": [
+    {
+     "assets": [
+      {
+       "asset": "BTC",
+       "exposure_pct": "80.00",
+       "signal": [
+        {
+         "name": "ENS",
+         "value": "1.0000"
+        },
+        {
+         "name": "ENS_VT",
+         "value": "1.0000"
+        },
+        {
+         "name": "vol30",
+         "value": "0.2433"
+        }
+       ],
+       "signal_close_date": "2026-12-01",
+       "target_pct": "100.00"
+      },
+      {
+       "asset": "ETH",
+       "exposure_pct": "100.00",
+       "signal": [
+        {
+         "name": "ENS",
+         "value": "1.0000"
+        },
+        {
+         "name": "ENS_VT",
+         "value": "1.0000"
+        },
+        {
+         "name": "vol30",
+         "value": "0.3924"
+        }
+       ],
+       "signal_close_date": "2026-12-01",
+       "target_pct": "100.00"
+      }
+     ],
+     "book": "EUR|ENS|0.001",
+     "comparator": {
+      "book": "EUR|BH_5050|0.001",
+      "equity": "8227.41",
+      "return_pct": "17.53",
+      "rule": "BH_5050"
+     },
+     "currency": "EUR",
+     "days": 60,
+     "equity": "8651.40",
+     "fee_pct": "0.1",
+     "fees": "18.40",
+     "label": "ENS",
+     "last_date": "2026-12-02",
+     "max_drawdown_pct": "-16.04",
+     "return_pct": "23.59",
+     "rule": "ENS",
+     "trades": 11,
+     "vs_buy_hold_pp": "6.06"
+    },
+    {
+     "assets": [
+      {
+       "asset": "BTC",
+       "exposure_pct": "80.00",
+       "signal": [
+        {
+         "name": "ENS",
+         "value": "1.0000"
+        },
+        {
+         "name": "ENS_VT",
+         "value": "1.0000"
+        },
+        {
+         "name": "vol30",
+         "value": "0.2433"
+        }
+       ],
+       "signal_close_date": "2026-12-01",
+       "target_pct": "100.00"
+      },
+      {
+       "asset": "ETH",
+       "exposure_pct": "100.00",
+       "signal": [
+        {
+         "name": "ENS",
+         "value": "1.0000"
+        },
+        {
+         "name": "ENS_VT",
+         "value": "1.0000"
+        },
+        {
+         "name": "vol30",
+         "value": "0.3924"
+        }
+       ],
+       "signal_close_date": "2026-12-01",
+       "target_pct": "100.00"
+      }
+     ],
+     "book": "EUR|ENS|0.004",
+     "comparator": {
+      "book": "EUR|BH_5050|0.004",
+      "equity": "8206.41",
+      "return_pct": "17.23",
+      "rule": "BH_5050"
+     },
+     "currency": "EUR",
+     "days": 60,
+     "equity": "8579.21",
+     "fee_pct": "0.4",
+     "fees": "73.46",
+     "label": "ENS",
+     "last_date": "2026-12-02",
+     "max_drawdown_pct": "-16.36",
+     "return_pct": "22.56",
+     "rule": "ENS",
+     "trades": 11,
+     "vs_buy_hold_pp": "5.33"
+    },
+    {
+     "assets": [
+      {
+       "asset": "BTC",
+       "exposure_pct": "95.38",
+       "signal": [
+        {
+         "name": "ENS",
+         "value": "1.0000"
+        },
+        {
+         "name": "ENS_VT",
+         "value": "1.0000"
+        },
+        {
+         "name": "vol30",
+         "value": "0.2433"
+        }
+       ],
+       "signal_close_date": "2026-12-01",
+       "target_pct": "100.00"
+      },
+      {
+       "asset": "ETH",
+       "exposure_pct": "93.34",
+       "signal": [
+        {
+         "name": "ENS",
+         "value": "1.0000"
+        },
+        {
+         "name": "ENS_VT",
+         "value": "1.0000"
+        },
+        {
+         "name": "vol30",
+         "value": "0.3924"
+        }
+       ],
+       "signal_close_date": "2026-12-01",
+       "target_pct": "100.00"
+      }
+     ],
+     "book": "EUR|ENS_VT|0.001",
+     "comparator": {
+      "book": "EUR|BH_5050|0.001",
+      "equity": "8227.41",
+      "return_pct": "17.53",
+      "rule": "BH_5050"
+     },
+     "currency": "EUR",
+     "days": 60,
+     "equity": "8192.26",
+     "fee_pct": "0.1",
+     "fees": "18.62",
+     "label": "ENS_VT",
+     "last_date": "2026-12-02",
+     "max_drawdown_pct": "-16.03",
+     "return_pct": "17.03",
+     "rule": "ENS_VT",
+     "trades": 12,
+     "vs_buy_hold_pp": "-0.50"
+    },
+    {
+     "assets": [
+      {
+       "asset": "BTC",
+       "exposure_pct": "95.38",
+       "signal": [
+        {
+         "name": "ENS",
+         "value": "1.0000"
+        },
+        {
+         "name": "ENS_VT",
+         "value": "1.0000"
+        },
+        {
+         "name": "vol30",
+         "value": "0.2433"
+        }
+       ],
+       "signal_close_date": "2026-12-01",
+       "target_pct": "100.00"
+      },
+      {
+       "asset": "ETH",
+       "exposure_pct": "93.34",
+       "signal": [
+        {
+         "name": "ENS",
+         "value": "1.0000"
+        },
+        {
+         "name": "ENS_VT",
+         "value": "1.0000"
+        },
+        {
+         "name": "vol30",
+         "value": "0.3924"
+        }
+       ],
+       "signal_close_date": "2026-12-01",
+       "target_pct": "100.00"
+      }
+     ],
+     "book": "EUR|ENS_VT|0.004",
+     "comparator": {
+      "book": "EUR|BH_5050|0.004",
+      "equity": "8206.41",
+      "return_pct": "17.23",
+      "rule": "BH_5050"
+     },
+     "currency": "EUR",
+     "days": 60,
+     "equity": "8122.26",
+     "fee_pct": "0.4",
+     "fees": "74.29",
+     "label": "ENS_VT",
+     "last_date": "2026-12-02",
+     "max_drawdown_pct": "-16.33",
+     "return_pct": "16.03",
+     "rule": "ENS_VT",
+     "trades": 12,
+     "vs_buy_hold_pp": "-1.20"
+    },
+    {
+     "assets": [
+      {
+       "asset": "BTC",
+       "exposure_pct": "100.00",
+       "signal": [
+        {
+         "name": "BTC_TREND5",
+         "value": "1.0000"
+        },
+        {
+         "name": "BTC_TREND5_VT",
+         "value": "0.8148"
+        },
+        {
+         "name": "vol_scale",
+         "value": "0.8148"
+        },
+        {
+         "name": "votes",
+         "value": "1.0000"
+        }
+       ],
+       "signal_close_date": "2026-12-01",
+       "target_pct": "100.00"
+      }
+     ],
+     "book": "EUR|BTC_TREND5|0.001",
+     "comparator": {
+      "book": "EUR|BH_BTC|0.001",
+      "equity": "8135.45",
+      "return_pct": "16.22",
+      "rule": "BH_BTC"
+     },
+     "currency": "EUR",
+     "days": 60,
+     "equity": "8092.50",
+     "fee_pct": "0.1",
+     "fees": "19.47",
+     "label": "btc_trend5",
+     "last_date": "2026-12-02",
+     "max_drawdown_pct": "-13.29",
+     "return_pct": "15.61",
+     "rule": "BTC_TREND5",
+     "trades": 9,
+     "vs_buy_hold_pp": "-0.61"
+    },
+    {
+     "assets": [
+      {
+       "asset": "BTC",
+       "exposure_pct": "100.00",
+       "signal": [
+        {
+         "name": "BTC_TREND5",
+         "value": "1.0000"
+        },
+        {
+         "name": "BTC_TREND5_VT",
+         "value": "0.8148"
+        },
+        {
+         "name": "vol_scale",
+         "value": "0.8148"
+        },
+        {
+         "name": "votes",
+         "value": "1.0000"
+        }
+       ],
+       "signal_close_date": "2026-12-01",
+       "target_pct": "100.00"
+      }
+     ],
+     "book": "EUR|BTC_TREND5|0.004",
+     "comparator": {
+      "book": "EUR|BH_BTC|0.004",
+      "equity": "8111.14",
+      "return_pct": "15.87",
+      "rule": "BH_BTC"
+     },
+     "currency": "EUR",
+     "days": 60,
+     "equity": "8022.49",
+     "fee_pct": "0.4",
+     "fees": "77.49",
+     "label": "btc_trend5",
+     "last_date": "2026-12-02",
+     "max_drawdown_pct": "-13.60",
+     "return_pct": "14.61",
+     "rule": "BTC_TREND5",
+     "trades": 9,
+     "vs_buy_hold_pp": "-1.27"
+    },
+    {
+     "assets": [
+      {
+       "asset": "BTC",
+       "exposure_pct": "81.62",
+       "signal": [
+        {
+         "name": "BTC_TREND5",
+         "value": "1.0000"
+        },
+        {
+         "name": "BTC_TREND5_VT",
+         "value": "0.8148"
+        },
+        {
+         "name": "vol_scale",
+         "value": "0.8148"
+        },
+        {
+         "name": "votes",
+         "value": "1.0000"
+        }
+       ],
+       "signal_close_date": "2026-12-01",
+       "target_pct": "81.48"
+      }
+     ],
+     "book": "EUR|BTC_TREND5_VT|0.001",
+     "comparator": {
+      "book": "EUR|BH_BTC|0.001",
+      "equity": "8135.45",
+      "return_pct": "16.22",
+      "rule": "BH_BTC"
+     },
+     "currency": "EUR",
+     "days": 60,
+     "equity": "7333.02",
+     "fee_pct": "0.1",
+     "fees": "17.43",
+     "label": "btc_trend5_vt",
+     "last_date": "2026-12-02",
+     "max_drawdown_pct": "-12.80",
+     "return_pct": "4.76",
+     "rule": "BTC_TREND5_VT",
+     "trades": 11,
+     "vs_buy_hold_pp": "-11.46"
+    },
+    {
+     "assets": [
+      {
+       "asset": "BTC",
+       "exposure_pct": "81.67",
+       "signal": [
+        {
+         "name": "BTC_TREND5",
+         "value": "1.0000"
+        },
+        {
+         "name": "BTC_TREND5_VT",
+         "value": "0.8148"
+        },
+        {
+         "name": "vol_scale",
+         "value": "0.8148"
+        },
+        {
+         "name": "votes",
+         "value": "1.0000"
+        }
+       ],
+       "signal_close_date": "2026-12-01",
+       "target_pct": "81.48"
+      }
+     ],
+     "book": "EUR|BTC_TREND5_VT|0.004",
+     "comparator": {
+      "book": "EUR|BH_BTC|0.004",
+      "equity": "8111.14",
+      "return_pct": "15.87",
+      "rule": "BH_BTC"
+     },
+     "currency": "EUR",
+     "days": 60,
+     "equity": "7276.28",
+     "fee_pct": "0.4",
+     "fees": "69.46",
+     "label": "btc_trend5_vt",
+     "last_date": "2026-12-02",
+     "max_drawdown_pct": "-13.08",
+     "return_pct": "3.95",
+     "rule": "BTC_TREND5_VT",
+     "trades": 11,
+     "vs_buy_hold_pp": "-11.93"
+    }
+   ]
+  },
+  {
+   "currency": "USDT",
+   "quote": "USDT",
+   "rows": [
+    {
+     "assets": [
+      {
+       "asset": "BTC",
+       "exposure_pct": "80.00",
+       "signal": [
+        {
+         "name": "ENS",
+         "value": "1.0000"
+        },
+        {
+         "name": "ENS_VT",
+         "value": "1.0000"
+        },
+        {
+         "name": "vol30",
+         "value": "0.2433"
+        }
+       ],
+       "signal_close_date": "2026-12-01",
+       "target_pct": "100.00"
+      },
+      {
+       "asset": "ETH",
+       "exposure_pct": "100.00",
+       "signal": [
+        {
+         "name": "ENS",
+         "value": "1.0000"
+        },
+        {
+         "name": "ENS_VT",
+         "value": "1.0000"
+        },
+        {
+         "name": "vol30",
+         "value": "0.3924"
+        }
+       ],
+       "signal_close_date": "2026-12-01",
+       "target_pct": "100.00"
+      }
+     ],
+     "book": "USDT|ENS|0.001",
+     "comparator": {
+      "book": "USDT|BH_5050|0.001",
+      "equity": "8218.97",
+      "return_pct": "17.41",
+      "rule": "BH_5050"
+     },
+     "currency": "USDT",
+     "days": 60,
+     "equity": "8638.79",
+     "fee_pct": "0.1",
+     "fees": "18.41",
+     "label": "ENS",
+     "last_date": "2026-12-02",
+     "max_drawdown_pct": "-16.01",
+     "return_pct": "23.41",
+     "rule": "ENS",
+     "trades": 11,
+     "vs_buy_hold_pp": "6.00"
+    },
+    {
+     "assets": [
+      {
+       "asset": "BTC",
+       "exposure_pct": "80.00",
+       "signal": [
+        {
+         "name": "ENS",
+         "value": "1.0000"
+        },
+        {
+         "name": "ENS_VT",
+         "value": "1.0000"
+        },
+        {
+         "name": "vol30",
+         "value": "0.2433"
+        }
+       ],
+       "signal_close_date": "2026-12-01",
+       "target_pct": "100.00"
+      },
+      {
+       "asset": "ETH",
+       "exposure_pct": "100.00",
+       "signal": [
+        {
+         "name": "ENS",
+         "value": "1.0000"
+        },
+        {
+         "name": "ENS_VT",
+         "value": "1.0000"
+        },
+        {
+         "name": "vol30",
+         "value": "0.3924"
+        }
+       ],
+       "signal_close_date": "2026-12-01",
+       "target_pct": "100.00"
+      }
+     ],
+     "book": "USDT|ENS|0.004",
+     "comparator": {
+      "book": "USDT|BH_5050|0.004",
+      "equity": "8197.97",
+      "return_pct": "17.11",
+      "rule": "BH_5050"
+     },
+     "currency": "USDT",
+     "days": 60,
+     "equity": "8566.70",
+     "fee_pct": "0.4",
+     "fees": "73.48",
+     "label": "ENS",
+     "last_date": "2026-12-02",
+     "max_drawdown_pct": "-16.33",
+     "return_pct": "22.38",
+     "rule": "ENS",
+     "trades": 11,
+     "vs_buy_hold_pp": "5.27"
+    },
+    {
+     "assets": [
+      {
+       "asset": "BTC",
+       "exposure_pct": "95.38",
+       "signal": [
+        {
+         "name": "ENS",
+         "value": "1.0000"
+        },
+        {
+         "name": "ENS_VT",
+         "value": "1.0000"
+        },
+        {
+         "name": "vol30",
+         "value": "0.2433"
+        }
+       ],
+       "signal_close_date": "2026-12-01",
+       "target_pct": "100.00"
+      },
+      {
+       "asset": "ETH",
+       "exposure_pct": "93.34",
+       "signal": [
+        {
+         "name": "ENS",
+         "value": "1.0000"
+        },
+        {
+         "name": "ENS_VT",
+         "value": "1.0000"
+        },
+        {
+         "name": "vol30",
+         "value": "0.3924"
+        }
+       ],
+       "signal_close_date": "2026-12-01",
+       "target_pct": "100.00"
+      }
+     ],
+     "book": "USDT|ENS_VT|0.001",
+     "comparator": {
+      "book": "USDT|BH_5050|0.001",
+      "equity": "8218.97",
+      "return_pct": "17.41",
+      "rule": "BH_5050"
+     },
+     "currency": "USDT",
+     "days": 60,
+     "equity": "8180.30",
+     "fee_pct": "0.1",
+     "fees": "18.62",
+     "label": "ENS_VT",
+     "last_date": "2026-12-02",
+     "max_drawdown_pct": "-16.00",
+     "return_pct": "16.86",
+     "rule": "ENS_VT",
+     "trades": 12,
+     "vs_buy_hold_pp": "-0.55"
+    },
+    {
+     "assets": [
+      {
+       "asset": "BTC",
+       "exposure_pct": "95.38",
+       "signal": [
+        {
+         "name": "ENS",
+         "value": "1.0000"
+        },
+        {
+         "name": "ENS_VT",
+         "value": "1.0000"
+        },
+        {
+         "name": "vol30",
+         "value": "0.2433"
+        }
+       ],
+       "signal_close_date": "2026-12-01",
+       "target_pct": "100.00"
+      },
+      {
+       "asset": "ETH",
+       "exposure_pct": "93.34",
+       "signal": [
+        {
+         "name": "ENS",
+         "value": "1.0000"
+        },
+        {
+         "name": "ENS_VT",
+         "value": "1.0000"
+        },
+        {
+         "name": "vol30",
+         "value": "0.3924"
+        }
+       ],
+       "signal_close_date": "2026-12-01",
+       "target_pct": "100.00"
+      }
+     ],
+     "book": "USDT|ENS_VT|0.004",
+     "comparator": {
+      "book": "USDT|BH_5050|0.004",
+      "equity": "8197.97",
+      "return_pct": "17.11",
+      "rule": "BH_5050"
+     },
+     "currency": "USDT",
+     "days": 60,
+     "equity": "8110.40",
+     "fee_pct": "0.4",
+     "fees": "74.31",
+     "label": "ENS_VT",
+     "last_date": "2026-12-02",
+     "max_drawdown_pct": "-16.30",
+     "return_pct": "15.86",
+     "rule": "ENS_VT",
+     "trades": 12,
+     "vs_buy_hold_pp": "-1.25"
+    },
+    {
+     "assets": [
+      {
+       "asset": "BTC",
+       "exposure_pct": "100.00",
+       "signal": [
+        {
+         "name": "BTC_TREND5",
+         "value": "1.0000"
+        },
+        {
+         "name": "BTC_TREND5_VT",
+         "value": "0.8148"
+        },
+        {
+         "name": "vol_scale",
+         "value": "0.8148"
+        },
+        {
+         "name": "votes",
+         "value": "1.0000"
+        }
+       ],
+       "signal_close_date": "2026-12-01",
+       "target_pct": "100.00"
+      }
+     ],
+     "book": "USDT|BTC_TREND5|0.001",
+     "comparator": {
+      "book": "USDT|BH_BTC|0.001",
+      "equity": "8127.11",
+      "return_pct": "16.10",
+      "rule": "BH_BTC"
+     },
+     "currency": "USDT",
+     "days": 60,
+     "equity": "8073.97",
+     "fee_pct": "0.1",
+     "fees": "19.47",
+     "label": "btc_trend5",
+     "last_date": "2026-12-02",
+     "max_drawdown_pct": "-13.29",
+     "return_pct": "15.34",
+     "rule": "BTC_TREND5",
+     "trades": 9,
+     "vs_buy_hold_pp": "-0.76"
+    },
+    {
+     "assets": [
+      {
+       "asset": "BTC",
+       "exposure_pct": "100.00",
+       "signal": [
+        {
+         "name": "BTC_TREND5",
+         "value": "1.0000"
+        },
+        {
+         "name": "BTC_TREND5_VT",
+         "value": "0.8148"
+        },
+        {
+         "name": "vol_scale",
+         "value": "0.8148"
+        },
+        {
+         "name": "votes",
+         "value": "1.0000"
+        }
+       ],
+       "signal_close_date": "2026-12-01",
+       "target_pct": "100.00"
+      }
+     ],
+     "book": "USDT|BTC_TREND5|0.004",
+     "comparator": {
+      "book": "USDT|BH_BTC|0.004",
+      "equity": "8102.82",
+      "return_pct": "15.75",
+      "rule": "BH_BTC"
+     },
+     "currency": "USDT",
+     "days": 60,
+     "equity": "8004.12",
+     "fee_pct": "0.4",
+     "fees": "77.49",
+     "label": "btc_trend5",
+     "last_date": "2026-12-02",
+     "max_drawdown_pct": "-13.60",
+     "return_pct": "14.34",
+     "rule": "BTC_TREND5",
+     "trades": 9,
+     "vs_buy_hold_pp": "-1.41"
+    },
+    {
+     "assets": [
+      {
+       "asset": "BTC",
+       "exposure_pct": "81.59",
+       "signal": [
+        {
+         "name": "BTC_TREND5",
+         "value": "1.0000"
+        },
+        {
+         "name": "BTC_TREND5_VT",
+         "value": "0.8148"
+        },
+        {
+         "name": "vol_scale",
+         "value": "0.8148"
+        },
+        {
+         "name": "votes",
+         "value": "1.0000"
+        }
+       ],
+       "signal_close_date": "2026-12-01",
+       "target_pct": "81.48"
+      }
+     ],
+     "book": "USDT|BTC_TREND5_VT|0.001",
+     "comparator": {
+      "book": "USDT|BH_BTC|0.001",
+      "equity": "8127.11",
+      "return_pct": "16.10",
+      "rule": "BH_BTC"
+     },
+     "currency": "USDT",
+     "days": 60,
+     "equity": "7318.03",
+     "fee_pct": "0.1",
+     "fees": "17.42",
+     "label": "btc_trend5_vt",
+     "last_date": "2026-12-02",
+     "max_drawdown_pct": "-12.80",
+     "return_pct": "4.54",
+     "rule": "BTC_TREND5_VT",
+     "trades": 11,
+     "vs_buy_hold_pp": "-11.56"
+    },
+    {
+     "assets": [
+      {
+       "asset": "BTC",
+       "exposure_pct": "81.64",
+       "signal": [
+        {
+         "name": "BTC_TREND5",
+         "value": "1.0000"
+        },
+        {
+         "name": "BTC_TREND5_VT",
+         "value": "0.8148"
+        },
+        {
+         "name": "vol_scale",
+         "value": "0.8148"
+        },
+        {
+         "name": "votes",
+         "value": "1.0000"
+        }
+       ],
+       "signal_close_date": "2026-12-01",
+       "target_pct": "81.48"
+      }
+     ],
+     "book": "USDT|BTC_TREND5_VT|0.004",
+     "comparator": {
+      "book": "USDT|BH_BTC|0.004",
+      "equity": "8102.82",
+      "return_pct": "15.75",
+      "rule": "BH_BTC"
+     },
+     "currency": "USDT",
+     "days": 60,
+     "equity": "7261.42",
+     "fee_pct": "0.4",
+     "fees": "69.45",
+     "label": "btc_trend5_vt",
+     "last_date": "2026-12-02",
+     "max_drawdown_pct": "-13.08",
+     "return_pct": "3.73",
+     "rule": "BTC_TREND5_VT",
+     "trades": 11,
+     "vs_buy_hold_pp": "-12.02"
+    }
+   ]
+  }
+ ],
+ "reason": null,
+ "skipped_days": [],
+ "state": "ok"
+}

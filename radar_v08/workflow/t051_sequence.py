@@ -1,25 +1,25 @@
 """T051 Screener benchmark: fixed lists, fixed sequence, selection rule and resumable state.
 
-Pure policy (T051c; D59 b/f, D61; docs/forja/DECISIONS.md). No I/O, no clock, no network,
+Pure policy. No I/O, no clock, no network,
 no environment: the runner (``scripts/run_t051_block.py``) reads the corpus and the results
 file and hands this module plain values. Everything here is a function of its inputs, so the
 same corpus and the same results always give the same lists, the same next step and the same
 selection.
 
-Fixed lists (D59 b), chosen by ``sha256(FREEZE_SALT | list | case_id | case_sha256)`` order,
+Fixed lists, chosen by ``sha256(FREEZE_SALT | list | case_id | case_sha256)`` order,
 never by content and never by a model:
 
 * ``probe``: 20 LABELLED development cases (deterministic gold), spread over the labelled
   categories in their name order (7/7/6 for 3 categories).
 * ``warmup`` (1), ``cold`` (10) and ``warm`` (20): development cases, disjoint slices of one
   ordering. The 40 development cases without gold may appear here: these phases measure only
-  schema validity and latency (D59 f).
+  schema validity and latency.
 * ``holdout_labelled``: the 120 labelled holdout cases, in id order, once per candidate.
 * ``stability``: 20 labelled holdout cases, spread like the probe, 3 repetitions.
 * ``holdout_sealed``: the 80 holdout cases WITHOUT gold. They are listed (id and sha256 only)
   so that the runner can refuse them; no step ever names one (``SealedCaseError``).
 
-Sequence (D61, OC-1 section 6), one step at a time (``next_step``):
+Sequence (OC-1 section 6), one step at a time (``next_step``):
 
 1. ``probe``: 20 cases per probe model (``PROBE_MODELS`` that are installed), in that order.
 2. Selection (``select_candidates``) once every probe is complete: the baseline
@@ -101,7 +101,7 @@ class SequenceError(ValueError):
 
 
 class SealedCaseError(RuntimeError):
-    """A holdout case without gold was about to be sent to a model (D59 f). Never allowed."""
+    """A holdout case without gold was about to be sent to a model. Never allowed."""
 
 
 class ResultsCorrupt(ValueError):
@@ -156,7 +156,7 @@ def _stratified(list_name: str, cases: Sequence[CaseRef], total: int) -> tuple[s
 
 
 def build_fixed_lists(development: Sequence[CaseRef], holdout: Sequence[CaseRef]) -> FixedLists:
-    """The D59 b lists for a corpus. Deterministic: same cases, same lists."""
+    """The fixed lists for a corpus. Deterministic: same cases, same lists."""
     ids = [case.case_id for case in (*development, *holdout)]
     if len(set(ids)) != len(ids):
         raise SequenceError("duplicate case id")
@@ -201,7 +201,7 @@ def freeze_document(
     lists: FixedLists,
     cases: Mapping[str, CaseRef],
 ) -> dict[str, object]:
-    """The D59 b freeze: hashes of what the model sees and of the code, plus the fixed lists."""
+    """The freeze: hashes of what the model sees and of the code, plus the fixed lists."""
 
     def listed(names: Sequence[str]) -> list[dict[str, str]]:
         return [{"case_id": name, "case_sha256": cases[name].case_sha256} for name in names]
@@ -272,7 +272,7 @@ class Step:
 def check_not_sealed(case_id: str, lists: FixedLists) -> None:
     """Last guard before a call: a sealed holdout case is never sent, whatever asked for it."""
     if case_id in lists.holdout_sealed:
-        raise SealedCaseError(f"sealed holdout case {case_id} must never be sent (D59 f)")
+        raise SealedCaseError(f"sealed holdout case {case_id} must never be sent")
 
 
 def _candidate_steps(model: str, lists: FixedLists) -> list[Step]:
@@ -369,7 +369,7 @@ class Selection:
 
 
 def select_candidates(stats: Sequence[ProbeStats]) -> Selection:
-    """The D61 rule, recomputable from the results file. The baseline is always first."""
+    """The selection rule, recomputable from the results file. The baseline is always first."""
     others = [item for item in stats if item.model != BASELINE_MODEL and item.passes_limits]
 
     def rank(item: ProbeStats) -> tuple[int, float, int, int, str]:

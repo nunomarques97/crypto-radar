@@ -12,9 +12,10 @@ stay raw.
   and, when evidence is linked too, for the same evidence hash. A missing link is stored as
   its typed reason; nothing is looked up or inferred to fill it.
 * ``label_due_outcomes`` is the labeler: for every subject horizon that has no label yet it
-  reads the subject's own Kraken spot pair from ``spot_snapshots`` and asks the domain for
-  the label as of ``now``. Only matured horizons are written; a label is written once and
-  never changed (immutability triggers), so repeating a run writes nothing new.
+  reads the subject's own Kraken spot pair from ``spot_snapshots`` over the quote window
+  (``LabelWindow``: forward or symmetric) and asks the domain for the label as of
+  ``now``. Only matured horizons are written; a label is written once and never changed
+  (immutability triggers), so repeating a run writes nothing new.
 * ``outcomes_known_as_of`` is the join for consumers: only labels with
   ``label_available_at <= decision_as_of`` are returned (filtered in SQL, then again by
   ``visible_outcomes``).
@@ -49,6 +50,7 @@ from ..domain.outcomes import (
     DecisionRef,
     Horizon,
     HorizonCost,
+    LabelWindow,
     LinkedOutcome,
     LinkMissingReason,
     MissingReason,
@@ -68,6 +70,8 @@ from . import evidence_store, invocation_store
 #: The venue whose spot quotes ``spot_snapshots`` holds (``kraken_timestamps.VENUE_SPOT``).
 SPOT_SNAPSHOT_VENUE = "kraken"
 SNAPSHOT_TEXT_MARGIN = timedelta(minutes=1)
+#: Resolution of stored times: the first instant strictly after another one.
+_TIME_STEP = timedelta(microseconds=1)
 DEFAULT_LABEL_BATCH = 500
 
 SUBJECT_TABLE = "outcome_subjects"
@@ -667,16 +671,21 @@ def label_due_outcomes(
     now: datetime,
     tolerance: timedelta,
     limit: int = DEFAULT_LABEL_BATCH,
+    window_kind: LabelWindow = LabelWindow.FORWARD,
 ) -> LabelRun:
     """Write every matured, still unlabelled horizon: per horizon, up to ``limit`` subjects, oldest first.
 
     One transaction; any error rolls the whole pass back. Horizons that are not mature are
     left untouched for a later pass. Existing labels are never read back into the
-    computation and never changed, so a repeated pass writes nothing.
+    computation and never changed, so a repeated pass writes nothing. ``window_kind``
+    selects the quote window; ``SYMMETRIC`` reads from ``target - tolerance`` (but only
+    after the subject's decision time), ``FORWARD`` from the target.
     """
     clock = _clock(now)
     if not isinstance(tolerance, timedelta) or tolerance < timedelta(0):
         raise OutcomeStoreError(OutcomeStoreFailure.INVALID_ARGUMENT, "tolerance must be a non-negative timedelta")
+    if not isinstance(window_kind, LabelWindow):
+        raise OutcomeStoreError(OutcomeStoreFailure.INVALID_ARGUMENT, "window_kind must be a LabelWindow")
     if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
         raise OutcomeStoreError(OutcomeStoreFailure.INVALID_ARGUMENT, "limit must be an int >= 1")
     labeled_at = utc_text(clock)
@@ -707,8 +716,13 @@ def label_due_outcomes(
                     quotes: list[QuoteObservation] | None = None
                     if _price_source(subject):
                         target = subject.target_at(horizon)
-                        quotes = _spot_quotes(conn, subject.pair, target, min(target + tolerance, clock))
-                    result = label_horizon(subject, horizon, quotes, now=clock, tolerance=tolerance)
+                        start = target
+                        if window_kind is LabelWindow.SYMMETRIC:
+                            start = max(target - tolerance, subject.decision_as_of + _TIME_STEP)
+                        quotes = _spot_quotes(conn, subject.pair, start, min(target + tolerance, clock))
+                    result = label_horizon(
+                        subject, horizon, quotes, now=clock, tolerance=tolerance, window_kind=window_kind
+                    )
                     if isinstance(result, NotMature):
                         not_mature += 1
                         continue

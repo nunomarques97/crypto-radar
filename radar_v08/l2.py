@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field, replace
@@ -210,6 +211,22 @@ def _build_tradeability_preview(c: L2CandidateInput) -> dict[str, Any]:
     }
 
 
+class _PhaseTimer:
+    """Contiguous phase laps of run_l2 into `timings_out`; inert without it."""
+
+    def __init__(self, timings_out: dict[str, float] | None, timer: Callable[[], float] | None) -> None:
+        self._out = timings_out
+        self._timer = timer if timer is not None else time.perf_counter
+        self._last = self._timer() if timings_out is not None else 0.0
+
+    def lap(self, key: str) -> None:
+        if self._out is None:
+            return
+        reading = self._timer()
+        self._out[key] = self._out.get(key, 0.0) + (reading - self._last) * 1000
+        self._last = reading
+
+
 def run_l2(
     store: SnapshotStore,
     session: GuardedSession,
@@ -219,17 +236,24 @@ def run_l2(
     clock: Clock | None = None,
     clock_sample: ClockSample | Callable[[], ClockSample] | None = None,
     integrity_out: dict[str, tuple[CapabilityResult, ...]] | None = None,
+    timings_out: dict[str, float] | None = None,
+    timer: Callable[[], float] | None = None,
 ) -> tuple[dict[str, L2Result], int, int]:
     """Returns (results_by_asset, ohlc_requests_made, ohlc_failures).
 
     With `clock`, OHLC integrity is enforced before storing and
     before consuming (see the module docstring); `integrity_out`, when
     given, receives every validated candidate's OC-1 results, blocked or not.
+    `timings_out`, when given, receives the wall time of the two phases
+    (observability only): "ohlc_fetch_ms" (the OHLC thread pool) and
+    "compute_ms" (per-candidate window, integrity, features and snapshot),
+    read with `timer` (default time.perf_counter).
     """
     if not candidates:
         return {}, 0, 0
+    phases = _PhaseTimer(timings_out, timer)
     if clock is not None:
-        return _run_l2_checked(store, session, candidates, now, run_id, clock, clock_sample, integrity_out)
+        return _run_l2_checked(store, session, candidates, now, run_id, clock, clock_sample, integrity_out, phases)
 
     now_iso = now.isoformat()
     interval = config.OHLC_INTERVAL_MINUTES
@@ -250,6 +274,7 @@ def run_l2(
             fetch_err[c.asset] = err
             if not ok:
                 logger.warning("OHLC fetch failed for %s (%s): %s", c.asset, c.pair, err)
+    phases.lap("ohlc_fetch_ms")
 
     ohlc_failures = sum(1 for ok in fetch_ok.values() if not ok)
 
@@ -294,6 +319,7 @@ def run_l2(
         )
 
         _store_l2_snapshot(store, run_id, c, l2f, opportunity, setup, now_iso)
+    phases.lap("compute_ms")
 
     return results, ohlc_requests_made, ohlc_failures
 
@@ -307,6 +333,7 @@ def _run_l2_checked(
     clock: Clock,
     clock_sample: ClockSample | Callable[[], ClockSample] | None,
     integrity_out: dict[str, tuple[CapabilityResult, ...]] | None,
+    phases: _PhaseTimer,
 ) -> tuple[dict[str, L2Result], int, int]:
     """Integrity path of `run_l2`: validate before storing and before consuming."""
     now_iso = now.isoformat()
@@ -331,6 +358,7 @@ def _run_l2_checked(
             fetched[c.asset] = done
             if not done.ok:
                 logger.warning("OHLC fetch/integrity failed for %s (%s): %s", c.asset, c.pair, done.error)
+    phases.lap("ohlc_fetch_ms")
 
     ohlc_failures = sum(1 for done in fetched.values() if not done.ok)
 
@@ -411,6 +439,7 @@ def _run_l2_checked(
             ohlc_observation=series,
         )
         _store_l2_snapshot(store, run_id, c, l2f, opportunity, setup, now_iso)
+    phases.lap("compute_ms")
 
     return results, ohlc_requests_made, ohlc_failures
 
@@ -463,75 +492,165 @@ def _store_l2_snapshot(
     )
 
 
-def label_forward_returns(store: SnapshotStore, now: datetime) -> int:
+class _ForwardReturnPass:
+    """Per-pass state of `label_forward_returns`. Snapshot bounds are read
+    lazily and cached, since no snapshot is written while a pass runs."""
+
+    def __init__(self, store: SnapshotStore, now: datetime) -> None:
+        self.store = store
+        self.now_iso = now.isoformat()
+        self.tolerance = timedelta(seconds=config.FORWARD_RETURN_LOOKUP_TOLERANCE_SECONDS)
+        self.margin = timedelta(seconds=config.FORWARD_RETURN_GAP_MARGIN_SECONDS)
+        self.mark_gaps = config.FORWARD_RETURN_MARK_GAPS_ENABLED
+        # Retention boundary = the later of the prune cutoff (same computation
+        # as SnapshotStore.prune) and the oldest retained spot snapshot.
+        # Snapshots are only written at the current cycle time, so no snapshot
+        # can ever appear before it again.
+        self.prune_cutoff = now - timedelta(days=config.SNAPSHOT_RETENTION_DAYS)
+        self._pair_oldest: dict[str, datetime | None] = {}
+        self._pair_latest: dict[str, datetime | None] = {}
+        # MIN(ts)/MAX(ts) over every pair are full scans: lazily, once per pass.
+        self._global_oldest: datetime | None = None
+        self._global_oldest_loaded = False
+        self._global_latest: datetime | None = None
+        self._global_latest_loaded = False
+
+    @staticmethod
+    def _parse(ts: str | None) -> datetime | None:
+        return datetime.fromisoformat(ts) if ts else None
+
+    def _outside_retention(self, pair: str, window_end: datetime) -> bool:
+        if window_end < self.prune_cutoff:
+            return True
+        # The global oldest snapshot is never later than this pair's oldest
+        # (index-backed), so the full scan is only needed when the window ends
+        # before this pair's retained history.
+        if pair not in self._pair_oldest:
+            self._pair_oldest[pair] = self._parse(self.store.oldest_spot_snapshot_ts(pair))
+        pair_oldest = self._pair_oldest[pair]
+        if pair_oldest is not None and window_end >= pair_oldest:
+            return False
+        if not self._global_oldest_loaded:
+            self._global_oldest = self._parse(self.store.oldest_spot_snapshot_ts())
+            self._global_oldest_loaded = True
+        return self._global_oldest is not None and window_end < self._global_oldest
+
+    def _window_closed(self, pair: str, window_end: datetime) -> bool:
+        # A snapshot of any pair strictly after window end + margin proves the
+        # window can no longer fill. The global latest is never earlier than
+        # this pair's latest (index-backed), so the full scan is only needed
+        # when this pair's own history does not already prove it.
+        threshold = window_end + self.margin
+        if pair not in self._pair_latest:
+            self._pair_latest[pair] = self._parse(self.store.latest_spot_snapshot_ts(pair))
+        pair_latest = self._pair_latest[pair]
+        if pair_latest is not None and pair_latest > threshold:
+            return True
+        if not self._global_latest_loaded:
+            self._global_latest = self._parse(self.store.latest_spot_snapshot_ts())
+            self._global_latest_loaded = True
+        return self._global_latest is not None and self._global_latest > threshold
+
+    def label_batch(self, due: list[Any], marked: dict[ForwardReturnUnlabelable, int]) -> tuple[int, int]:
+        """Label or mark one batch; returns (labeled, marked) for it."""
+        labeled = 0
+        to_mark: dict[ForwardReturnUnlabelable, list[int]] = {reason: [] for reason in ForwardReturnUnlabelable}
+
+        for row in due:
+            pair = row["pair"]
+            entry_price = row["entry_price"]
+            if not pair or not entry_price:
+                continue
+
+            target_dt = datetime.fromisoformat(row["ts"]) + timedelta(minutes=row["horizon_minutes"])
+            snap = self.store.nearest_spot_snapshot_by_pair(
+                pair, target_dt.isoformat(), config.FORWARD_RETURN_LOOKUP_TOLERANCE_SECONDS
+            )
+            if snap is None:
+                window_end = target_dt + self.tolerance
+                if self._outside_retention(pair, window_end):
+                    to_mark[ForwardReturnUnlabelable.TARGET_OUTSIDE_SNAPSHOT_RETENTION].append(row["id"])
+                elif self.mark_gaps and self._window_closed(pair, window_end):
+                    to_mark[ForwardReturnUnlabelable.TARGET_IN_SNAPSHOT_GAP].append(row["id"])
+                continue  # otherwise: horizon due but no snapshot close enough yet - retry next heartbeat
+
+            return_pct = (snap["last"] / entry_price - 1.0) * 100.0
+
+            window_rows = self.store.spot_snapshots_between_pair(pair, row["ts"], target_dt.isoformat())
+            if window_rows:
+                prices = [r["last"] for r in window_rows if r["last"]]
+                mfe_pct = (max(prices) / entry_price - 1.0) * 100.0 if prices else None
+                mae_pct = (min(prices) / entry_price - 1.0) * 100.0 if prices else None
+            else:
+                mfe_pct = mae_pct = None
+
+            self.store.label_forward_return(row["id"], return_pct, mfe_pct, mae_pct, self.now_iso)
+            labeled += 1
+
+        batch_marked = 0
+        for reason, row_ids in to_mark.items():
+            count = self.store.mark_forward_returns_unlabelable(row_ids, reason, self.now_iso)
+            marked[reason] += count
+            batch_marked += count
+        return labeled, batch_marked
+
+
+def label_forward_returns(
+    store: SnapshotStore,
+    now: datetime,
+    marked_out: dict[str, int] | None = None,
+    *,
+    monotonic: Callable[[], float] | None = None,
+) -> int:
     """Fill in return_pct/mfe_pct/mae_pct for any forward-return placeholder
     whose horizon is now due. Never used to change scoring weights directly -
-    purely calibration data for a future phase.
+    purely calibration data for a future phase. Returns the labeled count.
 
     A due row with no snapshot near its target whose whole lookup
     window lies before the snapshot retention boundary can never be labeled,
     so it is marked with a typed reason (return left NULL) instead of
-    occupying the batch forever. A due row inside retention with no snapshot
-    is left pending and retried, as before.
+    occupying the batch forever.
+
+    With config.FORWARD_RETURN_MARK_GAPS_ENABLED a due row
+    inside retention with no snapshot near its target is marked
+    target_in_snapshot_gap once a snapshot of any pair exists after its lookup
+    window plus FORWARD_RETURN_GAP_MARGIN_SECONDS; until then it is left
+    pending and retried. The retention reason takes precedence. The pass keeps
+    requesting batches while the previous one was full and moved at least one
+    row out of pending, up to FORWARD_RETURN_MAX_BATCHES_PER_PASS, and starts
+    no new batch once FORWARD_RETURN_PASS_BUDGET_SECONDS have elapsed on
+    `monotonic` (default time.monotonic). Switch off: retention marking only
+    and one batch per pass, as before.
+
+    `marked_out`, when given, is filled with one entry per
+    ForwardReturnUnlabelable value (zeros included): rows marked in this pass.
     """
-    due = store.pending_forward_returns(now, limit=config.FORWARD_RETURN_LABEL_BATCH_LIMIT)
-    tolerance = timedelta(seconds=config.FORWARD_RETURN_LOOKUP_TOLERANCE_SECONDS)
-    # Retention boundary = the later of the prune cutoff (same computation as
-    # SnapshotStore.prune) and the oldest retained spot snapshot. Snapshots are
-    # only written at the current cycle time, so no snapshot can ever appear
-    # before it again.
-    prune_cutoff = now - timedelta(days=config.SNAPSHOT_RETENTION_DAYS)
-    global_oldest: datetime | None = None
-    global_oldest_loaded = False  # MIN(ts) over every pair is a full scan: lazily, once per pass
+    clock = monotonic if monotonic is not None else time.monotonic
+    started = clock()
+    labeling = _ForwardReturnPass(store, now)
+    batch_limit = config.FORWARD_RETURN_LABEL_BATCH_LIMIT
+    max_batches = config.FORWARD_RETURN_MAX_BATCHES_PER_PASS if labeling.mark_gaps else 1
     labeled = 0
-    marked = 0
+    marked = {reason: 0 for reason in ForwardReturnUnlabelable}
+    batches = 0
 
-    for row in due:
-        pair = row["pair"]
-        entry_price = row["entry_price"]
-        if not pair or not entry_price:
-            continue
+    while True:
+        due = store.pending_forward_returns(now, limit=batch_limit)
+        batches += 1
+        batch_labeled, batch_marked = labeling.label_batch(due, marked)
+        labeled += batch_labeled
+        if len(due) < batch_limit or batch_labeled + batch_marked == 0 or batches >= max_batches:
+            break
+        if clock() - started >= config.FORWARD_RETURN_PASS_BUDGET_SECONDS:
+            break
 
-        target_dt = datetime.fromisoformat(row["ts"]) + timedelta(minutes=row["horizon_minutes"])
-        snap = store.nearest_spot_snapshot_by_pair(
-            pair, target_dt.isoformat(), config.FORWARD_RETURN_LOOKUP_TOLERANCE_SECONDS
-        )
-        if snap is None:
-            window_end = target_dt + tolerance
-            outside_retention = window_end < prune_cutoff
-            if not outside_retention:
-                # The global oldest snapshot is never later than this pair's
-                # oldest (index-backed), so the full scan is only needed when
-                # the window ends before this pair's retained history.
-                pair_oldest = store.oldest_spot_snapshot_ts(pair)
-                if pair_oldest is None or window_end < datetime.fromisoformat(pair_oldest):
-                    if not global_oldest_loaded:
-                        oldest_ts = store.oldest_spot_snapshot_ts()
-                        global_oldest = datetime.fromisoformat(oldest_ts) if oldest_ts else None
-                        global_oldest_loaded = True
-                    outside_retention = global_oldest is not None and window_end < global_oldest
-            if outside_retention and store.mark_forward_return_unlabelable(
-                row["id"], ForwardReturnUnlabelable.TARGET_OUTSIDE_SNAPSHOT_RETENTION, now.isoformat()
-            ):
-                marked += 1
-            continue  # otherwise: horizon due but no snapshot close enough yet - retry next heartbeat
-
-        return_pct = (snap["last"] / entry_price - 1.0) * 100.0
-
-        window_rows = store.spot_snapshots_between_pair(pair, row["ts"], target_dt.isoformat())
-        if window_rows:
-            prices = [r["last"] for r in window_rows if r["last"]]
-            mfe_pct = (max(prices) / entry_price - 1.0) * 100.0 if prices else None
-            mae_pct = (min(prices) / entry_price - 1.0) * 100.0 if prices else None
-        else:
-            mfe_pct = mae_pct = None
-
-        store.label_forward_return(row["id"], return_pct, mfe_pct, mae_pct, now.isoformat())
-        labeled += 1
-
-    if marked:
+    if marked_out is not None:
+        marked_out.update({reason.value: count for reason, count in marked.items()})
+    if any(marked.values()):
         logger.info(
-            "Marked %d forward-return rows %s (no retained snapshot can match)",
-            marked, ForwardReturnUnlabelable.TARGET_OUTSIDE_SNAPSHOT_RETENTION.value,
+            "Marked %d forward-return rows unlabelable (%s) in %d batch(es)",
+            sum(marked.values()),
+            ", ".join(f"{reason.value}={count}" for reason, count in marked.items()),
+            batches,
         )
     return labeled

@@ -1,4 +1,4 @@
-"""Terminal status panel (task section 14). No web UI - the terminal IS the
+"""Terminal status panel. No web UI - the terminal IS the
 main panel, and it must make obvious whether the radar is alive and whether
 it would (or would not) send anything to a cloud model.
 """

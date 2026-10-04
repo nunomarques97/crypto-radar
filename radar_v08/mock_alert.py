@@ -234,8 +234,8 @@ def run_mock_alert(store: SnapshotStore) -> dict[str, Any]:
     now = datetime.now(timezone.utc)
     event_id = create_mock_event(store, now=now)
 
-    # Marks the same way a real MEDIUM/HIGH title/body pair would (task
-    # section "NOTIFICAÇÃO WINDOWS"/"NTFY") - notify_for_event is the exact
+    # Marks the same way a real MEDIUM/HIGH title/body pair would (Windows
+    # and ntfy notifications) - notify_for_event is the exact
     # function claude_bridge.run_bridge_cycle's notify_fn calls for a real
     # PROCESSED event, so this is a genuine dry run of that path, not a copy.
     payload = {
